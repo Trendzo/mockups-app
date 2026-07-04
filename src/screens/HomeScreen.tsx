@@ -7,7 +7,6 @@ import {
   Banner,
   Card,
   HeroHeadline,
-  MainBottomNav,
   Icon,
   PressableScale,
   Screen,
@@ -150,7 +149,6 @@ export function HomeScreen({ navigation }: ScreenProps<'Home'>) {
         </View>
       </ScrollView>
 
-      <MainBottomNav navigation={navigation} active="home" />
     </Screen>
   );
 }

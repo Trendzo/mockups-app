@@ -12,10 +12,8 @@ import {
   AppImage,
   AppText,
   Banner,
-  BackButton,
   BottomSheet,
   Icon,
-  MainBottomNav,
   PressableScale,
   PrimaryButton,
   Screen,
@@ -85,7 +83,6 @@ export function CatalogListScreen({ navigation }: ScreenProps<'Catalog'>) {
   return (
     <Screen edges={['top']}>
       <View style={styles.header}>
-        <BackButton onPress={() => navigation.goBack()} />
         <View style={styles.headerText}>
           <AppText variant="sectionLabel" color={colors.meta}>
             Products & inventory
@@ -99,16 +96,6 @@ export function CatalogListScreen({ navigation }: ScreenProps<'Catalog'>) {
           {filtersActive ? <View style={styles.dot} /> : null}
         </PressableScale>
       </View>
-
-      {canWrite ? (
-        <View style={styles.newBtn}>
-          <PrimaryButton
-            label="New product"
-            tone="accent"
-            onPress={() => navigation.navigate('ProductForm', {})}
-          />
-        </View>
-      ) : null}
 
       {listingsQ.isLoading ? (
         <ActivityIndicator color={colors.ink} style={styles.loader} />
@@ -200,7 +187,17 @@ export function CatalogListScreen({ navigation }: ScreenProps<'Catalog'>) {
         </View>
       </BottomSheet>
 
-      <MainBottomNav navigation={navigation} active="catalog" />
+      {canWrite ? (
+        <PressableScale
+          onPress={() => navigation.navigate('ProductForm', {})}
+          style={[styles.fab, { bottom: insets.bottom + 86 }]}
+        >
+          <Icon name="add" size={20} color={colors.accentInk} />
+          <AppText variant="meta" color={colors.accentInk} style={styles.fabLabel}>
+            New product
+          </AppText>
+        </PressableScale>
+      ) : null}
     </Screen>
   );
 }
@@ -259,10 +256,28 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: colors.accent,
   },
-  newBtn: { marginTop: spacing.md },
   loader: { marginTop: spacing.xl },
   pad: { marginTop: spacing.md },
-  listContent: { paddingTop: spacing.md, paddingBottom: 120, gap: spacing.sm },
+  listContent: { paddingTop: spacing.md, paddingBottom: 160, gap: spacing.sm },
+  fab: {
+    position: 'absolute',
+    right: spacing.screenH,
+    height: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    backgroundColor: colors.accent,
+    borderRadius: radii.pill,
+    paddingLeft: spacing.sm,
+    paddingRight: spacing.md,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+  fabLabel: { fontSize: 15, lineHeight: 20, textAlignVertical: 'center', includeFontPadding: false },
   empty: { textAlign: 'center', marginTop: spacing.xl },
   row: {
     flexDirection: 'row',

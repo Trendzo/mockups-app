@@ -25,6 +25,8 @@ export type RootStackParamList = {
   Kyc: undefined;
   ChangeRequest: undefined;
 
+  // Bottom-tab container (Home · Catalog · Profile share one persistent bar)
+  Main: undefined;
   Home: undefined;
 
   // Catalog flow: photo picker (front + optional back/close-ups) → configure

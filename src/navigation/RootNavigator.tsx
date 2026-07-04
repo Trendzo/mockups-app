@@ -8,7 +8,7 @@ import { ApplicationFormScreen } from '../screens/ApplicationFormScreen';
 import { ApplicationStatusScreen } from '../screens/ApplicationStatusScreen';
 import { ResubmitScreen } from '../screens/ResubmitScreen';
 import { PendingApprovalScreen } from '../screens/PendingApprovalScreen';
-import { HomeScreen } from '../screens/HomeScreen';
+import { MainTabs } from './MainTabs';
 import { SelectPhotosScreen } from '../screens/SelectPhotosScreen';
 import { CaptureScreen } from '../screens/CaptureScreen';
 import { ConfigureScreen } from '../screens/ConfigureScreen';
@@ -17,13 +17,11 @@ import { ReviewResultsScreen } from '../screens/ReviewResultsScreen';
 import { PublishScreen } from '../screens/PublishScreen';
 import { PublishSuccessScreen } from '../screens/PublishSuccessScreen';
 import { CreationsScreen } from '../screens/CreationsScreen';
-import { CatalogListScreen } from '../screens/CatalogListScreen';
 import { ProductDetailScreen } from '../screens/ProductDetailScreen';
 import { ProductFormScreen } from '../screens/ProductFormScreen';
 import { VariantFormScreen } from '../screens/VariantFormScreen';
 import { KycScreen } from '../screens/KycScreen';
 import { ChangeRequestScreen } from '../screens/ChangeRequestScreen';
-import { ProfileScreen } from '../screens/ProfileScreen';
 import { useAuth } from '../store/auth';
 import { useSettings } from '../store/settings';
 import { useOnboarding } from '../store/onboarding';
@@ -142,7 +140,7 @@ export function RootNavigator() {
   if (active) {
     return (
       <Stack.Navigator screenOptions={options}>
-        <Stack.Screen name="Home" component={HomeScreen} />
+        <Stack.Screen name="Main" component={MainTabs} />
         <Stack.Screen name="SelectPhotos" component={SelectPhotosScreen} />
         <Stack.Screen
           name="Capture"
@@ -163,13 +161,11 @@ export function RootNavigator() {
           options={{ animation: 'fade', gestureEnabled: false }}
         />
         <Stack.Screen name="Creations" component={CreationsScreen} />
-        <Stack.Screen name="Catalog" component={CatalogListScreen} />
         <Stack.Screen name="ProductDetail" component={ProductDetailScreen} />
         <Stack.Screen name="ProductForm" component={ProductFormScreen} />
         <Stack.Screen name="VariantForm" component={VariantFormScreen} />
         <Stack.Screen name="Kyc" component={KycScreen} />
         <Stack.Screen name="ChangeRequest" component={ChangeRequestScreen} />
-        <Stack.Screen name="Profile" component={ProfileScreen} />
       </Stack.Navigator>
     );
   }

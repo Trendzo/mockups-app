@@ -5,6 +5,7 @@ export { Banner } from './Banner';
 export { BottomNav } from './BottomNav';
 export type { BottomNavTab } from './BottomNav';
 export { MainBottomNav } from './MainBottomNav';
+export type { MainTab } from './MainBottomNav';
 export { BottomSheet } from './BottomSheet';
 export { DocumentUpload } from './DocumentUpload';
 export { StatusChip, toneForStatus } from './StatusChip';

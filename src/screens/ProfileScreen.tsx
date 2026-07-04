@@ -3,10 +3,8 @@ import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   AppText,
-  BackButton,
   BottomSheet,
   Icon,
-  MainBottomNav,
   PressableScale,
   PrimaryButton,
   Screen,
@@ -82,10 +80,9 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
   };
 
   return (
-    <Screen edges={['top', 'bottom']}>
+    <Screen edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         <View style={styles.headerRow}>
-          <BackButton onPress={() => navigation.goBack()} />
           <AppText variant="cardTitle" color={colors.ink} style={styles.h1}>
             Profile
           </AppText>
@@ -195,8 +192,6 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
           )}
         </View>
       </BottomSheet>
-
-      <MainBottomNav navigation={navigation} active="profile" />
     </Screen>
   );
 }
