@@ -1,7 +1,10 @@
 {
   "extends": "@react-native/typescript-config",
   "compilerOptions": {
-    "types": ["jest"]
+    "types": ["jest"],
+    "paths": {
+      "@msg91comm/sendotp-react-native": ["./src/types/msg91.d.ts"]
+    }
   },
   "include": ["**/*.ts", "**/*.tsx"],
   "exclude": ["**/node_modules", "**/Pods"]

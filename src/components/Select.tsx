@@ -1,9 +1,15 @@
 import React, { useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Dimensions, ScrollView, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppText } from './AppText';
+import { BottomSheet } from './BottomSheet';
 import { Icon } from './Icon';
 import { PressableScale } from './PressableScale';
 import { colors, radii, spacing, type as typeScale } from '../theme/theme';
+
+// Concrete cap for the option list (percentage max-heights don't resolve inside
+// the sheet's auto-height animated wrapper).
+const OPTIONS_MAX_HEIGHT = Dimensions.get('window').height * 0.5;
 
 export interface SelectOption {
   label: string;
@@ -37,6 +43,7 @@ export function Select({
   loading = false,
 }: SelectProps) {
   const [open, setOpen] = useState(false);
+  const insets = useSafeAreaInsets();
 
   const summary =
     selected.length === 0
@@ -90,14 +97,8 @@ export function Select({
         </AppText>
       ) : null}
 
-      <Modal
-        visible={open}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setOpen(false)}
-      >
-        <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
-          <Pressable style={styles.sheet} onPress={() => {}}>
+      <BottomSheet visible={open} onClose={() => setOpen(false)}>
+        <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.lg }]}>
             <View style={styles.sheetHeader}>
               <AppText variant="cardTitle" color={colors.ink} style={styles.sheetTitle}>
                 {label}
@@ -141,9 +142,8 @@ export function Select({
                 </AppText>
               </PressableScale>
             ) : null}
-          </Pressable>
-        </Pressable>
-      </Modal>
+        </View>
+      </BottomSheet>
     </View>
   );
 }
@@ -187,13 +187,11 @@ const styles = StyleSheet.create({
   triggerError: { borderColor: colors.danger },
   triggerText: { flex: 1, marginRight: spacing.sm },
   error: { marginLeft: 2 },
-  backdrop: { flex: 1, backgroundColor: 'transparent', justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: colors.surface,
     borderTopLeftRadius: radii.sheet,
     borderTopRightRadius: radii.sheet,
     padding: spacing.lg,
-    maxHeight: '70%',
     shadowColor: '#000',
     shadowOpacity: 0.15,
     shadowRadius: 24,
@@ -207,7 +205,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   sheetTitle: { fontSize: 20, lineHeight: 24 },
-  optionScroll: { flexGrow: 0 },
+  optionScroll: { flexGrow: 0, maxHeight: OPTIONS_MAX_HEIGHT },
   optionRow: {
     flexDirection: 'row',
     alignItems: 'center',

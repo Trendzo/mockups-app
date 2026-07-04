@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import Animated, {
+  runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
@@ -48,18 +49,26 @@ export function ImageViewer({
 }: ImageViewerProps) {
   const insets = useSafeAreaInsets();
   const [index, setIndex] = useState(initialIndex);
+  // Disable horizontal paging while an image is zoomed, so a one-finger drag
+  // pans the image instead of swiping to the next one.
+  const [zoomed, setZoomed] = useState(false);
   const listRef = useRef<FlatList<ViewerImage>>(null);
 
   const onViewRef = useRef(
     ({ viewableItems }: { viewableItems: Array<{ index: number | null }> }) => {
       const first = viewableItems[0];
-      if (first?.index != null) setIndex(first.index);
+      if (first?.index != null) {
+        setIndex(first.index);
+        setZoomed(false);
+      }
     },
   );
   const viewConfigRef = useRef({ viewAreaCoveragePercentThreshold: 60 });
 
   const renderItem = useCallback(
-    ({ item }: ListRenderItemInfo<ViewerImage>) => <ZoomableImage uri={item.url} />,
+    ({ item }: ListRenderItemInfo<ViewerImage>) => (
+      <ZoomableImage uri={item.url} onZoomChange={setZoomed} />
+    ),
     [],
   );
 
@@ -75,6 +84,7 @@ export function ImageViewer({
           renderItem={renderItem}
           horizontal
           pagingEnabled
+          scrollEnabled={!zoomed}
           showsHorizontalScrollIndicator={false}
           initialScrollIndex={initialIndex}
           getItemLayout={(_, i) => ({
@@ -123,31 +133,60 @@ export function ImageViewer({
 
 const AFastImage = Animated.createAnimatedComponent(FastImage);
 
-function ZoomableImage({ uri }: { uri: string }) {
+const MAX_SCALE = 4;
+
+function ZoomableImage({
+  uri,
+  onZoomChange,
+}: {
+  uri: string;
+  onZoomChange: (zoomed: boolean) => void;
+}) {
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
   const savedX = useSharedValue(0);
   const savedY = useSharedValue(0);
+  // Local mirror drives `pan.enabled` (recreated on change) and the parent's
+  // paging lock.
+  const [zoomed, setZoomed] = useState(false);
+
+  const applyZoom = useCallback(
+    (z: boolean) => {
+      setZoomed(z);
+      onZoomChange(z);
+    },
+    [onZoomChange],
+  );
+
+  const resetToFit = () => {
+    'worklet';
+    scale.value = withTiming(1);
+    savedScale.value = 1;
+    translateX.value = withTiming(0);
+    translateY.value = withTiming(0);
+    savedX.value = 0;
+    savedY.value = 0;
+    runOnJS(applyZoom)(false);
+  };
 
   const pinch = Gesture.Pinch()
     .onUpdate((e) => {
-      scale.value = Math.max(1, savedScale.value * e.scale);
+      scale.value = Math.min(MAX_SCALE, Math.max(1, savedScale.value * e.scale));
     })
     .onEnd(() => {
-      savedScale.value = scale.value;
       if (scale.value <= 1) {
-        scale.value = withTiming(1);
-        translateX.value = withTiming(0);
-        translateY.value = withTiming(0);
-        savedX.value = 0;
-        savedY.value = 0;
+        resetToFit();
+      } else {
+        savedScale.value = scale.value;
+        runOnJS(applyZoom)(true);
       }
     });
 
+  // One-finger pan, only active while zoomed (otherwise the FlatList pages).
   const pan = Gesture.Pan()
-    .minPointers(2)
+    .enabled(zoomed)
     .onUpdate((e) => {
       translateX.value = savedX.value + e.translationX;
       translateY.value = savedY.value + e.translationY;
@@ -159,15 +198,14 @@ function ZoomableImage({ uri }: { uri: string }) {
 
   const doubleTap = Gesture.Tap()
     .numberOfTaps(2)
+    .maxDuration(260)
     .onEnd(() => {
-      const zoomed = scale.value > 1;
-      scale.value = withTiming(zoomed ? 1 : 2.5);
-      savedScale.value = zoomed ? 1 : 2.5;
-      if (zoomed) {
-        translateX.value = withTiming(0);
-        translateY.value = withTiming(0);
-        savedX.value = 0;
-        savedY.value = 0;
+      if (scale.value > 1) {
+        resetToFit();
+      } else {
+        scale.value = withTiming(2.5);
+        savedScale.value = 2.5;
+        runOnJS(applyZoom)(true);
       }
     });
 

@@ -1,13 +1,9 @@
 import React, { useMemo, useState } from 'react';
-import {
-  Modal,
-  ScrollView,
-  StyleSheet,
-  TextInput,
-  View,
-} from 'react-native';
+import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import {
   AppText,
+  BackButton,
+  BottomSheet,
   ImageViewer,
   MockupGrid,
   PrimaryButton,
@@ -105,6 +101,7 @@ export function ReviewResultsScreen({
           navigation.popToTop();
         },
         onError: (e) => {
+          console.warn('[ReviewResults] reject failed:', e.error);
           setRejectOpen(false);
           toast.show(e.error, 'error');
         },
@@ -118,6 +115,7 @@ export function ReviewResultsScreen({
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
       >
+        <BackButton onPress={() => navigation.goBack()} />
         <AppText variant="sectionLabel" color={colors.meta}>
           Step 3 · Review results
         </AppText>
@@ -170,9 +168,12 @@ export function ReviewResultsScreen({
       />
 
       {/* Reject notes sheet */}
-      <Modal visible={rejectOpen} transparent animationType="slide">
-        <View style={styles.sheetBackdrop}>
-          <View style={styles.sheet}>
+      <BottomSheet
+        visible={rejectOpen}
+        onClose={() => setRejectOpen(false)}
+        avoidKeyboard
+      >
+        <View style={styles.sheet}>
             <AppText variant="cardTitle" color={colors.ink} style={styles.sheetTitle}>
               What should change?
             </AppText>
@@ -202,9 +203,8 @@ export function ReviewResultsScreen({
                 onPress={onReject}
               />
             </View>
-          </View>
         </View>
-      </Modal>
+      </BottomSheet>
     </Screen>
   );
 }
@@ -240,11 +240,6 @@ const styles = StyleSheet.create({
   },
   row: { flexDirection: 'row', gap: spacing.md },
   flex: { flex: 1 },
-  sheetBackdrop: {
-    flex: 1,
-    backgroundColor: colors.scrim,
-    justifyContent: 'flex-end',
-  },
   sheet: {
     backgroundColor: colors.canvas,
     borderTopLeftRadius: radii.sheet,

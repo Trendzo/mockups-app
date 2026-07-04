@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import {
   AppText,
+  BackButton,
   Field,
   PrimaryButton,
   Screen,
@@ -24,7 +25,8 @@ import { parseRupeesToPaise } from '../utils/money';
 import { colors, spacing } from '../theme/theme';
 
 const OCCASIONS = ['Casual', 'Formal', 'Party', 'Sport', 'Festive'];
-const AGE_GROUPS = ['Teens', 'Adults', 'Kids'];
+// Backend age-range enum (validation_error otherwise).
+const AGE_GROUPS = ['0-2', '3-7', '8-12', '13-17', '18-24', '25-40', '40+'];
 
 /** Publish accepted submission → draft product (§5.7). */
 export function PublishScreen({ navigation, route }: ScreenProps<'Publish'>) {
@@ -41,9 +43,10 @@ export function PublishScreen({ navigation, route }: ScreenProps<'Publish'>) {
   const [price, setPrice] = useState('');
   const [description, setDescription] = useState('');
   const [brandId, setBrandId] = useState<string | null>(null);
-  const [listingPolicy, setListingPolicy] = useState<ListingPolicy>(
+  // Multi-select: e.g. return + replace can both apply.
+  const [listingPolicies, setListingPolicies] = useState<string[]>([
     ListingPolicy.Return,
-  );
+  ]);
   const [stock, setStock] = useState('0');
   const [compareAt, setCompareAt] = useState('');
   const [occasion, setOccasion] = useState<string[]>([]);
@@ -64,11 +67,17 @@ export function PublishScreen({ navigation, route }: ScreenProps<'Publish'>) {
   );
   const occasionOptions = OCCASIONS.map((o) => ({ label: o, value: o }));
   const ageOptions = AGE_GROUPS.map((a) => ({ label: a, value: a }));
+  const policyOptions = [
+    ListingPolicy.Return,
+    ListingPolicy.Replace,
+    ListingPolicy.FinalSale,
+  ].map((p) => ({ value: p, label: LISTING_POLICY_LABELS[p] }));
 
   const validate = (): boolean => {
     const e: Record<string, string> = {};
     if (!name.trim()) e.name = 'Required';
     if (!categoryId) e.category = 'Pick a category';
+    if (!brandId) e.brand = 'Pick a brand';
     if (pricePaise == null || pricePaise <= 0) e.price = 'Enter a valid price';
     if (compareAt.trim()) {
       if (comparePaise == null) e.compareAt = 'Invalid amount';
@@ -93,7 +102,7 @@ export function PublishScreen({ navigation, route }: ScreenProps<'Publish'>) {
       pricePaise: pricePaise!,
       description: description.trim() || undefined,
       brandId: brandId ?? undefined,
-      listingPolicy,
+      listingPolicy: (listingPolicies[0] as ListingPolicy) ?? ListingPolicy.Return,
       stock: Number(stock) || 0,
       compareAtPrice: comparePaise ?? undefined,
       occasion,
@@ -129,6 +138,7 @@ export function PublishScreen({ navigation, route }: ScreenProps<'Publish'>) {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={styles.content}
       >
+        <BackButton onPress={() => navigation.goBack()} />
         <AppText variant="sectionLabel" color={colors.meta}>
           Step 4 · Publish
         </AppText>
@@ -183,6 +193,16 @@ export function PublishScreen({ navigation, route }: ScreenProps<'Publish'>) {
         />
 
         <Field
+          label="Compare at (optional)"
+          prefix="₹"
+          keyboardType="decimal-pad"
+          value={compareAt}
+          onChangeText={setCompareAt}
+          placeholder="Higher than price"
+          error={errors.compareAt}
+        />
+
+        <Field
           label="Description"
           value={description}
           onChangeText={setDescription}
@@ -192,50 +212,31 @@ export function PublishScreen({ navigation, route }: ScreenProps<'Publish'>) {
 
         <Select
           label="Brand"
-          placeholder="Choose a brand (optional)"
+          required
+          placeholder="Choose a brand"
           loading={brandsQ.isLoading}
-          clearable
           options={brandOptions}
           selected={brandId ? [brandId] : []}
           onChange={(v) => setBrandId(v[0] ?? null)}
+          error={errors.brand}
         />
 
-        {/* Listing policy */}
-        <View style={styles.block}>
-          <AppText variant="sectionLabel" color={colors.meta}>
-            Listing policy
-          </AppText>
-          <SegmentedControl<ListingPolicy>
-            value={listingPolicy}
-            onChange={setListingPolicy}
-            options={[
-              ListingPolicy.Return,
-              ListingPolicy.Replace,
-              ListingPolicy.FinalSale,
-            ].map((p) => ({ value: p, label: LISTING_POLICY_LABELS[p] }))}
-          />
-        </View>
+        <Select
+          label="Listing policy"
+          multiple
+          placeholder="Select policies"
+          options={policyOptions}
+          selected={listingPolicies}
+          onChange={setListingPolicies}
+        />
 
-        <View style={styles.row}>
-          <Field
-            label="Stock"
-            keyboardType="number-pad"
-            value={stock}
-            onChangeText={setStock}
-            placeholder="0"
-            containerStyle={styles.flex}
-          />
-          <Field
-            label="Compare at"
-            prefix="₹"
-            keyboardType="decimal-pad"
-            value={compareAt}
-            onChangeText={setCompareAt}
-            placeholder="Optional"
-            error={errors.compareAt}
-            containerStyle={styles.flex}
-          />
-        </View>
+        <Field
+          label="Stock"
+          keyboardType="number-pad"
+          value={stock}
+          onChangeText={setStock}
+          placeholder="0"
+        />
 
         <Select
           label="Occasion"

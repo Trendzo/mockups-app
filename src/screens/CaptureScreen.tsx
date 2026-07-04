@@ -32,6 +32,14 @@ import { ensureCameraPermission, openAppSettings } from '../utils/permissions';
 // vision-camera exposes `zoom` as a Reanimated-animatable prop.
 const ReanimatedCamera = Animated.createAnimatedComponent(Camera);
 
+const SLOT_PROMPT: Record<string, string> = {
+  front: 'Shoot the FRONT',
+  back: 'Shoot the BACK',
+  pattern: 'Pattern close-up',
+  logo: 'Logo close-up',
+  tag: 'Brand tag / label',
+};
+
 /** Capture / Upload apparel (§5.2). Full-screen preview, yellow shutter, library pick. */
 export function CaptureScreen({ navigation, route }: ScreenProps<'Capture'>) {
   const insets = useSafeAreaInsets();
@@ -240,10 +248,10 @@ export function CaptureScreen({ navigation, route }: ScreenProps<'Capture'>) {
         </View>
       </View>
 
-      {/* Which side to capture */}
+      {/* Which photo to capture */}
       <View pointerEvents="none" style={[styles.sidePill, { top: insets.top + 56 }]}>
         <AppText variant="sectionLabel" color={colors.accentInk}>
-          {slot === 'back' ? 'Shoot the BACK' : 'Shoot the FRONT'}
+          {SLOT_PROMPT[slot] ?? 'Shoot the photo'}
         </AppText>
       </View>
 

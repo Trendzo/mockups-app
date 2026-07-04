@@ -3,6 +3,7 @@ import {
   ListingPolicy,
   Mode,
   MockupViews,
+  ModelGender,
   SubmissionStatus,
 } from './enums';
 import { UploadFile } from '../utils/image';
@@ -20,6 +21,11 @@ export interface CreateSubmissionInput {
   apparel: UploadFile;
   apparelBack?: UploadFile; // optional real back-of-garment reference
   design?: UploadFile;
+  // Optional close-up references (server-side only; not returned as outputs).
+  pattern?: UploadFile; // fabric texture / pattern close-up
+  logo?: UploadFile; // logo / monogram close-up
+  tag?: UploadFile; // brand tag / label photo
+  modelGender?: ModelGender; // only applies when mode === with_model
   prompt?: string;
   only?: string[]; // limit generated views
 }
@@ -120,6 +126,10 @@ export interface PublishResult {
 export interface CreateMockupsInput {
   apparel: UploadFile;
   design?: UploadFile;
+  pattern?: UploadFile;
+  logo?: UploadFile;
+  tag?: UploadFile;
+  modelGender?: ModelGender; // only applies to the with_model call
   views?: MockupViews;
   only?: string[];
 }
@@ -134,17 +144,4 @@ export interface MockupsResult {
   printed: string | null;
   product: NamedImage[];
   model: NamedImage[];
-}
-
-// ---- Try-on ----
-
-export interface CreateTryonInput {
-  person: UploadFile;
-  garments: UploadFile[]; // 1..2, applied in order
-}
-
-export interface TryonResult {
-  jobId: string;
-  result: string;
-  steps: string[];
 }

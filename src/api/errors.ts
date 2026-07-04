@@ -9,9 +9,20 @@ import { ApiError } from '../types/api';
 export function normalizeError(err: unknown): ApiError {
   if (axios.isAxiosError(err)) {
     const status = err.response?.status;
-    const data = err.response?.data as { error?: string } | undefined;
-
-    if (data?.error) return { error: data.error, status };
+    // MVP backend returns { error: "msg" }; the closetx/Render backend returns
+    // { error: { code, message } }. Coerce both to a plain string so the UI never
+    // tries to render an object (which crashes React).
+    const data = err.response?.data as
+      | { error?: string | { code?: string; message?: string } }
+      | undefined;
+    const rawErr = data?.error;
+    if (rawErr) {
+      const msg =
+        typeof rawErr === 'string'
+          ? rawErr
+          : rawErr.message || rawErr.code || 'Request failed.';
+      return { error: msg, status };
+    }
 
     if (err.code === 'ECONNABORTED') {
       return { error: 'The request timed out. Please try again.', status };

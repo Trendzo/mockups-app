@@ -81,7 +81,11 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             <View
               style={[styles.dot, { backgroundColor: kindColor[toast.kind] }]}
             />
-            <AppText variant="bodyMedium" color={colors.surface}>
+            <AppText
+              variant="bodyMedium"
+              color={colors.surface}
+              style={styles.message}
+            >
               {toast.message}
             </AppText>
           </View>
@@ -101,6 +105,7 @@ const styles = StyleSheet.create({
   toast: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: spacing.sm,
     backgroundColor: colors.ink,
     borderRadius: radii.pill,
@@ -108,5 +113,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md - 2,
     maxWidth: '100%',
   },
+  message: { flexShrink: 1, textAlign: 'center' },
   dot: { width: 8, height: 8, borderRadius: 4 },
 });

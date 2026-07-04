@@ -31,7 +31,8 @@ const STATUS_MESSAGES = [
 
 /** GENERATING (§5.5): honest indeterminate progress (no polling endpoint) + cancel. */
 export function GeneratingScreen({ navigation, route }: ScreenProps<'Generating'>) {
-  const { apparel, apparelBack, design, mode, prompt, only } = route.params;
+  const { apparel, apparelBack, design, pattern, logo, tag, modelGender, mode, prompt, only } =
+    route.params;
   const mutation = useCreateSubmission();
   const upsert = useSession((s) => s.upsert);
   const cancelled = useRef(false);
@@ -48,7 +49,7 @@ export function GeneratingScreen({ navigation, route }: ScreenProps<'Generating'
   const start = React.useCallback(() => {
     cancelled.current = false;
     mutation.mutate(
-      { apparel, apparelBack, design, mode, prompt, only },
+      { apparel, apparelBack, design, pattern, logo, tag, modelGender, mode, prompt, only },
       {
         onSuccess: (submission) => {
           if (cancelled.current) return;
@@ -62,7 +63,7 @@ export function GeneratingScreen({ navigation, route }: ScreenProps<'Generating'
       },
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apparel, apparelBack, design, mode, prompt, only]);
+  }, [apparel, apparelBack, design, pattern, logo, tag, modelGender, mode, prompt, only]);
 
   useEffect(() => {
     start();
@@ -118,13 +119,6 @@ export function GeneratingScreen({ navigation, route }: ScreenProps<'Generating'
         {failed ? (
           <>
             <PrimaryButton label="Try again" tone="accent" onPress={start} />
-            {isUnreachable(error!) && (
-              <PrimaryButton
-                label="Open Dev Settings"
-                tone="ghost"
-                onPress={() => navigation.navigate('DevSettings')}
-              />
-            )}
             <PrimaryButton
               label="Back"
               tone="surface"

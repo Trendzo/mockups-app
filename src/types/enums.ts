@@ -21,6 +21,20 @@ export enum Gender {
   Unisex = 'unisex',
 }
 
+/** Model gender for with_model generation (UI Male→him, Female→her). */
+export type ModelGender = 'him' | 'her';
+
+/** Valid age-range enum for publish (§ageGroups). */
+export const AGE_GROUP_OPTIONS = [
+  '0-2',
+  '3-7',
+  '8-12',
+  '13-17',
+  '18-24',
+  '25-40',
+  '40+',
+] as const;
+
 export enum ListingPolicy {
   Return = 'return',
   Replace = 'replace',

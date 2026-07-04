@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@d11/react-native-fast-image": "^8.13.0",
+    "@msg91comm/sendotp-react-native": "^2.1.0",
     "@react-native-async-storage/async-storage": "^3.1.1",
     "@react-native-camera-roll/camera-roll": "^7.10.2",
     "@react-native-community/blur": "^4.4.1",

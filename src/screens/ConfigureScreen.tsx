@@ -4,6 +4,7 @@ import { launchImageLibrary } from 'react-native-image-picker';
 import {
   AppImage,
   AppText,
+  BackButton,
   Chip,
   Icon,
   PressableScale,
@@ -12,21 +13,47 @@ import {
   SegmentedControl,
 } from '../components';
 import { ScreenProps } from '../navigation/types';
-import { Mode, prettyView, viewsForMode } from '../types/enums';
+import { Mode, ModelGender, prettyView, viewsForMode } from '../types/enums';
 import { colors, radii, spacing, type as typeScale } from '../theme/theme';
 import { prepareUpload } from '../utils/image';
 import { LocalPhoto } from '../navigation/types';
+import { useCaptureDraft } from '../store/captureDraft';
 
-/** Configure generation (§5.4). Skippable — sane defaults (product views, no design). */
-export function ConfigureScreen({ navigation, route }: ScreenProps<'Configure'>) {
-  const { apparel, apparelBack } = route.params;
+/** Product shots, or on a male / female model. */
+type GenType = 'product' | 'male' | 'female';
+
+/** Configure generation (§5.4). Reads garment photos from the capture draft. */
+export function ConfigureScreen({ navigation }: ScreenProps<'Configure'>) {
+  const draft = useCaptureDraft();
+  const apparel = draft.front;
+  const apparelBack = draft.back;
+  const closeupCount = [draft.pattern, draft.logo, draft.tag].filter(Boolean).length;
   const [mode, setMode] = useState<Mode>(Mode.WithoutModel);
+  const [modelGender, setModelGender] = useState<ModelGender | null>(null);
   const [design, setDesign] = useState<LocalPhoto | null>(null);
   const [prompt, setPrompt] = useState('');
   const [only, setOnly] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
 
   const availableViews = useMemo(() => viewsForMode(mode), [mode]);
+
+  // Single control drives both mode and model gender.
+  const genType: GenType =
+    mode === Mode.WithModel
+      ? modelGender === 'her'
+        ? 'female'
+        : 'male'
+      : 'product';
+  const setGenType = (t: GenType) => {
+    if (t === 'product') {
+      setMode(Mode.WithoutModel);
+      setModelGender(null);
+    } else {
+      setMode(Mode.WithModel);
+      setModelGender(t === 'male' ? 'him' : 'her');
+    }
+    setOnly([]);
+  };
 
   const toggleView = (view: string) =>
     setOnly((prev) =>
@@ -46,6 +73,7 @@ export function ConfigureScreen({ navigation, route }: ScreenProps<'Configure'>)
   };
 
   const onGenerate = async () => {
+    if (!apparel) return;
     setBusy(true);
     try {
       const apparelFile = await prepareUpload(apparel.uri);
@@ -53,6 +81,11 @@ export function ConfigureScreen({ navigation, route }: ScreenProps<'Configure'>)
         ? await prepareUpload(apparelBack.uri)
         : undefined;
       const designFile = design ? await prepareUpload(design.uri) : undefined;
+      const patternFile = draft.pattern
+        ? await prepareUpload(draft.pattern.uri)
+        : undefined;
+      const logoFile = draft.logo ? await prepareUpload(draft.logo.uri) : undefined;
+      const tagFile = draft.tag ? await prepareUpload(draft.tag.uri) : undefined;
       // `only` must match the active mode's view namespace.
       const validOnly = only.filter((v) =>
         (availableViews as readonly string[]).includes(v),
@@ -61,6 +94,12 @@ export function ConfigureScreen({ navigation, route }: ScreenProps<'Configure'>)
         apparel: apparelFile,
         apparelBack: apparelBackFile,
         design: designFile,
+        pattern: patternFile,
+        logo: logoFile,
+        tag: tagFile,
+        // modelGender only for on-model generation.
+        modelGender:
+          mode === Mode.WithModel ? modelGender ?? undefined : undefined,
         mode,
         prompt: prompt.trim() || undefined,
         only: validOnly.length ? validOnly : undefined,
@@ -76,6 +115,7 @@ export function ConfigureScreen({ navigation, route }: ScreenProps<'Configure'>)
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
       >
+        <BackButton onPress={() => navigation.goBack()} />
         <AppText variant="sectionLabel" color={colors.meta}>
           Step 2 · Configure
         </AppText>
@@ -86,7 +126,7 @@ export function ConfigureScreen({ navigation, route }: ScreenProps<'Configure'>)
         {/* Apparel preview */}
         <View style={styles.previewRow}>
           <AppImage
-            uri={apparel.uri}
+            uri={apparel?.uri}
             radius={radii.sm + 4}
             containerStyle={styles.apparelThumb}
           />
@@ -99,27 +139,33 @@ export function ConfigureScreen({ navigation, route }: ScreenProps<'Configure'>)
           ) : null}
           <View style={styles.previewText}>
             <AppText variant="bodyMedium" color={colors.ink}>
-              {apparelBack ? 'Front + back ready' : 'Apparel ready'}
+              {apparelBack ? 'Front + back ready' : 'Front ready'}
             </AppText>
             <AppText variant="meta" color={colors.meta}>
-              We'll generate {mode === Mode.WithModel ? 'on-model' : 'product'} views.
+              {closeupCount > 0
+                ? `${closeupCount} close-up${closeupCount > 1 ? 's' : ''} · `
+                : ''}
+              {mode === Mode.WithModel ? 'on-model' : 'product'} views
             </AppText>
           </View>
         </View>
 
-        {/* Mode */}
-        <Section label="Mode">
-          <SegmentedControl<Mode>
-            value={mode}
-            onChange={(v) => {
-              setMode(v);
-              setOnly([]);
-            }}
+        {/* Mockup type: product shots, or on a male / female model */}
+        <Section label="Mockup type">
+          <SegmentedControl<GenType>
+            value={genType}
+            onChange={setGenType}
             options={[
-              { value: Mode.WithoutModel, label: 'Product views' },
-              { value: Mode.WithModel, label: 'On-model' },
+              { value: 'product', label: 'Product' },
+              { value: 'male', label: 'Male' },
+              { value: 'female', label: 'Female' },
             ]}
           />
+          <AppText variant="meta" color={colors.meta} style={styles.hint}>
+            {genType === 'product'
+              ? 'Clean product shots on a white background.'
+              : `On-model shots with a ${genType} model.`}
+          </AppText>
         </Section>
 
         {/* Add design */}

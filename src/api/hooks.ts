@@ -7,7 +7,6 @@ import {
   publishSubmission,
 } from './catalog';
 import { createMockups } from './mockups';
-import { createTryon } from './tryon';
 import { getHealth } from './health';
 import { normalizeError } from './errors';
 import {
@@ -16,13 +15,11 @@ import {
   Category,
   CreateMockupsInput,
   CreateSubmissionInput,
-  CreateTryonInput,
   DecisionInput,
   MockupsResult,
   PublishInput,
   PublishResult,
   Submission,
-  TryonResult,
 } from '../types/api';
 
 /**
@@ -67,12 +64,6 @@ export function usePublishSubmission() {
 export function useCreateMockups() {
   return useMutation<MockupsResult, ApiError, CreateMockupsInput>({
     mutationFn: (input) => normalized(() => createMockups(input)),
-  });
-}
-
-export function useCreateTryon() {
-  return useMutation<TryonResult, ApiError, CreateTryonInput>({
-    mutationFn: (input) => normalized(() => createTryon(input)),
   });
 }
 

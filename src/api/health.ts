@@ -1,7 +1,13 @@
-import { getJson, isMock } from './client';
+import { currentBaseUrl, http, isMock } from './client';
 
-/** GET /health -> { ok: true }. Used by the "can't reach server" check. */
+/**
+ * Reachability check. The closetx backend serves health at the ROOT (`/health`),
+ * not under the `/api/v1` prefix, so we hit the origin directly (absolute URL →
+ * axios ignores the client baseURL).
+ */
 export async function getHealth(): Promise<{ ok: boolean }> {
   if (isMock()) return { ok: true };
-  return getJson<{ ok: boolean }>('/health', { timeout: 6000 });
+  const origin = currentBaseUrl().replace(/\/api\/v\d+\/?$/, '').replace(/\/$/, '');
+  await http.get(`${origin}/health`, { timeout: 8000 });
+  return { ok: true };
 }

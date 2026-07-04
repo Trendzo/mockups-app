@@ -2,6 +2,9 @@ apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
+// react-native-config: generates BuildConfig/resValues from .env so Config.* works on Android.
+apply from: project(':react-native-config').projectDir.getPath() + "/dotenv.gradle"
+
 /**
  * This is the configuration block to customize your React Native Android app.
  * By default you don't need to apply any configuration, just uncomment the lines you need.
@@ -105,8 +108,9 @@ android {
             signingConfig signingConfigs.debug
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
-            // Release builds disallow cleartext by default.
-            manifestPlaceholders = [usesCleartextTraffic: "false"]
+            // MVP: allow cleartext so the release APK can reach the local/LAN HTTP
+            // backend. Set to "false" for a production build served over HTTPS.
+            manifestPlaceholders = [usesCleartextTraffic: "true"]
         }
     }
 }

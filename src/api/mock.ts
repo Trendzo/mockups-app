@@ -8,7 +8,6 @@ import {
   Category,
   CreateMockupsInput,
   CreateSubmissionInput,
-  CreateTryonInput,
   DecisionInput,
   DecisionResult,
   Listing,
@@ -16,7 +15,6 @@ import {
   PublishInput,
   PublishResult,
   Submission,
-  TryonResult,
   Variant,
 } from '../types/api';
 import {
@@ -152,10 +150,4 @@ export async function mockMockups(
     },
     2200,
   );
-}
-
-export async function mockTryon(input: CreateTryonInput): Promise<TryonResult> {
-  const jobId = nextId('job_');
-  const steps = input.garments.map((_, i) => img(`${jobId}-step${i}`));
-  return delay({ jobId, result: steps[steps.length - 1], steps }, 2600);
 }

@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
-import { Modal, Pressable, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { launchImageLibrary } from 'react-native-image-picker';
 import {
   AppImage,
   AppText,
+  BackButton,
+  BottomSheet,
   Icon,
   PressableScale,
   PrimaryButton,
@@ -14,15 +16,22 @@ import { ScreenProps } from '../navigation/types';
 import { PhotoSlot, useCaptureDraft } from '../store/captureDraft';
 import { colors, radii, spacing } from '../theme/theme';
 
+const SLOT_LABEL: Record<PhotoSlot, string> = {
+  front: 'Front',
+  back: 'Back',
+  pattern: 'Pattern',
+  logo: 'Logo',
+  tag: 'Brand tag',
+};
+
 /**
- * Two-card garment upload (front required, back optional). Each card takes a
- * photo from the camera or the library; back can be left empty.
+ * Garment photo upload (§New Mockup). Front required; back optional; plus three
+ * optional close-up references (pattern, logo, tag) — same upload mechanism.
  */
 export function SelectPhotosScreen({ navigation }: ScreenProps<'SelectPhotos'>) {
   const toast = useToast();
-  const front = useCaptureDraft((s) => s.front);
-  const back = useCaptureDraft((s) => s.back);
-  const setPhoto = useCaptureDraft((s) => s.setPhoto);
+  const draft = useCaptureDraft();
+  const setPhoto = draft.setPhoto;
   const [chooser, setChooser] = useState<PhotoSlot | null>(null);
 
   const pickFromLibrary = async (slot: PhotoSlot) => {
@@ -47,94 +56,118 @@ export function SelectPhotosScreen({ navigation }: ScreenProps<'SelectPhotos'>) 
     navigation.navigate('Capture', { slot });
   };
 
-  const canContinue = front != null;
+  const canContinue = draft.front != null;
 
   return (
     <Screen edges={['top', 'bottom']}>
-      <View style={styles.header}>
-        <AppText variant="sectionLabel" color={colors.meta}>
-          Step 1 · Garment photos
-        </AppText>
-        <AppText variant="cardTitle" color={colors.ink} style={styles.title}>
-          Add front & back
-        </AppText>
-        <AppText variant="meta" color={colors.meta}>
-          Front is required. Back is optional — add it for truer back views.
-        </AppText>
-      </View>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.content}
+      >
+        <BackButton onPress={() => navigation.goBack()} />
 
-      <View style={styles.row}>
-        <PhotoCard
-          label="Front"
-          required
-          photo={front}
-          onAdd={() => setChooser('front')}
-          onRemove={() => setPhoto('front', null)}
-        />
-        <PhotoCard
-          label="Back"
-          photo={back}
-          onAdd={() => setChooser('back')}
-          onRemove={() => setPhoto('back', null)}
-        />
-      </View>
+        <View style={styles.header}>
+          <AppText variant="sectionLabel" color={colors.meta}>
+            Step 1 · Garment photos
+          </AppText>
+          <AppText variant="cardTitle" color={colors.ink} style={styles.title}>
+            Add product photos
+          </AppText>
+          <AppText variant="meta" color={colors.meta}>
+            Front is required. Everything else is optional and improves fidelity.
+          </AppText>
+        </View>
+
+        <View style={styles.row}>
+          <PhotoCard
+            label="Front"
+            required
+            photo={draft.front}
+            onAdd={() => setChooser('front')}
+            onRemove={() => setPhoto('front', null)}
+          />
+          <PhotoCard
+            label="Back"
+            photo={draft.back}
+            onAdd={() => setChooser('back')}
+            onRemove={() => setPhoto('back', null)}
+          />
+        </View>
+
+        <AppText variant="sectionLabel" color={colors.meta} style={styles.closeupLabel}>
+          Close-ups (optional)
+        </AppText>
+        <View style={styles.row}>
+          <PhotoCard
+            label="Pattern"
+            hint="Texture / weave"
+            photo={draft.pattern}
+            onAdd={() => setChooser('pattern')}
+            onRemove={() => setPhoto('pattern', null)}
+          />
+          <PhotoCard
+            label="Logo"
+            hint="Monogram"
+            photo={draft.logo}
+            onAdd={() => setChooser('logo')}
+            onRemove={() => setPhoto('logo', null)}
+          />
+          <PhotoCard
+            label="Brand tag"
+            hint="Label"
+            photo={draft.tag}
+            onAdd={() => setChooser('tag')}
+            onRemove={() => setPhoto('tag', null)}
+          />
+        </View>
+      </ScrollView>
 
       <View style={styles.footer}>
         <PrimaryButton
           label="Continue"
           tone="accent"
           disabled={!canContinue}
-          onPress={() =>
-            navigation.navigate('Configure', {
-              apparel: front!,
-              apparelBack: back ?? undefined,
-            })
-          }
+          onPress={() => navigation.navigate('Configure')}
         />
       </View>
 
       {/* Source chooser */}
-      <Modal
-        visible={chooser != null}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setChooser(null)}
-      >
-        <Pressable style={styles.sheetBackdrop} onPress={() => setChooser(null)}>
-          <Pressable style={styles.sheet} onPress={() => {}}>
-            <AppText variant="cardTitle" color={colors.ink} style={styles.sheetTitle}>
-              Add {chooser} photo
-            </AppText>
-            <SheetRow
-              icon="camera"
-              label="Take photo"
-              onPress={() => chooser && takePhoto(chooser)}
-            />
-            <SheetRow
-              icon="images"
-              label="Choose from library"
-              onPress={() => chooser && pickFromLibrary(chooser)}
-            />
-            <PrimaryButton
-              label="Cancel"
-              tone="surface"
-              onPress={() => setChooser(null)}
-            />
-          </Pressable>
-        </Pressable>
-      </Modal>
+      <BottomSheet visible={chooser != null} onClose={() => setChooser(null)}>
+        <View style={styles.sheet}>
+          <AppText variant="cardTitle" color={colors.ink} style={styles.sheetTitle}>
+            Add {chooser ? SLOT_LABEL[chooser] : ''} photo
+          </AppText>
+          <SheetRow
+            icon="camera"
+            label="Take photo"
+            onPress={() => chooser && takePhoto(chooser)}
+          />
+          <SheetRow
+            icon="images"
+            label="Choose from library"
+            onPress={() => chooser && pickFromLibrary(chooser)}
+          />
+          <PrimaryButton
+            label="Cancel"
+            tone="surface"
+            onPress={() => setChooser(null)}
+          />
+        </View>
+      </BottomSheet>
     </Screen>
   );
 }
 
 function PhotoCard({
   label,
+  hint,
   required,
   photo,
   onAdd,
   onRemove,
 }: {
   label: string;
+  hint?: string;
   required?: boolean;
   photo: { uri: string } | null;
   onAdd: () => void;
@@ -156,16 +189,18 @@ function PhotoCard({
           </>
         ) : (
           <View style={styles.empty}>
-            <Icon name="add" size={34} color={colors.inkMuted} />
-            <AppText variant="meta" color={colors.meta} style={styles.emptyLabel}>
-              Add {label.toLowerCase()}
-            </AppText>
+            <Icon name="add" size={28} color={colors.inkMuted} />
+            {hint ? (
+              <AppText variant="meta" color={colors.meta} style={styles.hintText}>
+                {hint}
+              </AppText>
+            ) : null}
           </View>
         )}
       </PressableScale>
       <AppText variant="sectionLabel" color={colors.meta} style={styles.cardLabel}>
         {label}
-        {required ? ' *' : ' · optional'}
+        {required ? ' *' : ''}
       </AppText>
     </View>
   );
@@ -191,16 +226,14 @@ function SheetRow({
 }
 
 const styles = StyleSheet.create({
-  header: { paddingTop: spacing.md, gap: spacing.xs },
+  content: { paddingTop: spacing.md, paddingBottom: spacing.xl, gap: spacing.md },
+  header: { gap: spacing.xs, marginTop: spacing.sm },
   title: { fontSize: 24, lineHeight: 28 },
-  row: {
-    flexDirection: 'row',
-    gap: spacing.cardGap,
-    marginTop: spacing.xl,
-  },
+  row: { flexDirection: 'row', gap: spacing.cardGap },
+  closeupLabel: { marginTop: spacing.sm, marginLeft: 2 },
   cardCol: { flex: 1, gap: spacing.sm },
   card: {
-    aspectRatio: 0.75,
+    aspectRatio: 0.8,
     borderRadius: radii.card,
     backgroundColor: colors.surface,
     overflow: 'hidden',
@@ -214,27 +247,23 @@ const styles = StyleSheet.create({
     borderColor: colors.hairline,
     borderStyle: 'dashed',
     gap: spacing.xs,
+    padding: spacing.xs,
   },
-  emptyLabel: {},
+  hintText: { textAlign: 'center' },
   fillCard: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   removeChip: {
     position: 'absolute',
     top: spacing.sm,
     right: spacing.sm,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     backgroundColor: colors.scrim,
     alignItems: 'center',
     justifyContent: 'center',
   },
   cardLabel: { marginLeft: 2 },
-  footer: { flex: 1, justifyContent: 'flex-end', paddingBottom: spacing.md },
-  sheetBackdrop: {
-    flex: 1,
-    backgroundColor: 'transparent',
-    justifyContent: 'flex-end',
-  },
+  footer: { paddingVertical: spacing.md },
   sheet: {
     backgroundColor: colors.surface,
     borderTopLeftRadius: radii.sheet,
@@ -247,12 +276,12 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: -6 },
     elevation: 16,
   },
-  sheetTitle: { fontSize: 20, lineHeight: 24, textTransform: 'capitalize' },
+  sheetTitle: { fontSize: 20, lineHeight: 24 },
   sheetRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.canvas,
     borderRadius: radii.card,
     padding: spacing.md,
   },

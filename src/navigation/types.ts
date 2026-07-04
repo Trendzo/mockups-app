@@ -1,6 +1,7 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Mode } from '../types/enums';
+import { Mode, ModelGender } from '../types/enums';
 import { PublishResult, Submission } from '../types/api';
+import { VariantMode } from '../types/catalog';
 import { UploadFile } from '../utils/image';
 
 /** A captured/picked local image passing through the flow. */
@@ -11,16 +12,33 @@ export interface LocalPhoto {
 }
 
 export type RootStackParamList = {
+  // Auth + onboarding (application-first)
+  Login: undefined;
+  ApplicationForm: undefined;
+  ApplicationStatus: { applicationId: string; email: string };
+  Resubmit: { applicationId: string; email: string };
+
+  // Post-login gate
+  PendingApproval: undefined;
+
+  // Retailer self-service
+  Kyc: undefined;
+  ChangeRequest: undefined;
+
   Home: undefined;
 
-  // Catalog flow: two-card picker (front required, back optional) → configure
+  // Catalog flow: photo picker (front + optional back/close-ups) → configure
   SelectPhotos: undefined;
-  Capture: { slot: 'front' | 'back' };
-  Configure: { apparel: LocalPhoto; apparelBack?: LocalPhoto };
+  Capture: { slot: 'front' | 'back' | 'pattern' | 'logo' | 'tag' };
+  Configure: undefined; // images read from the capture-draft store
   Generating: {
     apparel: UploadFile;
     apparelBack?: UploadFile;
     design?: UploadFile;
+    pattern?: UploadFile;
+    logo?: UploadFile;
+    tag?: UploadFile;
+    modelGender?: ModelGender;
     mode: Mode;
     prompt?: string;
     only?: string[];
@@ -29,17 +47,17 @@ export type RootStackParamList = {
   Publish: { submission: Submission };
   PublishSuccess: { result: PublishResult };
 
-  // Try-on flow
-  TryOn: undefined;
-  TryOnResult: {
-    result: { jobId: string; result: string; steps: string[] };
-  };
-
   // History of generated work
   Creations: undefined;
 
+  // Catalog management
+  Catalog: undefined;
+  ProductDetail: { id: string };
+  ProductForm: { id?: string };
+  VariantForm: { listingId: string; variantId?: string; mode: VariantMode };
+
   // Dev
-  DevSettings: undefined;
+  Profile: undefined;
 };
 
 export type ScreenProps<T extends keyof RootStackParamList> =

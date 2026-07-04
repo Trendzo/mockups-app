@@ -1,10 +1,12 @@
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 import { useSettings } from '../store/settings';
+import { useAuth } from '../store/auth';
 
 /**
  * Single axios instance. The base URL is injected per-request from the settings
  * store so the Dev Settings screen (editable base URL) takes effect immediately
- * without recreating the client.
+ * without recreating the client. The retailer JWT is attached when present
+ * (closetx retailer routes require it).
  */
 export const http: AxiosInstance = axios.create({
   timeout: 120000, // generation can be slow
@@ -12,8 +14,37 @@ export const http: AxiosInstance = axios.create({
 
 http.interceptors.request.use((config) => {
   config.baseURL = useSettings.getState().baseUrl;
+  const token = useAuth.getState().token;
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
   return config;
 });
+
+// No refresh endpoint exists on the backend, so the server is authoritative on
+// expiry: a 401 on an authed call ends the session with reason 'expired', which
+// sends the user back to Login (gated on the token) with a clear notice. Reading
+// the token live inside the handler makes this single-flight — the first 401
+// clears the token, so concurrent 401s that follow see no token and no-op.
+http.interceptors.response.use(
+  (res) => res,
+  (error) => {
+    const status = error?.response?.status;
+    const hadToken = !!useAuth.getState().token;
+    if (status === 401 && hadToken) {
+      useAuth.getState().logout('expired');
+    }
+    return Promise.reject(error);
+  },
+);
+
+/** Unwrap the closetx envelope { success, data } → data. */
+export function unwrapEnvelope<T>(payload: unknown): T {
+  if (payload && typeof payload === 'object' && 'data' in (payload as any)) {
+    return (payload as { data: T }).data;
+  }
+  return payload as T;
+}
 
 /** Are we in MOCK mode? Read live from the store. */
 export const isMock = () => useSettings.getState().mock;
