@@ -39,6 +39,13 @@ export function MainBottomNav({
           onPress: startNewMockup,
         },
         {
+          key: 'scan',
+          icon: 'barcode-scan',
+          set: 'mci',
+          label: 'Scan',
+          onPress: () => navigation.navigate('Scan'),
+        },
+        {
           key: 'catalog',
           icon: 'pricetags-outline',
           label: 'Catalog',

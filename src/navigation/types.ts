@@ -29,6 +29,9 @@ export type RootStackParamList = {
   Main: undefined;
   Home: undefined;
 
+  // QR checkout scanner → pushes picks to an open web Register over SSE
+  Scan: undefined;
+
   // Catalog flow: photo picker (front + optional back/close-ups) → configure
   SelectPhotos: undefined;
   Capture: { slot: 'front' | 'back' | 'pattern' | 'logo' | 'tag' };

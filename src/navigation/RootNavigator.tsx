@@ -17,6 +17,7 @@ import { ReviewResultsScreen } from '../screens/ReviewResultsScreen';
 import { PublishScreen } from '../screens/PublishScreen';
 import { PublishSuccessScreen } from '../screens/PublishSuccessScreen';
 import { CreationsScreen } from '../screens/CreationsScreen';
+import { ScanScreen } from '../screens/ScanScreen';
 import { ProductDetailScreen } from '../screens/ProductDetailScreen';
 import { ProductFormScreen } from '../screens/ProductFormScreen';
 import { VariantFormScreen } from '../screens/VariantFormScreen';
@@ -161,6 +162,11 @@ export function RootNavigator() {
           options={{ animation: 'fade', gestureEnabled: false }}
         />
         <Stack.Screen name="Creations" component={CreationsScreen} />
+        <Stack.Screen
+          name="Scan"
+          component={ScanScreen}
+          options={{ animation: 'slide_from_bottom' }}
+        />
         <Stack.Screen name="ProductDetail" component={ProductDetailScreen} />
         <Stack.Screen name="ProductForm" component={ProductFormScreen} />
         <Stack.Screen name="VariantForm" component={VariantFormScreen} />

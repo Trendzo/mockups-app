@@ -2,13 +2,15 @@ import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppText } from './AppText';
-import { Icon } from './Icon';
+import { Icon, IconSet } from './Icon';
 import { PressableScale } from './PressableScale';
 import { colors, spacing } from '../theme/theme';
 
 export interface BottomNavTab {
   key: string;
   icon: string;
+  /** Icon family — defaults to Ionicons ('ion'). Use 'mci' for MaterialCommunityIcons glyphs. */
+  set?: IconSet;
   label: string;
   active?: boolean;
   onPress: () => void;
@@ -27,7 +29,7 @@ export function BottomNav({ tabs }: { tabs: BottomNavTab[] }) {
           const tint = t.active ? colors.ink : colors.inkMuted;
           return (
             <PressableScale key={t.key} onPress={t.onPress} style={styles.tab} haptic>
-              <Icon name={t.icon} size={22} color={tint} />
+              <Icon name={t.icon} set={t.set} size={22} color={tint} />
               <AppText variant="meta" color={tint} style={styles.label}>
                 {t.label}
               </AppText>
