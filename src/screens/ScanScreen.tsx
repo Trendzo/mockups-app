@@ -82,7 +82,9 @@ export function ScanScreen({ navigation }: ScreenProps<'Scan'>) {
   const [showPicker, setShowPicker] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [qty, setQty] = useState(1);
+  const [pickerContentH, setPickerContentH] = useState(0);
   const menuProgress = useSharedValue(0); // 0 = details, 1 = action menu revealed
+  const pickerProgress = useSharedValue(0); // 0 = picker collapsed, 1 = expanded
 
   // Refs mirror state so the (stable-identity) code-scanner callback reads current values.
   const cardRef = useRef<PosLookupRow | null>(null);
@@ -116,6 +118,23 @@ export function ScanScreen({ navigation }: ScreenProps<'Scan'>) {
     const unsub = navigation.addListener('focus', () => void refreshRegisters());
     return unsub;
   }, [navigation, refreshRegisters]);
+
+  // Swipe-up gesture reloads the register list (replaces the old refresh button).
+  const triggerReload = useCallback(() => {
+    Haptics.tap();
+    toast.show('Refreshing…', 'info');
+    void refreshRegisters();
+  }, [refreshRegisters, toast]);
+
+  // Smoothly expand/collapse the picker whenever it toggles (gear tap, or forced
+  // open when nothing is connected).
+  const pickerVisible = showPicker || registers.length === 0;
+  useEffect(() => {
+    pickerProgress.value = withTiming(pickerVisible ? 1 : 0, {
+      duration: 260,
+      easing: Easing.inOut(Easing.ease),
+    });
+  }, [pickerVisible, pickerProgress]);
 
   // ── Resolve a scanned code → confirm card ──
   const handleCode = useCallback(
@@ -236,6 +255,13 @@ export function ScanScreen({ navigation }: ScreenProps<'Scan'>) {
       runOnJS(menuOpen ? closeMenu : openMenu)();
     });
 
+  // Pull down (from the top) anywhere on the scan area → reload registers.
+  const reloadPan = Gesture.Pan().onEnd((e) => {
+    if (e.translationY > 50 && e.velocityY > 250) {
+      runOnJS(triggerReload)();
+    }
+  });
+
   // Card slides straight (no rotation).
   const cardStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }],
@@ -262,6 +288,11 @@ export function ScanScreen({ navigation }: ScreenProps<'Scan'>) {
     height: menuProgress.value * MENU_HEIGHT,
     opacity: menuProgress.value,
   }));
+  // Register picker reveal (clip to an animated fraction of its measured height).
+  const pickerAnimStyle = useAnimatedStyle(() => ({
+    height: pickerProgress.value * pickerContentH,
+    opacity: pickerProgress.value,
+  }));
 
   const decQty = useCallback(() => setQty((n) => Math.max(1, n - 1)), []);
   const incQty = useCallback(() => setQty((n) => Math.min(99, n + 1)), []);
@@ -271,8 +302,6 @@ export function ScanScreen({ navigation }: ScreenProps<'Scan'>) {
   // The camera only runs when at least one register is connected — otherwise there's nowhere to
   // send a scan, so we stay on a black screen with the picker/banner shown.
   const cameraLive = showCamera && connected;
-  // Picker is hidden while scanning; revealed by the gear, or forced open when nothing's connected.
-  const pickerOpen = showPicker || !connected;
   const targetLabel =
     target === TARGET_ALL
       ? 'All registers'
@@ -323,23 +352,21 @@ export function ScanScreen({ navigation }: ScreenProps<'Scan'>) {
                 {targetLabel}
               </AppText>
             </View>
-            <PressableScale
-              onPress={() => setShowPicker((v) => !v)}
-              style={[styles.pill, showPicker && styles.pillActive]}
-            >
-              <Icon name="settings-outline" size={20} color={showPicker ? colors.ink : colors.surface} />
+            <PressableScale onPress={() => setShowPicker((v) => !v)} style={styles.pill}>
+              <Icon name="settings-outline" size={20} color={colors.surface} />
             </PressableScale>
           </View>
 
-          {pickerOpen && (
-            <>
+          {/* Register picker — expands / collapses smoothly. */}
+          <Animated.View style={[styles.pickerClip, pickerAnimStyle]}>
+            <View
+              style={styles.pickerInner}
+              onLayout={(e) => setPickerContentH(e.nativeEvent.layout.height)}
+            >
               <View style={styles.pickerHead}>
-                <AppText variant="meta" color={colors.onDarkMuted}>
+                <AppText variant="meta" color={colors.meta}>
                   Send scan to
                 </AppText>
-                <PressableScale onPress={() => void refreshRegisters()}>
-                  <Icon name="refresh" size={16} color={colors.surface} />
-                </PressableScale>
               </View>
               <ScrollView
                 horizontal
@@ -363,30 +390,39 @@ export function ScanScreen({ navigation }: ScreenProps<'Scan'>) {
 
               {!connected && (
                 <View style={styles.banner}>
-                  <AppText variant="meta" color={colors.accentInk} style={styles.center}>
-                    No register connected. Open the Register page on your counter device.
+                  <AppText variant="meta" color={colors.ink} style={styles.center}>
+                    No register connected. Open the Register page on your counter device, then swipe up to refresh.
                   </AppText>
                 </View>
               )}
-            </>
-          )}
+            </View>
+          </Animated.View>
         </View>
 
-        {/* Scan reticle — fills the remaining height and centers itself. */}
-        {cameraLive && !card && (
-          <View pointerEvents="none" style={styles.reticleArea}>
-            <View style={styles.reticle} />
-            <AppText variant="meta" color={colors.surface} style={styles.reticleHint}>
-              {resolving ? 'Looking up…' : 'Point at a product QR'}
-            </AppText>
-          </View>
+        {/* Scan area — swipe up to refresh; reticle shows when the camera is live. */}
+        {!card && (
+          <GestureDetector gesture={reloadPan}>
+            <View style={styles.scanArea}>
+              {cameraLive && (
+                <View pointerEvents="none" style={styles.reticleBox}>
+                  <View style={styles.reticle} />
+                  <AppText variant="meta" color={colors.surface} style={styles.reticleHint}>
+                    {resolving ? 'Looking up…' : 'Point at a product QR'}
+                  </AppText>
+                </View>
+              )}
+              <AppText variant="meta" color={colors.surface} style={styles.swipeHintReload}>
+                Swipe down to refresh
+              </AppText>
+            </View>
+          </GestureDetector>
         )}
       </View>
 
       {/* Product confirm card */}
       {card && (
         <GestureDetector gesture={pan}>
-          <Animated.View style={[styles.cardWrap, { bottom: insets.bottom + spacing.lg }]}>
+          <Animated.View style={styles.cardWrap}>
             <Animated.View style={[styles.cardStack, stackStyle]}>
               {/* Behind the card: action icons revealed as it slides off. */}
               <Animated.View style={[styles.revealIcon, styles.revealIconLeft, greenStyle]}>
@@ -398,10 +434,10 @@ export function ScanScreen({ navigation }: ScreenProps<'Scan'>) {
 
               <Animated.View style={[styles.card, cardStyle]}>
                 <GestureDetector gesture={detailsTap}>
-                  <View style={styles.cardTopRow}>
-                    <AppImage uri={card.imageUrl} radius={radii.sm} containerStyle={styles.thumb} />
-                    <View style={styles.cardBody}>
-                      <AppText variant="cardTitle" color={colors.ink} numberOfLines={1}>
+                  <View style={styles.cardContent}>
+                    <AppImage uri={card.imageUrl} radius={radii.card} containerStyle={styles.cardImage} />
+                    <View style={styles.cardInfo}>
+                      <AppText variant="cardTitle" color={colors.ink} numberOfLines={2} style={styles.cardName}>
                         {card.name}
                       </AppText>
                       <AppText variant="meta" color={colors.meta} numberOfLines={1}>
@@ -409,7 +445,7 @@ export function ScanScreen({ navigation }: ScreenProps<'Scan'>) {
                         {card.sku ? ` · ${card.sku}` : ''}
                       </AppText>
                       <View style={styles.priceRow}>
-                        <AppText variant="bodyMedium" color={colors.ink}>
+                        <AppText variant="cardTitle" color={colors.ink}>
                           {rupees(card.pricePaise)}
                         </AppText>
                         {card.compareAtPaise != null && card.compareAtPaise > card.pricePaise && (
@@ -459,13 +495,13 @@ const styles = StyleSheet.create({
   center: { textAlign: 'center' },
   settingsBtn: { marginTop: spacing.sm },
 
-  reticleArea: {
-    flex: 1,
+  scanArea: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  reticleBox: {
     alignItems: 'center',
-    justifyContent: 'center',
-    // Nudge the focus square up ~10% of screen height so it sits above centre.
-    transform: [{ translateY: -SCREEN_H * 0.1 }],
+    // Nudge the focus square up so it sits above centre.
+    transform: [{ translateY: -SCREEN_H * 0.06 }],
   },
+  swipeHintReload: { position: 'absolute', top: spacing.lg, alignSelf: 'center', opacity: 0.9 },
   reticle: {
     width: SCREEN_W * 0.58,
     height: SCREEN_W * 0.58,
@@ -478,54 +514,66 @@ const styles = StyleSheet.create({
   topBar: {
     paddingHorizontal: spacing.screenH,
     paddingBottom: spacing.md,
-    backgroundColor: colors.scrim,
+    backgroundColor: colors.surface,
     borderBottomLeftRadius: radii.card,
     borderBottomRightRadius: radii.card,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
   },
   topRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   pill: {
     width: 40,
     height: 40,
     borderRadius: radii.pill,
-    backgroundColor: colors.scrim,
+    backgroundColor: colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  pillActive: { backgroundColor: colors.surface },
-  pickerHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: spacing.md,
-  },
+  pickerClip: { overflow: 'hidden' },
+  // Absolute so it lays out at its natural height regardless of the clip height,
+  // giving onLayout a real measurement to animate to.
+  pickerInner: { position: 'absolute', left: 0, right: 0, top: 0 },
+  pickerHead: { marginTop: spacing.md },
   sendToPill: {
     flex: 1,
+    height: 40,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: spacing.xs,
     backgroundColor: colors.accent,
     borderRadius: radii.pill,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
   },
-  sendToText: { flex: 1 },
+  sendToText: { flexShrink: 1, textAlign: 'center' },
   chipRow: { gap: spacing.sm, paddingVertical: spacing.md },
   banner: {
-    backgroundColor: colors.scrim,
+    backgroundColor: colors.canvas,
     borderRadius: radii.sm,
     padding: spacing.md,
   },
 
-  cardWrap: { position: 'absolute', left: spacing.lg, right: spacing.lg },
+  // Fills the screen and centres the card; the pan gesture lives here.
+  cardWrap: {
+    position: 'absolute',
+    left: spacing.lg,
+    right: spacing.lg,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+  },
   // Container carries the reveal colour as its own background (always behind the card child);
-  // the card is opaque and slides freely over it (overflow visible so it isn't clipped).
+  // the card is opaque and slides freely over it.
   cardStack: { position: 'relative', borderRadius: radii.card },
   card: {
     backgroundColor: colors.surface,
     borderRadius: radii.card,
     padding: spacing.md,
   },
-  cardTopRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  cardContent: { alignItems: 'stretch' },
   menu: { overflow: 'hidden' },
   menuRow: {
     flexDirection: 'row',
@@ -542,9 +590,16 @@ const styles = StyleSheet.create({
   },
   menuBtnPlain: { backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.hairline },
   qtyText: { minWidth: 28, textAlign: 'center' },
-  thumb: { width: 56, height: 56 },
-  cardBody: { flex: 1, gap: 2 },
-  priceRow: { flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm, marginTop: 2 },
+  cardImage: { width: '100%', height: SCREEN_W * 0.7 },
+  cardInfo: { alignItems: 'center', gap: spacing.xs, marginTop: spacing.md },
+  cardName: { textAlign: 'center', fontSize: 20, lineHeight: 24 },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    marginTop: 2,
+  },
   strike: { textDecorationLine: 'line-through' },
   swipeHint: { textAlign: 'center', marginTop: spacing.sm },
 
