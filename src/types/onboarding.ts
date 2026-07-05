@@ -135,6 +135,14 @@ export interface RetailerProfile {
 export interface RetailerMe {
   retailer: RetailerProfile;
   store: Store | null;
+  termsAcceptanceRequired?: boolean;
+  currentTermsVersion?: string;
+}
+
+export interface TermsInfo {
+  version: string;
+  shortText: string;
+  acceptedAt: string | null;
 }
 
 // ---- KYC ----

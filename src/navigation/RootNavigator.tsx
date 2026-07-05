@@ -8,6 +8,7 @@ import { ApplicationFormScreen } from '../screens/ApplicationFormScreen';
 import { ApplicationStatusScreen } from '../screens/ApplicationStatusScreen';
 import { ResubmitScreen } from '../screens/ResubmitScreen';
 import { PendingApprovalScreen } from '../screens/PendingApprovalScreen';
+import { TermsScreen } from '../screens/TermsScreen';
 import { MainTabs } from './MainTabs';
 import { SelectPhotosScreen } from '../screens/SelectPhotosScreen';
 import { CaptureScreen } from '../screens/CaptureScreen';
@@ -136,6 +137,16 @@ export function RootNavigator() {
     retailer?.status === 'active' &&
     !!store &&
     (store.status === 'onboarding' || store.status === 'active');
+
+  // Legal gate — an onboarding store must accept the Retailer Terms before it can
+  // go live. Block the full app on a terms-only screen until accepted.
+  if (active && me.data?.termsAcceptanceRequired) {
+    return (
+      <Stack.Navigator screenOptions={options}>
+        <Stack.Screen name="Terms" component={TermsScreen} />
+      </Stack.Navigator>
+    );
+  }
 
   // Active retailer with a usable store → full app.
   if (active) {

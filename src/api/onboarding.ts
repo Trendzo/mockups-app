@@ -11,6 +11,7 @@ import {
   KycCycle,
   RetailerMe,
   ResubmitPrefill,
+  TermsInfo,
   ThreadMessage,
   UploadResult,
 } from '../types/onboarding';
@@ -153,6 +154,16 @@ export async function getRetailerMe(): Promise<RetailerMe> {
   } catch (e) {
     throw normalizeAuthError(e);
   }
+}
+
+// ---- C2) Terms & Conditions (legal gate before go-live) ----
+export async function getTerms(): Promise<TermsInfo> {
+  const res = await getJson<{ data: TermsInfo }>('/retailer/terms');
+  return unwrapEnvelope<TermsInfo>(res);
+}
+
+export async function acceptTerms(version: string): Promise<void> {
+  await postJson('/retailer/terms/accept', { version });
 }
 
 // ---- D) KYC ----
