@@ -5,12 +5,21 @@ export type PermissionOutcome = 'granted' | 'denied' | 'blocked';
 
 /** Camera permission for the vision-camera preview (§5.2). */
 export async function ensureCameraPermission(): Promise<PermissionOutcome> {
-  const status = await Camera.getCameraPermissionStatus();
+  // getCameraPermissionStatus is synchronous in vision-camera v4.
+  let status = Camera.getCameraPermissionStatus();
   if (status === 'granted') return 'granted';
-  const requested = await Camera.requestCameraPermission();
-  if (requested === 'granted') return 'granted';
-  // vision-camera returns 'denied' for both soft and hard denials on some OS
-  return status === 'denied' ? 'blocked' : 'denied';
+
+  // Only 'not-determined' can still show the system prompt; a prior denial won't.
+  if (status === 'not-determined') {
+    const requested = await Camera.requestCameraPermission();
+    if (requested === 'granted') return 'granted';
+    status = Camera.getCameraPermissionStatus(); // re-read the real status after the prompt
+  }
+
+  // 'denied' / 'restricted' → the OS won't prompt again; the user must enable it
+  // in Settings. Report 'blocked' so the screen shows the "Open Settings" path
+  // instead of getting stuck on "Requesting camera…".
+  return status === 'not-determined' ? 'denied' : 'blocked';
 }
 
 /**
