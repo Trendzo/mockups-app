@@ -6,6 +6,7 @@ import {
   Banner,
   Field,
   HeroHeadline,
+  OtpInput,
   PressableScale,
   PrimaryButton,
   Screen,
@@ -29,6 +30,7 @@ const NATIONAL_RE = /^[0-9]{6,14}$/;
 const RESEND_SECONDS = 30;
 const REVIEW_PHONE = '9179621765';
 const REVIEW_REQ_ID = 'app-store-review';
+const OTP_LENGTH = 4;
 
 // Public retailer widget credentials (safe to ship; the secret authkey stays server-side).
 const WIDGET_ID = '3667636f3464353730373939';
@@ -146,13 +148,14 @@ export function LoginScreen({ navigation }: ScreenProps<'Login'>) {
     }
   };
 
-  const verifyOtp = async () => {
+  const verifyOtp = async (codeOverride?: string) => {
     setOtpErr(undefined);
-    const code = otp.trim();
-    if (code.length < 4 || !reqId) {
+    const code = (codeOverride ?? otp).replace(/\D/g, '');
+    if (code.length !== OTP_LENGTH || !reqId) {
       setOtpErr('Enter the code we sent');
       return;
     }
+    if (verifying) return;
     setVerifying(true);
     try {
       const result =
@@ -308,21 +311,29 @@ export function LoginScreen({ navigation }: ScreenProps<'Login'>) {
             </View>
           ) : (
             <View style={styles.form}>
-              <Field
-                label="Verification code"
-                required
-                value={otp}
-                onChangeText={setOtp}
-                placeholder="Enter OTP"
-                keyboardType="number-pad"
-                maxLength={6}
-                error={otpErr}
-              />
+              <View style={styles.otpField}>
+                <AppText variant="sectionLabel" color={colors.meta}>
+                  Enter the {OTP_LENGTH}-digit code
+                </AppText>
+                <OtpInput
+                  value={otp}
+                  onChange={setOtp}
+                  length={OTP_LENGTH}
+                  autoFocus
+                  disabled={verifying}
+                  onComplete={(code) => void verifyOtp(code)}
+                />
+                {otpErr ? (
+                  <AppText variant="meta" color={colors.danger}>
+                    {otpErr}
+                  </AppText>
+                ) : null}
+              </View>
               <PrimaryButton
                 label="Verify & log in"
                 tone="accent"
                 loading={verifying}
-                onPress={verifyOtp}
+                onPress={() => verifyOtp()}
               />
               <View style={styles.otpRow}>
                 <PressableScale
@@ -448,6 +459,7 @@ const styles = StyleSheet.create({
   header: { gap: spacing.sm },
   headline: { marginVertical: spacing.xs },
   form: { gap: spacing.lg },
+  otpField: { gap: spacing.sm },
   otpRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

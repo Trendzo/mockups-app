@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppText, Icon, PressableScale, PrimaryButton, Screen, useToast } from '../components';
-import { acceptTerms, getTerms } from '../api/onboarding';
+import { acceptTerms, declineTerms, getTerms } from '../api/onboarding';
 import { useAuth } from '../store/auth';
 import { colors, radii, spacing } from '../theme/theme';
 
@@ -28,6 +28,22 @@ export function TermsScreen() {
     onError: (e: unknown) =>
       toast.show((e as { message?: string })?.message ?? 'Could not record acceptance', 'error'),
   });
+
+  // Declining is recorded, then the user is logged out — re-prompted next login until accepted.
+  const decline = useMutation({
+    mutationFn: () => declineTerms(terms!.version),
+    onSettled: () => logout(),
+  });
+  function onDecline() {
+    Alert.alert(
+      'Decline terms?',
+      'Declining the Retailer Terms will log you out. You must accept them to use your store.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Decline & log out', style: 'destructive', onPress: () => decline.mutate() },
+      ],
+    );
+  }
 
   return (
     <Screen>
@@ -55,7 +71,7 @@ export function TermsScreen() {
         loading={accept.isPending}
         onPress={() => accept.mutate()}
       />
-      <PrimaryButton label="Log out" tone="ghost" onPress={logout} />
+      <PrimaryButton label="Decline & log out" tone="danger" loading={decline.isPending} onPress={onDecline} />
     </Screen>
   );
 }

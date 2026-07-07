@@ -24,6 +24,7 @@ export type { ViewerImage } from './ImageViewer';
 export { MockupGrid } from './MockupGrid';
 export type { MockupItem } from './MockupGrid';
 export { PressableScale } from './PressableScale';
+export { OtpInput } from './OtpInput';
 export { PrimaryButton } from './PrimaryButton';
 export { Screen } from './Screen';
 export { Select } from './Select';
