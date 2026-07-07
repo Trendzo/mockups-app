@@ -16,4 +16,4 @@ export const DEFAULT_AUTH_BASE_URL = 'https://backend-qpmx.onrender.com/api/v1';
 
 export const platformDefaultAuthBaseUrl = (): string => DEFAULT_AUTH_BASE_URL;
 
-export const APP_NAME = 'Trendzo Mockup';
+export const APP_NAME = 'Trendzo Retailer';
