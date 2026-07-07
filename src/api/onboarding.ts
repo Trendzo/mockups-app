@@ -166,6 +166,11 @@ export async function acceptTerms(version: string): Promise<void> {
   await postJson('/retailer/terms/accept', { version });
 }
 
+/** Record a decline (audited); the app then logs the user out. */
+export async function declineTerms(version: string): Promise<void> {
+  await postJson('/retailer/terms/decline', { version });
+}
+
 // ---- D) KYC ----
 export async function getKyc(): Promise<KycCycle | null> {
   try {
