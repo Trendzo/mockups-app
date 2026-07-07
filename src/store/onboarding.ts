@@ -27,7 +27,7 @@ export const useOnboarding = create<OnboardingState>()(
       _setHydrated: () => set({ hydrated: true }),
     }),
     {
-      name: 'trenzo.onboarding.v1',
+      name: 'trendzo.onboarding.v1',
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (s) => ({
         applicationId: s.applicationId,

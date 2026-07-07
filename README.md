@@ -1,6 +1,6 @@
-# Trenzo Mockup — Mobile App
+# Trendzo Mockup — Mobile App
 
-React Native **CLI** (bare, TypeScript) app for the Trenzo AI catalog + virtual
+React Native **CLI** (bare, TypeScript) app for the Trendzo AI catalog + virtual
 try-on flows. Talks to the existing backend in the sibling `../backend` folder.
 Editorial / Swiss / brutalist-minimal design — warm-gray canvas, one chartreuse
 accent, giant stacked grotesk headlines on an 8pt grid.
@@ -73,7 +73,7 @@ cd ../backend && node server.mjs   # listens on :5055
 npm start
 
 # iOS
-npm run ios         # or open ios/TrenzoMockup.xcworkspace in Xcode
+npm run ios         # or open ios/TrendzoMockup.xcworkspace in Xcode
 
 # Android (emulator/device running)
 npm run android

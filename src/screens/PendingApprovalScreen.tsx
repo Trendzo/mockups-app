@@ -65,7 +65,7 @@ export function PendingApprovalScreen({ navigation }: ScreenProps<'PendingApprov
           <Icon name="time-outline" size={30} color={colors.ink} />
         </View>
         <AppText variant="sectionLabel" color={colors.meta}>
-          Trenzo Studio
+          Trendzo Studio
         </AppText>
         <AppText variant="cardTitle" color={colors.ink} style={styles.h1}>
           Almost there

@@ -15,9 +15,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-               BuildableName = "TrenzoMockup.app"
-               BlueprintName = "TrenzoMockup"
-               ReferencedContainer = "container:TrenzoMockup.xcodeproj">
+               BuildableName = "TrendzoMockup.app"
+               BlueprintName = "TrendzoMockup"
+               ReferencedContainer = "container:TrendzoMockup.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -33,9 +33,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "00E356ED1AD99517003FC87E"
-               BuildableName = "TrenzoMockupTests.xctest"
-               BlueprintName = "TrenzoMockupTests"
-               ReferencedContainer = "container:TrenzoMockup.xcodeproj">
+               BuildableName = "TrendzoMockupTests.xctest"
+               BlueprintName = "TrendzoMockupTests"
+               ReferencedContainer = "container:TrendzoMockup.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
@@ -55,9 +55,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-            BuildableName = "TrenzoMockup.app"
-            BlueprintName = "TrenzoMockup"
-            ReferencedContainer = "container:TrenzoMockup.xcodeproj">
+            BuildableName = "TrendzoMockup.app"
+            BlueprintName = "TrendzoMockup"
+            ReferencedContainer = "container:TrendzoMockup.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -72,9 +72,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-            BuildableName = "TrenzoMockup.app"
-            BlueprintName = "TrenzoMockup"
-            ReferencedContainer = "container:TrenzoMockup.xcodeproj">
+            BuildableName = "TrendzoMockup.app"
+            BlueprintName = "TrendzoMockup"
+            ReferencedContainer = "container:TrendzoMockup.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

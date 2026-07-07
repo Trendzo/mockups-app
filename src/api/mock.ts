@@ -84,7 +84,7 @@ export async function mockCategories(): Promise<Category[]> {
 export async function mockBrands(): Promise<Brand[]> {
   return delay(
     [
-      { id: 'brd_1', slug: 'trenzo', name: 'Trenzo' },
+      { id: 'brd_1', slug: 'trendzo', name: 'Trendzo' },
       { id: 'brd_2', slug: 'northline', name: 'Northline' },
       { id: 'brd_3', slug: 'atelier', name: 'Atelier 9' },
     ],

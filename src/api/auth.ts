@@ -10,7 +10,7 @@ import { AuthError, AuthResult, LoginInput, SignupInput } from '../types/auth';
  */
 export const authHttp = axios.create({ timeout: 20000 });
 
-authHttp.interceptors.request.use((config) => {
+authHttp.interceptors.request.use(config => {
   config.baseURL = useSettings.getState().authBaseUrl;
   return config;
 });
@@ -20,7 +20,13 @@ export function normalizeAuthError(err: unknown): AuthError {
   if (axios.isAxiosError(err)) {
     const status = err.response?.status;
     const data = err.response?.data as
-      | { error?: { code?: string; message?: string; details?: { applicationId?: string } } }
+      | {
+          error?: {
+            code?: string;
+            message?: string;
+            details?: { applicationId?: string };
+          };
+        }
       | undefined;
     const e = data?.error;
     if (e?.code || e?.message) {
@@ -62,7 +68,9 @@ function friendly(code?: string, message?: string): string {
   }
 }
 
-async function unwrap<T>(promise: Promise<{ data: { success: boolean; data: T } }>): Promise<T> {
+async function unwrap<T>(
+  promise: Promise<{ data: { success: boolean; data: T } }>,
+): Promise<T> {
   const res = await promise;
   return res.data.data;
 }
@@ -86,10 +94,26 @@ export async function loginRetailer(input: LoginInput): Promise<AuthResult> {
  * secret key, matches the phone to a retailer account, and mints a JWT. Same
  * envelope/shape and error codes as loginRetailer (never creates an account).
  */
-export async function loginRetailerOtp(accessToken: string): Promise<AuthResult> {
+export async function loginRetailerOtp(
+  accessToken: string,
+): Promise<AuthResult> {
   try {
     return await unwrap<AuthResult>(
       authHttp.post('/auth/retailer/otp/msg91', { accessToken }),
+    );
+  } catch (e) {
+    throw normalizeAuthError(e);
+  }
+}
+
+/** App Store reviewer login for the single phone configured on the backend. */
+export async function loginRetailerReview(
+  phone: string,
+  otp: string,
+): Promise<AuthResult> {
+  try {
+    return await unwrap<AuthResult>(
+      authHttp.post('/auth/retailer/review-login', { phone, otp }),
     );
   } catch (e) {
     throw normalizeAuthError(e);

@@ -66,7 +66,7 @@ export const useSession = create<SessionState>()(
         ).length,
     }),
     {
-      name: 'trenzo.session.v1',
+      name: 'trendzo.session.v1',
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (s) => ({ recent: s.recent }),
     },

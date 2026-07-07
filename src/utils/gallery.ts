@@ -11,7 +11,7 @@ export async function saveRemoteImage(url: string): Promise<void> {
   const ext = (url.split('?')[0].split('.').pop() || 'jpg').toLowerCase();
   const safeExt = ['png', 'jpg', 'jpeg', 'webp'].includes(ext) ? ext : 'jpg';
   const dir = ReactNativeBlobUtil.fs.dirs.CacheDir;
-  const path = `${dir}/trenzo_${Date.now()}.${safeExt}`;
+  const path = `${dir}/trendzo_${Date.now()}.${safeExt}`;
 
   const res = await ReactNativeBlobUtil.config({ path, fileCache: true }).fetch(
     'GET',
@@ -21,7 +21,7 @@ export async function saveRemoteImage(url: string): Promise<void> {
   const fileUri = Platform.OS === 'android' ? `file://${localPath}` : localPath;
 
   try {
-    await CameraRoll.save(fileUri, { type: 'photo', album: 'Trenzo' });
+    await CameraRoll.save(fileUri, { type: 'photo', album: 'Trendzo' });
   } finally {
     ReactNativeBlobUtil.fs.unlink(localPath).catch(() => {});
   }

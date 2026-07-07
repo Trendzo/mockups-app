@@ -1,5 +1,11 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Linking,
+  ScrollView,
+  StyleSheet,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   AppText,
@@ -16,14 +22,21 @@ import { ScreenProps } from '../navigation/types';
 import { useAuth } from '../store/auth';
 import { useKyc, useRetailerMe } from '../api/onboardingHooks';
 import { CatalogExportKind, downloadCatalogCsv } from '../api/catalogueExport';
+import { deleteRetailerAccount } from '../api/onboarding';
 import { colors, radii, spacing } from '../theme/theme';
+import {
+  ACCOUNT_DELETION_URL,
+  PRIVACY_URL,
+  SUPPORT_URL,
+  TERMS_URL,
+} from '../config/legal';
 
 /** Profile (§account): view your retailer details, request changes, log out. */
 export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
   const toast = useToast();
   const insets = useSafeAreaInsets();
-  const retailer = useAuth((s) => s.retailer);
-  const logout = useAuth((s) => s.logout);
+  const retailer = useAuth(s => s.retailer);
+  const logout = useAuth(s => s.logout);
   const me = useRetailerMe(!!retailer);
   const kyc = useKyc(!!retailer);
 
@@ -40,13 +53,17 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
 
   const kycStatus = kyc.data?.status;
   const kycNeedsAction =
-    kycStatus === 'pending' || kycStatus === 'overdue' || kycStatus === 'rejected';
+    kycStatus === 'pending' ||
+    kycStatus === 'overdue' ||
+    kycStatus === 'rejected';
 
   const [exportOpen, setExportOpen] = useState(false);
   const [exporting, setExporting] = useState<CatalogExportKind | null>(null);
   const [phase, setPhase] = useState<'idle' | 'downloading' | 'done'>('idle');
   const [progress, setProgress] = useState(0);
   const [doneMsg, setDoneMsg] = useState('');
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const closeExport = () => {
     setExportOpen(false);
@@ -63,7 +80,9 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
       const { location, filename } = await downloadCatalogCsv(kind, {
         onProgress: setProgress,
       });
-      setDoneMsg(location === 'downloads' ? 'Saved to Downloads' : 'Saved to Files');
+      setDoneMsg(
+        location === 'downloads' ? 'Saved to Downloads' : 'Saved to Files',
+      );
       setPhase('done');
       toast.show(`Downloaded ${filename}`, 'success');
       setTimeout(closeExport, 1500);
@@ -79,9 +98,26 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
     toast.show('Logged out', 'info');
   };
 
+  const onDeleteAccount = async () => {
+    setDeleting(true);
+    try {
+      await deleteRetailerAccount();
+      setDeleteOpen(false);
+      logout();
+      toast.show('Your account was deleted', 'info');
+    } catch (e: any) {
+      toast.show(e?.message ?? 'Could not delete account', 'error');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <Screen edges={['top']}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.content}
+      >
         <View style={styles.headerRow}>
           <AppText variant="cardTitle" color={colors.ink} style={styles.h1}>
             Profile
@@ -91,15 +127,27 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
         {/* Identity */}
         <View style={styles.identity}>
           <View style={styles.avatar}>
-            <AppText variant="cardTitle" color={colors.accentInk} style={styles.avatarText}>
+            <AppText
+              variant="cardTitle"
+              color={colors.accentInk}
+              style={styles.avatarText}
+            >
               {initial}
             </AppText>
           </View>
           <View style={styles.identityBody}>
-            <AppText variant="cardTitle" color={colors.ink} numberOfLines={1} style={styles.name}>
+            <AppText
+              variant="cardTitle"
+              color={colors.ink}
+              numberOfLines={1}
+              style={styles.name}
+            >
               {legalName}
             </AppText>
-            <StatusChip label={status.replace(/_/g, ' ')} tone={toneForStatus(status)} />
+            <StatusChip
+              label={status.replace(/_/g, ' ')}
+              tone={toneForStatus(status)}
+            />
           </View>
         </View>
 
@@ -110,7 +158,11 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
           <InfoRow label="Phone" value={phone} />
           <InfoRow label="GSTIN" value={gstin} />
           {store ? (
-            <InfoRow label="Store" value={store.name ?? store.id} chip={store.status} />
+            <InfoRow
+              label="Store"
+              value={store.name ?? store.id}
+              chip={store.status}
+            />
           ) : null}
         </View>
 
@@ -135,6 +187,30 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
             hint="Download your products or inventory"
             onPress={() => setExportOpen(true)}
           />
+          <ActionRow
+            icon="document-text-outline"
+            label="Terms of Service"
+            onPress={() => Linking.openURL(TERMS_URL)}
+          />
+          <ActionRow
+            icon="lock-closed-outline"
+            label="Privacy Policy"
+            onPress={() => Linking.openURL(PRIVACY_URL)}
+          />
+          <ActionRow
+            icon="help-circle-outline"
+            label="Support"
+            onPress={() => Linking.openURL(SUPPORT_URL)}
+          />
+          {retailer?.subRole === 'owner' ? (
+            <ActionRow
+              icon="trash-outline"
+              label="Delete account"
+              hint="Permanently close this business account"
+              tone="danger"
+              onPress={() => setDeleteOpen(true)}
+            />
+          ) : null}
         </View>
 
         <PrimaryButton label="Log out" tone="ghost" onPress={onLogout} />
@@ -148,8 +224,14 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
         }}
         dismissable={phase === 'idle'}
       >
-        <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.lg }]}>
-          <AppText variant="cardTitle" color={colors.ink} style={styles.sheetTitle}>
+        <View
+          style={[styles.sheet, { paddingBottom: insets.bottom + spacing.lg }]}
+        >
+          <AppText
+            variant="cardTitle"
+            color={colors.ink}
+            style={styles.sheetTitle}
+          >
             Export catalog
           </AppText>
 
@@ -176,20 +258,72 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
               ) : (
                 <ActivityIndicator size="large" color={colors.ink} />
               )}
-              <AppText variant="bodyMedium" color={colors.ink} style={styles.dlLabel}>
+              <AppText
+                variant="bodyMedium"
+                color={colors.ink}
+                style={styles.dlLabel}
+              >
                 {phase === 'done'
                   ? doneMsg
-                  : `Downloading ${exporting === 'inventory' ? 'inventory' : 'products'}…`}
+                  : `Downloading ${
+                      exporting === 'inventory' ? 'inventory' : 'products'
+                    }…`}
               </AppText>
               {phase === 'downloading' && progress > 0 ? (
                 <View style={styles.progressTrack}>
                   <View
-                    style={[styles.progressFill, { width: `${Math.round(progress * 100)}%` }]}
+                    style={[
+                      styles.progressFill,
+                      { width: `${Math.round(progress * 100)}%` },
+                    ]}
                   />
                 </View>
               ) : null}
             </View>
           )}
+        </View>
+      </BottomSheet>
+
+      <BottomSheet
+        visible={deleteOpen}
+        onClose={() => !deleting && setDeleteOpen(false)}
+        dismissable={!deleting}
+      >
+        <View
+          style={[styles.sheet, { paddingBottom: insets.bottom + spacing.lg }]}
+        >
+          <AppText
+            variant="cardTitle"
+            color={colors.ink}
+            style={styles.sheetTitle}
+          >
+            Delete account?
+          </AppText>
+          <AppText variant="body" color={colors.meta}>
+            Access will end immediately. Your profile and active media will be
+            removed or anonymized. GST, invoice, order, payout and audit records
+            may be retained where legally required.
+          </AppText>
+          <PressableScale
+            haptic={false}
+            onPress={() => Linking.openURL(ACCOUNT_DELETION_URL)}
+          >
+            <AppText variant="bodyMedium" color={colors.ink}>
+              Read account deletion details
+            </AppText>
+          </PressableScale>
+          <PrimaryButton
+            label="Permanently delete account"
+            tone="danger"
+            loading={deleting}
+            onPress={onDeleteAccount}
+          />
+          <PrimaryButton
+            label="Cancel"
+            tone="surface"
+            disabled={deleting}
+            onPress={() => setDeleteOpen(false)}
+          />
         </View>
       </BottomSheet>
     </Screen>
@@ -238,10 +372,20 @@ function InfoRow({
         {label}
       </AppText>
       <View style={styles.infoValueRow}>
-        <AppText variant="bodyMedium" color={colors.ink} numberOfLines={1} style={styles.flex}>
+        <AppText
+          variant="bodyMedium"
+          color={colors.ink}
+          numberOfLines={1}
+          style={styles.flex}
+        >
           {value}
         </AppText>
-        {chip ? <StatusChip label={chip.replace(/_/g, ' ')} tone={toneForStatus(chip)} /> : null}
+        {chip ? (
+          <StatusChip
+            label={chip.replace(/_/g, ' ')}
+            tone={toneForStatus(chip)}
+          />
+        ) : null}
       </View>
     </View>
   );
@@ -257,18 +401,21 @@ function ActionRow({
   icon: string;
   label: string;
   hint?: string;
-  tone?: 'warning';
+  tone?: 'warning' | 'danger';
   onPress: () => void;
 }) {
   return (
     <PressableScale onPress={onPress} toScale={0.98} style={styles.actionRow}>
-      <Icon name={icon} size={20} color={tone === 'warning' ? colors.danger : colors.ink} />
+      <Icon name={icon} size={20} color={tone ? colors.danger : colors.ink} />
       <View style={styles.flex}>
-        <AppText variant="bodyMedium" color={colors.ink}>
+        <AppText
+          variant="bodyMedium"
+          color={tone === 'danger' ? colors.danger : colors.ink}
+        >
           {label}
         </AppText>
         {hint ? (
-          <AppText variant="meta" color={tone === 'warning' ? colors.danger : colors.meta}>
+          <AppText variant="meta" color={tone ? colors.danger : colors.meta}>
             {hint}
           </AppText>
         ) : null}
@@ -325,7 +472,11 @@ const styles = StyleSheet.create({
     elevation: 16,
   },
   sheetTitle: { fontSize: 20, lineHeight: 24 },
-  dlStatus: { alignItems: 'center', gap: spacing.md, paddingVertical: spacing.lg },
+  dlStatus: {
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.lg,
+  },
   dlLabel: { textAlign: 'center' },
   dlDone: {
     width: 56,

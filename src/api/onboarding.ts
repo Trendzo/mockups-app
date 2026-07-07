@@ -1,4 +1,10 @@
-import { getJson, postJson, postMultipart, unwrapEnvelope } from './client';
+import {
+  deleteJson,
+  getJson,
+  postJson,
+  postMultipart,
+  unwrapEnvelope,
+} from './client';
 import { normalizeAuthError } from './auth';
 import { toFormFile, UploadFile } from '../utils/image';
 import {
@@ -82,10 +88,11 @@ export async function getMessages(
   email: string,
 ): Promise<ThreadMessage[]> {
   try {
-    const res = await getJson<{ data: ThreadMessage[] | { thread: ThreadMessage[] } }>(
-      `/applications/${id}/messages`,
-      { params: { email: email.trim().toLowerCase() } },
-    );
+    const res = await getJson<{
+      data: ThreadMessage[] | { thread: ThreadMessage[] };
+    }>(`/applications/${id}/messages`, {
+      params: { email: email.trim().toLowerCase() },
+    });
     const data = unwrapEnvelope<any>(res);
     return Array.isArray(data) ? data : data?.thread ?? data?.messages ?? [];
   } catch (e) {
@@ -151,6 +158,14 @@ export async function getRetailerMe(): Promise<RetailerMe> {
   try {
     const res = await getJson<{ data: RetailerMe }>('/retailer/me');
     return unwrapEnvelope<RetailerMe>(res);
+  } catch (e) {
+    throw normalizeAuthError(e);
+  }
+}
+
+export async function deleteRetailerAccount(): Promise<void> {
+  try {
+    await deleteJson('/retailer/account', { confirmation: 'DELETE' });
   } catch (e) {
     throw normalizeAuthError(e);
   }

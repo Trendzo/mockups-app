@@ -33,7 +33,7 @@ function stamp(): string {
 /**
  * Download a catalog CSV directly to the device — no share/preview popup.
  * - Android: saves to the public Downloads folder (system completion notification).
- * - iOS: saves into the app's Documents folder (browsable in Files › Trenzo).
+ * - iOS: saves into the app's Documents folder (browsable in Files › Trendzo).
  * Resolves once the file is written.
  */
 export async function downloadCatalogCsv(
@@ -59,7 +59,7 @@ export async function downloadCatalogCsv(
         useDownloadManager: true,
         notification: true,
         title: filename,
-        description: 'Trenzo catalog export',
+        description: 'Trendzo catalog export',
         mime: 'text/csv',
         mediaScannable: true,
         path: `${fs.dirs.DownloadDir}/${filename}`,

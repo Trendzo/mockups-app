@@ -20,7 +20,7 @@ export const useScanTarget = create<ScanTargetState>()(
       setTarget: (target) => set({ target }),
     }),
     {
-      name: 'trenzo.scanTarget.v1',
+      name: 'trendzo.scanTarget.v1',
       storage: createJSONStorage(() => AsyncStorage),
     },
   ),

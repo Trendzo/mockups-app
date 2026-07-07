@@ -77,7 +77,7 @@ export const useApplicationDraft = create<ApplicationDraftState>()(
       _setHydrated: () => set({ hydrated: true }),
     }),
     {
-      name: 'trenzo.applicationDraft.v1',
+      name: 'trendzo.applicationDraft.v1',
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (s) => ({
         // Never persist the password.

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Linking, ScrollView, StyleSheet, View } from 'react-native';
 import { OTPWidget } from '@msg91comm/sendotp-react-native';
 import {
   AppText,
@@ -13,30 +13,37 @@ import {
   useToast,
 } from '../components';
 import { ScreenProps } from '../navigation/types';
-import { loginRetailer, loginRetailerOtp } from '../api/auth';
+import {
+  loginRetailer,
+  loginRetailerOtp,
+  loginRetailerReview,
+} from '../api/auth';
 import { useAuth } from '../store/auth';
 import { COUNTRIES, DEFAULT_ISO } from '../config/countryCodes';
 import { colors, spacing } from '../theme/theme';
 import { Haptics } from '../utils/haptics';
+import { PRIVACY_URL, SUPPORT_URL, TERMS_URL } from '../config/legal';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const NATIONAL_RE = /^[0-9]{6,14}$/;
 const RESEND_SECONDS = 30;
+const REVIEW_PHONE = '9179621765';
+const REVIEW_REQ_ID = 'app-store-review';
 
 // Public retailer widget credentials (safe to ship; the secret authkey stays server-side).
 const WIDGET_ID = '3667636f3464353730373939';
 const TOKEN_AUTH = '547225TSvi20QFa026a47d90aP1';
 
-const COUNTRY_OPTIONS = COUNTRIES.map((c) => ({
+const COUNTRY_OPTIONS = COUNTRIES.map(c => ({
   value: c.iso,
   label: `${c.flag}  ${c.name}  +${c.dial}`,
 }));
 
 export function LoginScreen({ navigation }: ScreenProps<'Login'>) {
   const toast = useToast();
-  const setAuth = useAuth((s) => s.setAuth);
-  const logoutReason = useAuth((s) => s.logoutReason);
-  const clearLogoutReason = useAuth((s) => s.clearLogoutReason);
+  const setAuth = useAuth(s => s.setAuth);
+  const logoutReason = useAuth(s => s.logoutReason);
+  const clearLogoutReason = useAuth(s => s.clearLogoutReason);
 
   // OTP is the primary method; email/password is the secondary fallback.
   const [method, setMethod] = useState<'phone' | 'email'>('phone');
@@ -57,9 +64,11 @@ export function LoginScreen({ navigation }: ScreenProps<'Login'>) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
-  const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+  const [errors, setErrors] = useState<{ email?: string; password?: string }>(
+    {},
+  );
 
-  const country = COUNTRIES.find((c) => c.iso === countryIso) ?? COUNTRIES[0];
+  const country = COUNTRIES.find(c => c.iso === countryIso) ?? COUNTRIES[0];
 
   useEffect(() => {
     try {
@@ -73,7 +82,7 @@ export function LoginScreen({ navigation }: ScreenProps<'Login'>) {
   // Resend cooldown ticker.
   useEffect(() => {
     if (resendIn <= 0) return;
-    const t = setTimeout(() => setResendIn((s) => s - 1), 1000);
+    const t = setTimeout(() => setResendIn(s => s - 1), 1000);
     return () => clearTimeout(t);
   }, [resendIn]);
 
@@ -87,9 +96,20 @@ export function LoginScreen({ navigation }: ScreenProps<'Login'>) {
     }
     setSending(true);
     try {
-      const res: any = await OTPWidget.sendOTP({ identifier: `${country.dial}${national}` });
+      if (country.dial === '91' && national === REVIEW_PHONE) {
+        setReqId(REVIEW_REQ_ID);
+        setOtp('');
+        setStep('otp');
+        setResendIn(0);
+        Haptics.select();
+        return;
+      }
+      const res: any = await OTPWidget.sendOTP({
+        identifier: `${country.dial}${national}`,
+      });
       console.log('[LoginScreen] sendOTP response:', res);
-      if (res?.type === 'error') throw new Error(res?.message || 'Could not send OTP');
+      if (res?.type === 'error')
+        throw new Error(res?.message || 'Could not send OTP');
       const rid = typeof res === 'string' ? res : res?.message;
       if (!rid) throw new Error('Could not send OTP');
       setReqId(String(rid));
@@ -113,6 +133,10 @@ export function LoginScreen({ navigation }: ScreenProps<'Login'>) {
 
   const resendOtp = async () => {
     if (resendIn > 0 || !reqId) return;
+    if (reqId === REVIEW_REQ_ID) {
+      toast.show('Use the OTP supplied in App Review notes', 'info');
+      return;
+    }
     try {
       await OTPWidget.retryOTP({ reqId });
       setResendIn(RESEND_SECONDS);
@@ -131,13 +155,22 @@ export function LoginScreen({ navigation }: ScreenProps<'Login'>) {
     }
     setVerifying(true);
     try {
-      const vr: any = await OTPWidget.verifyOTP({ reqId, otp: code });
-      console.log('[LoginScreen] verifyOTP response:', vr);
-      if (vr?.type === 'error') throw new Error(vr?.message || 'Invalid OTP');
-      const accessToken = typeof vr === 'string' ? vr : vr?.message;
-      if (!accessToken) throw new Error('Verification failed');
-      const result = await loginRetailerOtp(String(accessToken));
-      console.log('[LoginScreen] loginRetailerOtp succeeded — token received:', !!result?.token);
+      const result =
+        reqId === REVIEW_REQ_ID
+          ? await loginRetailerReview(`+${country.dial}${phone.trim()}`, code)
+          : await (async () => {
+              const vr: any = await OTPWidget.verifyOTP({ reqId, otp: code });
+              console.log('[LoginScreen] verifyOTP response:', vr);
+              if (vr?.type === 'error')
+                throw new Error(vr?.message || 'Invalid OTP');
+              const accessToken = typeof vr === 'string' ? vr : vr?.message;
+              if (!accessToken) throw new Error('Verification failed');
+              return loginRetailerOtp(String(accessToken));
+            })();
+      console.log(
+        '[LoginScreen] loginRetailerOtp succeeded — token received:',
+        !!result?.token,
+      );
       Haptics.success();
       setAuth(result); // the app gate then routes on /retailer/me
     } catch (e: any) {
@@ -148,10 +181,16 @@ export function LoginScreen({ navigation }: ScreenProps<'Login'>) {
       });
       console.error(e);
       // Backend AuthError carries code/status; MSG91 failures are plain Errors.
-      if (e?.code === 'application_pending' || e?.code === 'application_rejected') {
+      if (
+        e?.code === 'application_pending' ||
+        e?.code === 'application_rejected'
+      ) {
         toast.show(e.message ?? 'Your application is under review.', 'info');
       } else if (e?.status === 503) {
-        toast.show('OTP login is temporarily unavailable — use email + password.', 'error');
+        toast.show(
+          'OTP login is temporarily unavailable — use email + password.',
+          'error',
+        );
         setMethod('email');
       } else if (e?.code === 'invalid_credentials' && e?.status) {
         setOtpErr(e.message ?? 'No account is linked to this number.');
@@ -219,9 +258,13 @@ export function LoginScreen({ navigation }: ScreenProps<'Login'>) {
       >
         <View style={styles.header}>
           <AppText variant="sectionLabel" color={colors.meta}>
-            Trenzo Studio
+            Trendzo Studio
           </AppText>
-          <HeroHeadline fontSize={48} style={styles.headline} lines={[{ text: 'Log in' }]} />
+          <HeroHeadline
+            fontSize={48}
+            style={styles.headline}
+            lines={[{ text: 'Log in' }]}
+          />
           <AppText variant="body" color={colors.meta}>
             {subtitle}
           </AppText>
@@ -244,7 +287,7 @@ export function LoginScreen({ navigation }: ScreenProps<'Login'>) {
                 label="Country"
                 options={COUNTRY_OPTIONS}
                 selected={[countryIso]}
-                onChange={(v) => setCountryIso(v[0] ?? DEFAULT_ISO)}
+                onChange={v => setCountryIso(v[0] ?? DEFAULT_ISO)}
               />
               <Field
                 label="Phone number"
@@ -294,7 +337,11 @@ export function LoginScreen({ navigation }: ScreenProps<'Login'>) {
                     Edit number
                   </AppText>
                 </PressableScale>
-                <PressableScale haptic={false} disabled={resendIn > 0} onPress={resendOtp}>
+                <PressableScale
+                  haptic={false}
+                  disabled={resendIn > 0}
+                  onPress={resendOtp}
+                >
                   <AppText
                     variant="bodyMedium"
                     color={resendIn > 0 ? colors.meta : colors.ink}
@@ -328,7 +375,12 @@ export function LoginScreen({ navigation }: ScreenProps<'Login'>) {
               autoCapitalize="none"
               error={errors.password}
             />
-            <PrimaryButton label="Log in" tone="accent" loading={busy} onPress={onEmailSubmit} />
+            <PrimaryButton
+              label="Log in"
+              tone="accent"
+              loading={busy}
+              onPress={onEmailSubmit}
+            />
           </View>
         )}
 
@@ -358,6 +410,33 @@ export function LoginScreen({ navigation }: ScreenProps<'Login'>) {
             Create an account
           </AppText>
         </PressableScale>
+
+        <View style={styles.legalRow}>
+          <PressableScale
+            haptic={false}
+            onPress={() => Linking.openURL(PRIVACY_URL)}
+          >
+            <AppText variant="meta" color={colors.meta}>
+              Privacy
+            </AppText>
+          </PressableScale>
+          <PressableScale
+            haptic={false}
+            onPress={() => Linking.openURL(TERMS_URL)}
+          >
+            <AppText variant="meta" color={colors.meta}>
+              Terms
+            </AppText>
+          </PressableScale>
+          <PressableScale
+            haptic={false}
+            onPress={() => Linking.openURL(SUPPORT_URL)}
+          >
+            <AppText variant="meta" color={colors.meta}>
+              Support
+            </AppText>
+          </PressableScale>
+        </View>
       </ScrollView>
     </Screen>
   );
@@ -378,5 +457,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  legalRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: spacing.lg,
+    paddingBottom: spacing.lg,
   },
 });

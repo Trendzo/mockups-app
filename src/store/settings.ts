@@ -41,7 +41,7 @@ export const useSettings = create<SettingsState>()(
       _setHydrated: () => set({ hydrated: true }),
     }),
     {
-      name: 'trenzo.settings.v4',
+      name: 'trendzo.settings.v4',
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (s) => ({
         baseUrl: s.baseUrl,

@@ -12,7 +12,7 @@ export const http: AxiosInstance = axios.create({
   timeout: 120000, // generation can be slow
 });
 
-http.interceptors.request.use((config) => {
+http.interceptors.request.use(config => {
   config.baseURL = useSettings.getState().baseUrl;
   const token = useAuth.getState().token;
   if (token) {
@@ -27,8 +27,8 @@ http.interceptors.request.use((config) => {
 // the token live inside the handler makes this single-flight — the first 401
 // clears the token, so concurrent 401s that follow see no token and no-op.
 http.interceptors.response.use(
-  (res) => res,
-  (error) => {
+  res => res,
+  error => {
     const status = error?.response?.status;
     const hadToken = !!useAuth.getState().token;
     if (status === 401 && hadToken) {
@@ -52,7 +52,10 @@ export const isMock = () => useSettings.getState().mock;
 /** Current base URL (for building absolute /files fallbacks, health checks). */
 export const currentBaseUrl = () => useSettings.getState().baseUrl;
 
-export async function getJson<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
+export async function getJson<T>(
+  url: string,
+  config?: AxiosRequestConfig,
+): Promise<T> {
   const res = await http.get<T>(url, config);
   return res.data;
 }
@@ -63,6 +66,19 @@ export async function postJson<T>(
   config?: AxiosRequestConfig,
 ): Promise<T> {
   const res = await http.post<T>(url, body, {
+    headers: { 'Content-Type': 'application/json' },
+    ...config,
+  });
+  return res.data;
+}
+
+export async function deleteJson<T>(
+  url: string,
+  body: unknown,
+  config?: AxiosRequestConfig,
+): Promise<T> {
+  const res = await http.delete<T>(url, {
+    data: body,
     headers: { 'Content-Type': 'application/json' },
     ...config,
   });

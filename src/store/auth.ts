@@ -55,7 +55,7 @@ export const useAuth = create<AuthState>()(
       _setHydrated: () => set({ hydrated: true }),
     }),
     {
-      name: 'trenzo.auth.v1',
+      name: 'trendzo.auth.v1',
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (s) => ({ token: s.token, retailer: s.retailer }),
       // Flip `hydrated` on BOTH success and error. On a rehydration failure

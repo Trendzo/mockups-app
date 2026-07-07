@@ -1,5 +1,5 @@
 /**
- * Trenzo Mockup — app root.
+ * Trendzo Mockup — app root.
  * Providers: GestureHandler → SafeArea → QueryClient → Toast → Navigation.
  */
 import React from 'react';

@@ -76,3 +76,9 @@ yarn-error.log
 
 # Local env (keep .env.example committed)
 .env
+
+# Expo local cache
+.expo/
+
+# Backend is a separate repo (github.com/Trendzo/backend), nested here for convenience
+/backend/

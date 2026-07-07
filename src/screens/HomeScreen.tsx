@@ -51,7 +51,7 @@ export function HomeScreen({ navigation }: ScreenProps<'Home'>) {
     <Screen edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         <AppText variant="sectionLabel" color={colors.meta}>
-          Trenzo Studio
+          Trendzo Studio
         </AppText>
         <HeroHeadline
           align="left"

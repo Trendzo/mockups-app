@@ -1,5 +1,5 @@
 /**
- * Trenzo Mockup — Design System
+ * Trendzo Mockup — Design System
  * Editorial / Swiss / brutalist-minimal. Warm light-gray canvas, one loud
  * chartreuse accent, giant stacked grotesk headlines, strict 8pt grid.
  *
