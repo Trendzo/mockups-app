@@ -101,9 +101,14 @@ export function ImageViewer({
           <PressableScale onPress={onClose} style={styles.closeBtn}>
             <Icon name="close" size={26} color={colors.surface} />
           </PressableScale>
-          <AppText variant="bodyMedium" color={colors.surface}>
-            {current?.name ? prettyView(current.name) : ''}
-            {'  '}
+          <AppText
+            variant="bodyMedium"
+            color={colors.surface}
+            numberOfLines={1}
+            ellipsizeMode="middle"
+            style={styles.title}
+          >
+            {current?.name ? `${prettyView(current.name)}  ` : ''}
             {index + 1}/{images.length}
           </AppText>
           <View style={styles.closeBtn} />
@@ -248,6 +253,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  title: {
+    flex: 1,
+    textAlign: 'center',
+    marginHorizontal: spacing.sm,
   },
   closeBtn: { width: 32, alignItems: 'center' },
   actions: {

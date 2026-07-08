@@ -50,7 +50,12 @@ export function MockupGrid({
               resizeMode="cover"
             />
             <View style={styles.labelPill}>
-              <AppText variant="meta" color={colors.ink}>
+              <AppText
+                variant="meta"
+                color={colors.ink}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
                 {prettyView(item.name)}
               </AppText>
             </View>
@@ -79,6 +84,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: spacing.sm,
     bottom: spacing.sm,
+    maxWidth: '82%',
     backgroundColor: colors.surface,
     paddingHorizontal: spacing.sm,
     paddingVertical: 3,

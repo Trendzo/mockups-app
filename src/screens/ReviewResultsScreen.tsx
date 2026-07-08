@@ -5,9 +5,10 @@ import {
   BackButton,
   BottomSheet,
   ImageViewer,
-  MockupGrid,
   PrimaryButton,
   Screen,
+  SortableMockupGrid,
+  SortableMockupItem,
   useToast,
 } from '../components';
 import { ScreenProps } from '../navigation/types';
@@ -34,20 +35,47 @@ export function ReviewResultsScreen({
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [notes, setNotes] = useState('');
+  const [dragging, setDragging] = useState(false);
 
-  const images = useMemo(
+  // Stable item list (id + url + view name). The user arranges the order and
+  // selects which mockups to keep; only the chosen ones publish, in this order.
+  const items = useMemo<SortableMockupItem[]>(
     () =>
       submission.outputUrls.map((url, i) => ({
+        id: String(i),
         url,
-        name: submission.outputUrls.length ? guessName(url, i) : `view-${i}`,
+        name: guessName(url, i),
       })),
     [submission.outputUrls],
   );
+  const itemsById = useMemo(
+    () => Object.fromEntries(items.map((it) => [it.id, it])),
+    [items],
+  );
+
+  const [order, setOrder] = useState<string[]>(() => items.map((it) => it.id));
+  const [selected, setSelected] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(items.map((it) => [it.id, true])),
+  );
+
+  const orderedItems = useMemo(
+    () =>
+      order.map((id) => itemsById[id]).filter(Boolean) as SortableMockupItem[],
+    [order, itemsById],
+  );
+  const chosen = useMemo(
+    () => orderedItems.filter((it) => selected[it.id]),
+    [orderedItems, selected],
+  );
+  // The zoom viewer works over the currently arranged order.
+  const images = orderedItems;
 
   const canDecide = submission.status === SubmissionStatus.ReadyForReview;
+  const canApprove = canDecide && chosen.length > 0;
 
   const onSave = async (index: number) => {
-    const url = submission.outputUrls[index];
+    const url = orderedItems[index]?.url;
+    if (!url) return;
     const perm = await ensurePhotoAddPermission();
     if (perm === 'blocked') {
       toast.show('Enable photo access in Settings', 'error');
@@ -63,24 +91,30 @@ export function ReviewResultsScreen({
   };
 
   const onShare = async (index: number) => {
+    const url = orderedItems[index]?.url;
+    if (!url) return;
     try {
-      await shareRemoteImage(submission.outputUrls[index]);
+      await shareRemoteImage(url);
     } catch {
       /* user cancelled */
     }
   };
 
   const onApprove = () => {
-    if (!canDecide) return;
+    if (!canApprove) return;
     decide.mutate(
       { id: submission.id, input: { decision: 'accept' } },
       {
         onSuccess: (res) => {
           Haptics.success();
           setStatus(submission.id, res.status);
-          const next = { ...submission, status: res.status };
-          setSubmission(next);
-          navigation.navigate('Publish', { submission: next });
+          // Keep the full set in local state, but publish only the chosen
+          // mockups in the arranged order.
+          const updated = { ...submission, status: res.status };
+          setSubmission(updated);
+          navigation.navigate('Publish', {
+            submission: { ...updated, outputUrls: chosen.map((it) => it.url) },
+          });
         },
         onError: (e) => toast.show(e.error, 'error'),
       },
@@ -114,19 +148,33 @@ export function ReviewResultsScreen({
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
+        scrollEnabled={!dragging}
       >
         <BackButton onPress={() => navigation.goBack()} />
         <AppText variant="sectionLabel" color={colors.meta}>
           Step 3 · Review results
         </AppText>
         <AppText variant="cardTitle" color={colors.ink} style={styles.h1}>
-          {images.length} mockups ready
+          {chosen.length} of {items.length} selected
         </AppText>
         <AppText variant="meta" color={colors.meta} style={styles.sub}>
-          Tap any to zoom, save, or share. Approve to publish, or reject to redo.
+          Tap to select · hold &amp; drag to reorder · ⤢ to zoom. Chosen mockups
+          publish in this order.
         </AppText>
 
-        <MockupGrid items={images} onPressItem={(i) => setViewerIndex(i)} />
+        <SortableMockupGrid
+          items={items}
+          selected={selected}
+          onToggleSelect={(id) =>
+            setSelected((s) => ({ ...s, [id]: !s[id] }))
+          }
+          onReorder={setOrder}
+          onZoom={(id) =>
+            setViewerIndex(orderedItems.findIndex((it) => it.id === id))
+          }
+          onDragStart={() => setDragging(true)}
+          onDragEnd={() => setDragging(false)}
+        />
       </ScrollView>
 
       {/* Sticky decision bar */}
@@ -150,10 +198,16 @@ export function ReviewResultsScreen({
           />
         </View>
         <PrimaryButton
-          label={canDecide ? 'Approve → Publish' : 'Approved'}
+          label={
+            canDecide
+              ? chosen.length > 0
+                ? `Approve ${chosen.length} → Publish`
+                : 'Select at least one'
+              : 'Approved'
+          }
           tone="accent"
           loading={decide.isPending && !rejectOpen}
-          disabled={!canDecide}
+          disabled={!canApprove}
           onPress={onApprove}
         />
       </View>

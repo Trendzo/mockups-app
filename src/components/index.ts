@@ -23,6 +23,8 @@ export { ImageViewer } from './ImageViewer';
 export type { ViewerImage } from './ImageViewer';
 export { MockupGrid } from './MockupGrid';
 export type { MockupItem } from './MockupGrid';
+export { SortableMockupGrid } from './SortableMockupGrid';
+export type { SortableMockupItem } from './SortableMockupGrid';
 export { PressableScale } from './PressableScale';
 export { OtpInput } from './OtpInput';
 export { PrimaryButton } from './PrimaryButton';

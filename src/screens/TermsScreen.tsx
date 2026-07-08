@@ -71,7 +71,13 @@ export function TermsScreen() {
         loading={accept.isPending}
         onPress={() => accept.mutate()}
       />
-      <PrimaryButton label="Decline & log out" tone="danger" loading={decline.isPending} onPress={onDecline} />
+      <PrimaryButton
+        label="Decline & log out"
+        tone="danger"
+        style={styles.declineBtn}
+        loading={decline.isPending}
+        onPress={onDecline}
+      />
     </Screen>
   );
 }
@@ -98,4 +104,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   checkOn: { backgroundColor: colors.accent, borderColor: colors.accent },
+  declineBtn: { marginTop: spacing.sm },
 });
