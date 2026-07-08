@@ -64,11 +64,11 @@ Verified against `src/config/legal.ts`. Confirm all five return HTTP 200 before 
 
 Trendzo Retailer is a retailer-only business app. A permanent review account is provided.
 
-To sign in:
+To sign in (standard MSG91 phone-OTP; this number has a fixed OTP configured on MSG91, so no live SMS is needed):
 
 1. Keep the country set to India (+91).
 2. Enter phone number 9179621765.
-3. Tap Send OTP. No SMS is required for this review account.
+3. Tap Send OTP.
 4. Enter OTP 1234 and tap Verify & log in.
 
 The demo account must remain active and contain sample catalog, inventory and AI mockup data. Main areas are Home, Catalog and Profile. Account deletion is available under Profile → Delete account. Privacy, Terms and Support links are available from both the login and profile screens.
@@ -141,8 +141,6 @@ Do not select advertising, third-party advertising, developer advertising, or cr
 ## Render environment values required before deployment
 
 ```text
-APP_REVIEW_PHONE=+919179621765
-APP_REVIEW_OTP=1234
 PUBLIC_APP_NAME=Trendzo Retailer
 PUBLIC_COMPANY_NAME=Trendzo
 PUBLIC_SUPPORT_EMAIL=trendzodevelopment@gmail.com

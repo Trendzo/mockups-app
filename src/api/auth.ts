@@ -24,7 +24,7 @@ export function normalizeAuthError(err: unknown): AuthError {
           error?: {
             code?: string;
             message?: string;
-            details?: { applicationId?: string };
+            details?: { applicationId?: string; ownerEmail?: string };
           };
         }
       | undefined;
@@ -35,6 +35,7 @@ export function normalizeAuthError(err: unknown): AuthError {
         message: friendly(e.code, e.message),
         status,
         applicationId: e.details?.applicationId,
+        ownerEmail: e.details?.ownerEmail,
       };
     }
     if (!err.response) {
@@ -100,20 +101,6 @@ export async function loginRetailerOtp(
   try {
     return await unwrap<AuthResult>(
       authHttp.post('/auth/retailer/otp/msg91', { accessToken }),
-    );
-  } catch (e) {
-    throw normalizeAuthError(e);
-  }
-}
-
-/** App Store reviewer login for the single phone configured on the backend. */
-export async function loginRetailerReview(
-  phone: string,
-  otp: string,
-): Promise<AuthResult> {
-  try {
-    return await unwrap<AuthResult>(
-      authHttp.post('/auth/retailer/review-login', { phone, otp }),
     );
   } catch (e) {
     throw normalizeAuthError(e);

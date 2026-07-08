@@ -14,11 +14,7 @@ import {
   useToast,
 } from '../components';
 import { ScreenProps } from '../navigation/types';
-import {
-  loginRetailer,
-  loginRetailerOtp,
-  loginRetailerReview,
-} from '../api/auth';
+import { loginRetailer, loginRetailerOtp } from '../api/auth';
 import { useAuth } from '../store/auth';
 import { COUNTRIES, DEFAULT_ISO } from '../config/countryCodes';
 import { colors, spacing } from '../theme/theme';
@@ -28,8 +24,6 @@ import { PRIVACY_URL, SUPPORT_URL, TERMS_URL } from '../config/legal';
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const NATIONAL_RE = /^[0-9]{6,14}$/;
 const RESEND_SECONDS = 30;
-const REVIEW_PHONE = '9179621765';
-const REVIEW_REQ_ID = 'app-store-review';
 const OTP_LENGTH = 4;
 
 // Public retailer widget credentials (safe to ship; the secret authkey stays server-side).
@@ -98,14 +92,6 @@ export function LoginScreen({ navigation }: ScreenProps<'Login'>) {
     }
     setSending(true);
     try {
-      if (country.dial === '91' && national === REVIEW_PHONE) {
-        setReqId(REVIEW_REQ_ID);
-        setOtp('');
-        setStep('otp');
-        setResendIn(0);
-        Haptics.select();
-        return;
-      }
       const res: any = await OTPWidget.sendOTP({
         identifier: `${country.dial}${national}`,
       });
@@ -135,10 +121,6 @@ export function LoginScreen({ navigation }: ScreenProps<'Login'>) {
 
   const resendOtp = async () => {
     if (resendIn > 0 || !reqId) return;
-    if (reqId === REVIEW_REQ_ID) {
-      toast.show('Use the OTP supplied in App Review notes', 'info');
-      return;
-    }
     try {
       await OTPWidget.retryOTP({ reqId });
       setResendIn(RESEND_SECONDS);
@@ -158,18 +140,12 @@ export function LoginScreen({ navigation }: ScreenProps<'Login'>) {
     if (verifying) return;
     setVerifying(true);
     try {
-      const result =
-        reqId === REVIEW_REQ_ID
-          ? await loginRetailerReview(`+${country.dial}${phone.trim()}`, code)
-          : await (async () => {
-              const vr: any = await OTPWidget.verifyOTP({ reqId, otp: code });
-              console.log('[LoginScreen] verifyOTP response:', vr);
-              if (vr?.type === 'error')
-                throw new Error(vr?.message || 'Invalid OTP');
-              const accessToken = typeof vr === 'string' ? vr : vr?.message;
-              if (!accessToken) throw new Error('Verification failed');
-              return loginRetailerOtp(String(accessToken));
-            })();
+      const vr: any = await OTPWidget.verifyOTP({ reqId, otp: code });
+      console.log('[LoginScreen] verifyOTP response:', vr);
+      if (vr?.type === 'error') throw new Error(vr?.message || 'Invalid OTP');
+      const accessToken = typeof vr === 'string' ? vr : vr?.message;
+      if (!accessToken) throw new Error('Verification failed');
+      const result = await loginRetailerOtp(String(accessToken));
       console.log(
         '[LoginScreen] loginRetailerOtp succeeded — token received:',
         !!result?.token,
@@ -184,19 +160,54 @@ export function LoginScreen({ navigation }: ScreenProps<'Login'>) {
       });
       console.error(e);
       // Backend AuthError carries code/status; MSG91 failures are plain Errors.
+      // The verified phone matched a pending/rejected application → route to its
+      // status/resubmit screen (both key on the owner email the backend returns).
       if (
-        e?.code === 'application_pending' ||
-        e?.code === 'application_rejected'
+        e?.code === 'application_pending' &&
+        e?.applicationId &&
+        e?.ownerEmail
       ) {
-        toast.show(e.message ?? 'Your application is under review.', 'info');
-      } else if (e?.status === 503) {
+        navigation.navigate('ApplicationStatus', {
+          applicationId: e.applicationId,
+          email: e.ownerEmail,
+        });
+        return;
+      }
+      if (
+        e?.code === 'application_rejected' &&
+        e?.applicationId &&
+        e?.ownerEmail
+      ) {
+        navigation.navigate('Resubmit', {
+          applicationId: e.applicationId,
+          email: e.ownerEmail,
+        });
+        return;
+      }
+      // Verified phone with no account and no application → start signup.
+      if (e?.code === 'invalid_credentials' && e?.status) {
+        toast.show(
+          "No account for this number yet — let's get you set up.",
+          'info',
+        );
+        navigation.navigate('ApplicationForm');
+        return;
+      }
+      if (e?.status === 503) {
         toast.show(
           'OTP login is temporarily unavailable — use email + password.',
           'error',
         );
         setMethod('email');
-      } else if (e?.code === 'invalid_credentials' && e?.status) {
-        setOtpErr(e.message ?? 'No account is linked to this number.');
+        return;
+      }
+      // Pending/rejected without routing details (older backend) or a plain
+      // MSG91/verify failure.
+      if (
+        e?.code === 'application_pending' ||
+        e?.code === 'application_rejected'
+      ) {
+        toast.show(e.message ?? 'Your application is under review.', 'info');
       } else {
         setOtpErr(e?.message ?? 'Invalid or expired OTP.');
       }
