@@ -70,7 +70,8 @@ export function DocumentUpload({
     : required
     ? 'warning'
     : 'neutral';
-  const chipLabel = status ?? (value ? 'uploaded' : required ? 'required' : 'optional');
+  // Optional docs show no chip (they used to read "optional"); still not required.
+  const chipLabel = status ?? (value ? 'uploaded' : required ? 'required' : null);
 
   return (
     <View style={[styles.row, error ? styles.rowError : null]}>
@@ -90,7 +91,7 @@ export function DocumentUpload({
             {label}
             {required ? ' *' : ''}
           </AppText>
-          <StatusChip label={chipLabel} tone={chipTone} />
+          {chipLabel ? <StatusChip label={chipLabel} tone={chipTone} /> : null}
         </View>
         <PressableScale onPress={pick} disabled={busy} style={styles.action}>
           <AppText variant="meta" color={colors.ink}>

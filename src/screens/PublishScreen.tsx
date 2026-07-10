@@ -82,7 +82,7 @@ export function PublishScreen({ navigation, route }: ScreenProps<'Publish'>) {
     if (compareAt.trim()) {
       if (comparePaise == null) e.compareAt = 'Invalid amount';
       else if (pricePaise != null && comparePaise <= pricePaise)
-        e.compareAt = 'Must be higher than price';
+        e.compareAt = 'MSP must be higher than the current price';
     }
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -181,26 +181,29 @@ export function PublishScreen({ navigation, route }: ScreenProps<'Publish'>) {
           />
         </View>
 
-        <Field
-          label="Price"
-          required
-          prefix="₹"
-          keyboardType="decimal-pad"
-          value={price}
-          onChangeText={setPrice}
-          placeholder="499.99"
-          error={errors.price}
-        />
-
-        <Field
-          label="Compare at (optional)"
-          prefix="₹"
-          keyboardType="decimal-pad"
-          value={compareAt}
-          onChangeText={setCompareAt}
-          placeholder="Higher than price"
-          error={errors.compareAt}
-        />
+        <View style={styles.priceRow}>
+          <Field
+            containerStyle={styles.priceField}
+            label="Current price"
+            required
+            prefix="₹"
+            keyboardType="decimal-pad"
+            value={price}
+            onChangeText={setPrice}
+            placeholder="499.99"
+            error={errors.price}
+          />
+          <Field
+            containerStyle={styles.priceField}
+            label="MSP"
+            prefix="₹"
+            keyboardType="decimal-pad"
+            value={compareAt}
+            onChangeText={setCompareAt}
+            placeholder="Higher"
+            error={errors.compareAt}
+          />
+        </View>
 
         <Field
           label="Description"
@@ -284,6 +287,8 @@ const styles = StyleSheet.create({
   },
   h1: { fontSize: 24, lineHeight: 28 },
   block: { gap: spacing.sm },
+  priceRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start' },
+  priceField: { flex: 1 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   row: { flexDirection: 'row', gap: spacing.md },
   flex: { flex: 1 },

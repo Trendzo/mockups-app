@@ -79,6 +79,7 @@ export interface ApplicationInput {
   bankIfsc?: string;
   contactPhone?: string;
   managerName?: string;
+  znfFinance?: boolean; // store opts into ZNF Finance
   categories?: string[];
   brands?: string[];
   documents?: UploadedDoc[];

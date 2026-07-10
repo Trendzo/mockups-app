@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   AppText,
@@ -47,6 +47,9 @@ function validateStep(s: number, f: ApplicationFields): Record<string, string> {
     if (f.ownerName.trim().length < 2) e.ownerName = '2–120 characters';
     if (!EMAIL_RE.test(f.ownerEmail.trim())) e.ownerEmail = 'Enter a valid email';
     if (!PHONE_RE.test(f.ownerPhone.trim())) e.ownerPhone = 'Enter a valid Indian phone';
+    // Alternate phone is not required; validate only when the user typed one.
+    if (f.contactPhone.trim() && !PHONE_RE.test(f.contactPhone.trim()))
+      e.contactPhone = 'Enter a valid Indian phone';
     if (f.password.length < 8 || f.password.length > 128)
       e.password = '8–128 characters (your login password)';
   } else if (s === 2) {
@@ -66,6 +69,8 @@ export function ApplicationFormScreen({ navigation }: ScreenProps<'ApplicationFo
 
   const f = useApplicationDraft((s) => s.fields);
   const docs = useApplicationDraft((s) => s.docs);
+  const znfFinance = useApplicationDraft((s) => s.znfFinance);
+  const setZnfFinance = useApplicationDraft((s) => s.setZnfFinance);
   const step = useApplicationDraft((s) => s.step);
   const hydrated = useApplicationDraft((s) => s.hydrated);
   const setField = useApplicationDraft((s) => s.setField);
@@ -149,12 +154,14 @@ export function ApplicationFormScreen({ navigation }: ScreenProps<'ApplicationFo
         ownerName: f.ownerName,
         ownerEmail: f.ownerEmail,
         ownerPhone: f.ownerPhone,
+        contactPhone: f.contactPhone || undefined,
         addressLine: f.addressLine,
         pincode: f.pincode,
         stateCode: f.stateCode,
         password: f.password,
         storeName: f.storeName || undefined,
         pan: f.pan || undefined,
+        znfFinance,
         bankLegalName: f.bankLegalName || undefined,
         bankAccountNumber: f.bankAccountNumber || undefined,
         bankIfsc: f.bankIfsc || undefined,
@@ -232,8 +239,21 @@ export function ApplicationFormScreen({ navigation }: ScreenProps<'ApplicationFo
           <StepBlock title="Your business" subtitle="Registered details, as on GST.">
             <Field label="Legal name" required value={f.legalName} onChangeText={set('legalName')} placeholder="Registered business name" error={errors.legalName} />
             <Field label="GSTIN" required value={f.gstin} onChangeText={(v) => set('gstin')(v.toUpperCase())} placeholder="15-character GSTIN" autoCapitalize="characters" autoCorrect={false} maxLength={15} error={errors.gstin} />
-            <Field label="Store name" value={f.storeName} onChangeText={set('storeName')} placeholder="Shown to customers (optional)" />
-            <Field label="PAN" value={f.pan} onChangeText={(v) => set('pan')(v.toUpperCase())} placeholder="10-character PAN (optional)" autoCapitalize="characters" autoCorrect={false} maxLength={10} error={errors.pan} />
+            <Field label="Store name" value={f.storeName} onChangeText={set('storeName')} placeholder="Shown to customers" />
+            <Field label="PAN" value={f.pan} onChangeText={(v) => set('pan')(v.toUpperCase())} placeholder="10-character PAN" autoCapitalize="characters" autoCorrect={false} maxLength={10} error={errors.pan} />
+            <View style={styles.toggleRow}>
+              <View style={styles.flex}>
+                <AppText variant="bodyMedium" color={colors.ink}>ZNF Finance</AppText>
+                <AppText variant="meta" color={colors.meta}>Enable ZNF financing for this store</AppText>
+              </View>
+              <Switch
+                value={znfFinance}
+                onValueChange={setZnfFinance}
+                trackColor={{ true: colors.accent, false: colors.hairline }}
+                thumbColor={colors.surface}
+                ios_backgroundColor={colors.hairline}
+              />
+            </View>
           </StepBlock>
         ) : null}
 
@@ -242,13 +262,14 @@ export function ApplicationFormScreen({ navigation }: ScreenProps<'ApplicationFo
             <Field label="Owner name" required value={f.ownerName} onChangeText={set('ownerName')} placeholder="Full name" error={errors.ownerName} />
             <Field label="Owner email" required value={f.ownerEmail} onChangeText={set('ownerEmail')} placeholder="you@store.com" keyboardType="email-address" autoCapitalize="none" autoCorrect={false} error={errors.ownerEmail} />
             <Field label="Owner phone" required value={f.ownerPhone} onChangeText={set('ownerPhone')} placeholder="+91XXXXXXXXXX" keyboardType="phone-pad" error={errors.ownerPhone} />
+            <Field label="Alternate phone" value={f.contactPhone} onChangeText={set('contactPhone')} placeholder="+91XXXXXXXXXX" keyboardType="phone-pad" error={errors.contactPhone} />
             <Field label="Password" required value={f.password} onChangeText={set('password')} placeholder="8–128 characters" secureTextEntry autoCapitalize="none" error={errors.password} />
           </StepBlock>
         ) : null}
 
         {step === 2 ? (
           <StepBlock title="Store address" subtitle="Where your store is located.">
-            <Field label="Address line" required value={f.addressLine} onChangeText={set('addressLine')} placeholder="Shop no, street, area" error={errors.addressLine} />
+            <Field label="Address line" required multiline value={f.addressLine} onChangeText={set('addressLine')} placeholder="Shop no, street, area, landmark" error={errors.addressLine} style={styles.addressInput} />
             <View style={styles.row}>
               <Field label="Pincode" required value={f.pincode} onChangeText={set('pincode')} placeholder="560001" keyboardType="number-pad" maxLength={6} error={errors.pincode} containerStyle={styles.flex} />
               <Field label="State code" required value={f.stateCode} onChangeText={set('stateCode')} placeholder="29" keyboardType="number-pad" maxLength={2} error={errors.stateCode} containerStyle={styles.flex} />
@@ -257,7 +278,7 @@ export function ApplicationFormScreen({ navigation }: ScreenProps<'ApplicationFo
         ) : null}
 
         {step === 3 ? (
-          <StepBlock title="Bank (optional)" subtitle="For payouts. You can add this later.">
+          <StepBlock title="Bank" subtitle="For payouts. You can add this later.">
             <Field label="Bank legal name" value={f.bankLegalName} onChangeText={set('bankLegalName')} placeholder="Account holder name" />
             <Field label="Account number" value={f.bankAccountNumber} onChangeText={set('bankAccountNumber')} placeholder="Bank account number" keyboardType="number-pad" maxLength={20} />
             <Field label="IFSC" value={f.bankIfsc} onChangeText={(v) => set('bankIfsc')(v.toUpperCase())} placeholder="IFSC code" autoCapitalize="characters" autoCorrect={false} maxLength={11} />
@@ -265,7 +286,7 @@ export function ApplicationFormScreen({ navigation }: ScreenProps<'ApplicationFo
         ) : null}
 
         {step === 4 ? (
-          <StepBlock title="Documents (optional)" subtitle="Attach photos to speed up review. You can add missing ones later.">
+          <StepBlock title="Documents" subtitle="Attach photos to speed up review. You can add missing ones later.">
             {APPLICATION_DOC_KINDS.map((d) => (
               <DocumentUpload
                 key={d.kind}
@@ -350,6 +371,16 @@ const styles = StyleSheet.create({
   stepBlock: { gap: spacing.md },
   stepHead: { gap: spacing.xs, marginBottom: spacing.xs },
   h1: { fontSize: 24, lineHeight: 28 },
+  addressInput: { minHeight: 64, textAlignVertical: 'top' },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
   row: { flexDirection: 'row', gap: spacing.md },
   footer: {
     gap: spacing.md,

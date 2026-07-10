@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   AppText,
   BackButton,
@@ -27,9 +28,13 @@ export function ReviewResultsScreen({
   route,
 }: ScreenProps<'ReviewResults'>) {
   const toast = useToast();
+  const insets = useSafeAreaInsets();
   const decide = useDecideSubmission();
   const setStatus = useSession((s) => s.setStatus);
   const clearDraft = useCaptureDraft((s) => s.clear);
+  // The garment photos are still in the draft during the live review flow, so we
+  // can send the user back to Configure to tweak & regenerate the same garment.
+  const hasGarment = useCaptureDraft((s) => !!s.front);
 
   const [submission, setSubmission] = useState(route.params.submission);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
@@ -84,9 +89,10 @@ export function ReviewResultsScreen({
     }
     try {
       await saveRemoteImage(url);
-      toast.show('Saved to gallery', 'success');
+      // Explicit confirmation popup that the image was downloaded to the gallery.
+      Alert.alert('Image downloaded', 'Saved to your gallery in the “Trendzo” album.');
     } catch {
-      toast.show("Couldn't save image", 'error');
+      Alert.alert("Couldn't download image", 'Please try again.');
     }
   };
 
@@ -178,7 +184,7 @@ export function ReviewResultsScreen({
       </ScrollView>
 
       {/* Sticky decision bar */}
-      <View style={styles.bar}>
+      <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
         <View style={styles.row}>
           <PrimaryButton
             label="Reject"
@@ -187,15 +193,26 @@ export function ReviewResultsScreen({
             disabled={!canDecide || decide.isPending}
             onPress={() => setRejectOpen(true)}
           />
-          <PrimaryButton
-            label="Make again"
-            tone="surface"
-            style={styles.flex}
-            onPress={() => {
-              clearDraft();
-              navigation.navigate('SelectPhotos');
-            }}
-          />
+          {canDecide && hasGarment ? (
+            <PrimaryButton
+              label="Regenerate"
+              tone="surface"
+              style={styles.flex}
+              disabled={decide.isPending}
+              // Keep the garment photos + prior settings; go tweak and re-run.
+              onPress={() => navigation.navigate('Configure')}
+            />
+          ) : (
+            <PrimaryButton
+              label="Make again"
+              tone="surface"
+              style={styles.flex}
+              onPress={() => {
+                clearDraft();
+                navigation.navigate('SelectPhotos');
+              }}
+            />
+          )}
         </View>
         <PrimaryButton
           label={
@@ -232,7 +249,7 @@ export function ReviewResultsScreen({
               What should change?
             </AppText>
             <AppText variant="meta" color={colors.meta}>
-              Optional revision notes saved with the rejection.
+              Revision notes saved with the rejection.
             </AppText>
             <TextInput
               value={notes}
@@ -286,13 +303,13 @@ const styles = StyleSheet.create({
     bottom: 0,
     paddingHorizontal: spacing.screenH,
     paddingTop: spacing.md,
-    paddingBottom: spacing.xl,
+    // paddingBottom applied inline from the safe-area inset.
     backgroundColor: colors.canvas,
     borderTopWidth: 1,
     borderTopColor: colors.hairline,
     gap: spacing.md,
   },
-  row: { flexDirection: 'row', gap: spacing.md },
+  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   flex: { flex: 1 },
   sheet: {
     backgroundColor: colors.canvas,

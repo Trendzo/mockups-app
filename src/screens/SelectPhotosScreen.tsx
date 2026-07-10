@@ -74,7 +74,7 @@ export function SelectPhotosScreen({ navigation }: ScreenProps<'SelectPhotos'>) 
             Add product photos
           </AppText>
           <AppText variant="meta" color={colors.meta}>
-            Front is required. Everything else is optional and improves fidelity.
+            Front is required. The rest are extra references that improve fidelity.
           </AppText>
         </View>
 
@@ -95,7 +95,7 @@ export function SelectPhotosScreen({ navigation }: ScreenProps<'SelectPhotos'>) 
         </View>
 
         <AppText variant="sectionLabel" color={colors.meta} style={styles.closeupLabel}>
-          Close-ups (optional)
+          Close-ups
         </AppText>
         <View style={styles.row}>
           <PhotoCard

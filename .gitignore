@@ -85,3 +85,6 @@ yarn-error.log
 
 # Backend is a separate repo (github.com/Trendzo/backend), nested here for convenience
 /backend/
+
+# macOS AppleDouble metadata (created on exFAT/network volumes)
+._*

@@ -103,12 +103,12 @@ export function ChangeRequestScreen({ navigation }: ScreenProps<'ChangeRequest'>
             onChange={(v) => setField((v[0] as ChangeRequestField) ?? null)}
             error={errors.field}
           />
-          <Field label="Current value" value={currentValue} onChangeText={setCurrentValue} placeholder="What it is now (optional)" />
+          <Field label="Current value" value={currentValue} onChangeText={setCurrentValue} placeholder="What it is now" />
           <Field label="Requested value" required value={requestedValue} onChangeText={setRequestedValue} placeholder="What it should be" error={errors.requestedValue} />
           <Field label="Reason" required value={reason} onChangeText={setReason} placeholder="Why this change (3–500 chars)" multiline error={errors.reason} />
 
           <View style={styles.section}>
-            <AppText variant="sectionLabel" color={colors.meta}>Evidence (optional)</AppText>
+            <AppText variant="sectionLabel" color={colors.meta}>Evidence</AppText>
             <DocumentUpload
               label="Supporting document"
               value={evidenceUrl}

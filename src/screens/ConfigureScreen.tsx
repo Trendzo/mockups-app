@@ -13,26 +13,23 @@ import {
   SegmentedControl,
 } from '../components';
 import { ScreenProps } from '../navigation/types';
-import { Mode, ModelGender, prettyView, viewsForMode } from '../types/enums';
+import { Mode, prettyView, viewsForMode } from '../types/enums';
 import { colors, radii, spacing, type as typeScale } from '../theme/theme';
 import { prepareUpload } from '../utils/image';
-import { LocalPhoto } from '../navigation/types';
 import { useCaptureDraft } from '../store/captureDraft';
 
 /** Product shots, or on a male / female model. */
 type GenType = 'product' | 'male' | 'female';
 
-/** Configure generation (§5.4). Reads garment photos from the capture draft. */
+/** Configure generation (§5.4). Reads garment photos + config from the capture
+ *  draft, so "Adjust & regenerate" can return here with everything preserved. */
 export function ConfigureScreen({ navigation }: ScreenProps<'Configure'>) {
   const draft = useCaptureDraft();
   const apparel = draft.front;
   const apparelBack = draft.back;
   const closeupCount = [draft.pattern, draft.logo, draft.tag].filter(Boolean).length;
-  const [mode, setMode] = useState<Mode>(Mode.WithoutModel);
-  const [modelGender, setModelGender] = useState<ModelGender | null>(null);
-  const [design, setDesign] = useState<LocalPhoto | null>(null);
-  const [prompt, setPrompt] = useState('');
-  const [only, setOnly] = useState<string[]>([]);
+  const { mode, modelGender, design, prompt, only } = draft.config;
+  const setConfig = draft.setConfig;
   const [busy, setBusy] = useState(false);
 
   const availableViews = useMemo(() => viewsForMode(mode), [mode]);
@@ -45,20 +42,24 @@ export function ConfigureScreen({ navigation }: ScreenProps<'Configure'>) {
         : 'male'
       : 'product';
   const setGenType = (t: GenType) => {
+    // Changing mode also clears `only`, since the view namespaces differ.
     if (t === 'product') {
-      setMode(Mode.WithoutModel);
-      setModelGender(null);
+      setConfig({ mode: Mode.WithoutModel, modelGender: null, only: [] });
     } else {
-      setMode(Mode.WithModel);
-      setModelGender(t === 'male' ? 'him' : 'her');
+      setConfig({
+        mode: Mode.WithModel,
+        modelGender: t === 'male' ? 'him' : 'her',
+        only: [],
+      });
     }
-    setOnly([]);
   };
 
   const toggleView = (view: string) =>
-    setOnly((prev) =>
-      prev.includes(view) ? prev.filter((v) => v !== view) : [...prev, view],
-    );
+    setConfig({
+      only: only.includes(view)
+        ? only.filter((v) => v !== view)
+        : [...only, view],
+    });
 
   const onAddDesign = async () => {
     const res = await launchImageLibrary({
@@ -69,7 +70,7 @@ export function ConfigureScreen({ navigation }: ScreenProps<'Configure'>) {
       maxHeight: 2048,
     });
     const asset = res.assets?.[0];
-    if (asset?.uri) setDesign({ uri: asset.uri });
+    if (asset?.uri) setConfig({ design: { uri: asset.uri } });
   };
 
   const onGenerate = async () => {
@@ -169,7 +170,7 @@ export function ConfigureScreen({ navigation }: ScreenProps<'Configure'>) {
         </Section>
 
         {/* Add design */}
-        <Section label="Add design (optional)">
+        <Section label="Add design">
           <PressableScale onPress={onAddDesign} style={styles.designBox}>
             {design ? (
               <AppImage
@@ -191,7 +192,7 @@ export function ConfigureScreen({ navigation }: ScreenProps<'Configure'>) {
               </AppText>
             </View>
             {design && (
-              <PressableScale onPress={() => setDesign(null)} style={styles.clearBtn}>
+              <PressableScale onPress={() => setConfig({ design: null })} style={styles.clearBtn}>
                 <AppText variant="meta" color={colors.danger}>
                   Remove
                 </AppText>
@@ -201,10 +202,10 @@ export function ConfigureScreen({ navigation }: ScreenProps<'Configure'>) {
         </Section>
 
         {/* Prompt */}
-        <Section label="Prompt (optional)">
+        <Section label="Prompt">
           <TextInput
             value={prompt}
-            onChangeText={setPrompt}
+            onChangeText={(text) => setConfig({ prompt: text })}
             placeholder="e.g. minimal studio, soft light, neutral background"
             placeholderTextColor={colors.inkMuted}
             multiline
@@ -213,7 +214,7 @@ export function ConfigureScreen({ navigation }: ScreenProps<'Configure'>) {
         </Section>
 
         {/* Only views */}
-        <Section label="Limit views (optional)">
+        <Section label="Limit views">
           <View style={styles.chips}>
             {availableViews.map((view) => (
               <Chip

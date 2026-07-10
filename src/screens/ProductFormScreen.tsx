@@ -17,7 +17,7 @@ import {
 } from '../components';
 import { ScreenProps } from '../navigation/types';
 import { useCatalogBrands, useCatalogCategories, useListing } from '../api/catalogHooks';
-import { createListing, updateListing, uploadImage } from '../api/catalogManagement';
+import { createListing, patchVariant, updateListing, uploadImage } from '../api/catalogManagement';
 import {
   AGE_GROUP_VALUES,
   CatalogGender,
@@ -25,6 +25,7 @@ import {
   UpdateListingInput,
 } from '../types/catalog';
 import { inferMimeType } from '../utils/image';
+import { paiseToRupeeInput, parseRupeesToPaise } from '../utils/money';
 import { colors, radii, spacing } from '../theme/theme';
 
 const OCCASIONS = ['Casual', 'Formal', 'Party', 'Sport', 'Festive'];
@@ -58,6 +59,11 @@ export function ProductFormScreen({ navigation, route }: ScreenProps<'ProductFor
   const [occasion, setOccasion] = useState<string[]>([]);
   const [ageGroups, setAgeGroups] = useState<string[]>([]);
   const [gallery, setGallery] = useState<string[]>([]);
+  // Pricing lives on the default variant. We surface it here so price is
+  // editable in one place alongside the rest of the product (§ edit product).
+  const [price, setPrice] = useState(''); // current / selling price
+  const [msp, setMsp] = useState(''); // struck-through MSP (compare-at)
+  const [priceVariantId, setPriceVariantId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -77,8 +83,19 @@ export function ProductFormScreen({ navigation, route }: ScreenProps<'ProductFor
     setOccasion(l.occasion ?? []);
     setAgeGroups(l.ageGroups ?? []);
     setGallery(l.galleryUrls ?? []);
+    // Seed the price from the default variant (default group, else the first).
+    const defaultGroupId = l.variantGroups?.find((g) => g.isDefault)?.id;
+    const pv =
+      l.variants?.find((v) => v.groupId === defaultGroupId) ?? l.variants?.[0];
+    if (pv) {
+      setPrice(paiseToRupeeInput(pv.pricePaise));
+      setMsp(paiseToRupeeInput(pv.compareAtPrice ?? null));
+      setPriceVariantId(pv.id);
+    }
     setSeeded(true);
   }, [isEdit, seeded, listingQ.data]);
+
+  const variantCount = listingQ.data?.variants?.length ?? 0;
 
   const brandOptions = (brandsQ.data ?? []).map((b) => ({ value: b.id, label: b.name }));
   const categoryOptions = (categoriesQ.data ?? []).map((c) => ({ value: c.id, label: c.label }));
@@ -120,6 +137,17 @@ export function ProductFormScreen({ navigation, route }: ScreenProps<'ProductFor
     if (!categoryId) e.category = 'Pick a category';
     if (genders.length === 0) e.gender = 'Select at least one';
     if (description.length > 2000) e.description = 'Max 2000 characters';
+    // Validate pricing when the default variant is being edited here.
+    if (priceVariantId) {
+      const pricePaise = parseRupeesToPaise(price);
+      if (pricePaise == null || pricePaise <= 0) e.price = 'Enter a valid price';
+      if (msp.trim()) {
+        const mspPaise = parseRupeesToPaise(msp);
+        if (mspPaise == null) e.msp = 'Invalid amount';
+        else if (pricePaise != null && mspPaise <= pricePaise)
+          e.msp = 'MSP must be higher than the current price';
+      }
+    }
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -142,9 +170,17 @@ export function ProductFormScreen({ navigation, route }: ScreenProps<'ProductFor
           galleryUrls: gallery,
         };
         await updateListing(editId!, body);
+        // Save price changes onto the default variant, alongside the listing.
+        if (priceVariantId) {
+          await patchVariant(priceVariantId, {
+            pricePaise: parseRupeesToPaise(price)!,
+            compareAtPrice: msp.trim() ? parseRupeesToPaise(msp) : null,
+          });
+        }
         toast.show('Product updated', 'success');
         qc.invalidateQueries({ queryKey: ['listing', editId] });
         qc.invalidateQueries({ queryKey: ['listings'] });
+        qc.invalidateQueries({ queryKey: ['inventory'] });
         navigation.goBack();
       } else {
         const created = await createListing({
@@ -225,8 +261,43 @@ export function ProductFormScreen({ navigation, route }: ScreenProps<'ProductFor
           ) : null}
         </View>
 
+        {/* Pricing — MSP + current price, kept together on one row. */}
+        {isEdit && priceVariantId ? (
+          <View style={styles.block}>
+            <AppText variant="sectionLabel" color={colors.meta}>Pricing</AppText>
+            <View style={styles.priceRow}>
+              <Field
+                containerStyle={styles.flex}
+                label="Current price"
+                required
+                prefix="₹"
+                keyboardType="decimal-pad"
+                value={price}
+                onChangeText={setPrice}
+                placeholder="499.99"
+                error={errors.price}
+              />
+              <Field
+                containerStyle={styles.flex}
+                label="MSP"
+                prefix="₹"
+                keyboardType="decimal-pad"
+                value={msp}
+                onChangeText={setMsp}
+                placeholder="Higher"
+                error={errors.msp}
+              />
+            </View>
+            {variantCount > 1 ? (
+              <AppText variant="meta" color={colors.meta}>
+                Editing the default variant. Manage other variants from the product page.
+              </AppText>
+            ) : null}
+          </View>
+        ) : null}
+
         <Field label="Description" value={description} onChangeText={setDescription} placeholder="Short product description" multiline error={errors.description} />
-        <Field label="Full description" value={descriptionLong} onChangeText={setDescriptionLong} placeholder="Longer details (optional)" multiline />
+        <Field label="Full description" value={descriptionLong} onChangeText={setDescriptionLong} placeholder="Longer details" multiline />
         <Select label="Listing policy" options={POLICIES} selected={[policy]} onChange={(v) => setPolicy((v[0] as ListingPolicy) ?? 'return')} />
         <Select label="Occasion" multiple placeholder="Select occasions" options={OCCASIONS.map((o) => ({ value: o, label: o }))} selected={occasion} onChange={setOccasion} />
         <Select label="Age groups" multiple placeholder="Select age groups" options={AGE_GROUP_VALUES.map((a) => ({ value: a, label: a }))} selected={ageGroups} onChange={setAgeGroups} />
@@ -276,6 +347,7 @@ const styles = StyleSheet.create({
   loader: { marginTop: spacing.xl },
   h1: { fontSize: 24, lineHeight: 28 },
   block: { gap: spacing.sm },
+  priceRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start' },
   pillRow: { flexDirection: 'row', gap: spacing.sm },
   pill: {
     flexDirection: 'row',

@@ -66,7 +66,7 @@ export function VariantFormScreen({ navigation, route }: ScreenProps<'VariantFor
     if (compareAt.trim()) {
       const cp = parseRupeesToPaise(compareAt);
       if (cp == null) e.compareAt = 'Invalid amount';
-      else if (pricePaise != null && cp <= pricePaise) e.compareAt = 'Must be higher than price';
+      else if (pricePaise != null && cp <= pricePaise) e.compareAt = 'MSP must be higher than the current price';
     }
     const st = Number(stock);
     if (!Number.isInteger(st) || st < 0) e.stock = 'Whole number ≥ 0';
@@ -173,10 +173,12 @@ export function VariantFormScreen({ navigation, route }: ScreenProps<'VariantFor
           </View>
         ) : null}
 
-        <Field label="Price" required prefix="₹" keyboardType="decimal-pad" value={price} onChangeText={setPrice} placeholder="499.99" error={errors.price} />
-        <Field label="Compare at (optional)" prefix="₹" keyboardType="decimal-pad" value={compareAt} onChangeText={setCompareAt} placeholder="Higher than price" error={errors.compareAt} />
+        <View style={styles.priceRow}>
+          <Field containerStyle={styles.flex} label="Current price" required prefix="₹" keyboardType="decimal-pad" value={price} onChangeText={setPrice} placeholder="499.99" error={errors.price} />
+          <Field containerStyle={styles.flex} label="MSP" prefix="₹" keyboardType="decimal-pad" value={compareAt} onChangeText={setCompareAt} placeholder="Higher" error={errors.compareAt} />
+        </View>
         <Field label="Stock" required keyboardType="number-pad" value={stock} onChangeText={setStock} placeholder="0" error={errors.stock} />
-        <Field label="SKU (optional)" value={sku} onChangeText={setSku} placeholder="Auto-generated if blank" autoCapitalize="characters" autoCorrect={false} />
+        <Field label="SKU" value={sku} onChangeText={setSku} placeholder="Auto-generated if blank" autoCapitalize="characters" autoCorrect={false} />
 
         {isEdit ? (
           <View style={styles.block}>
@@ -214,6 +216,7 @@ const styles = StyleSheet.create({
   content: { paddingTop: spacing.md, paddingBottom: spacing.lg, gap: spacing.lg },
   h1: { fontSize: 24, lineHeight: 28 },
   block: { gap: spacing.sm },
+  priceRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start' },
   footer: {
     paddingTop: spacing.md,
     borderTopWidth: 1,

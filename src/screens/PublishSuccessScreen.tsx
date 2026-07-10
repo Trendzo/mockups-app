@@ -50,9 +50,9 @@ export function PublishSuccessScreen({
         ) : null}
 
         <View style={styles.card}>
-          <Row label="Price" value={formatPaise(variant.pricePaise)} />
+          <Row label="Current price" value={formatPaise(variant.pricePaise)} />
           {variant.compareAtPrice != null && (
-            <Row label="Compare at" value={formatPaise(variant.compareAtPrice)} />
+            <Row label="MSP" value={formatPaise(variant.compareAtPrice)} />
           )}
           <Row label="Status" value={capitalize(listing.status)} />
           <Row label="Gender" value={GENDER_LABELS[listing.gender]} />

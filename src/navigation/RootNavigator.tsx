@@ -19,6 +19,8 @@ import { PublishScreen } from '../screens/PublishScreen';
 import { PublishSuccessScreen } from '../screens/PublishSuccessScreen';
 import { CreationsScreen } from '../screens/CreationsScreen';
 import { ScanScreen } from '../screens/ScanScreen';
+import { BillingScreen } from '../screens/BillingScreen';
+import { InvoiceScreen } from '../screens/InvoiceScreen';
 import { ProductDetailScreen } from '../screens/ProductDetailScreen';
 import { ProductFormScreen } from '../screens/ProductFormScreen';
 import { VariantFormScreen } from '../screens/VariantFormScreen';
@@ -177,6 +179,12 @@ export function RootNavigator() {
           name="Scan"
           component={ScanScreen}
           options={{ animation: 'slide_from_bottom' }}
+        />
+        <Stack.Screen name="Billing" component={BillingScreen} />
+        <Stack.Screen
+          name="Invoice"
+          component={InvoiceScreen}
+          options={{ animation: 'fade', gestureEnabled: false }}
         />
         <Stack.Screen name="ProductDetail" component={ProductDetailScreen} />
         <Stack.Screen name="ProductForm" component={ProductFormScreen} />

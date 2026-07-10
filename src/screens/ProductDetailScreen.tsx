@@ -246,11 +246,21 @@ function VariantRow({ variant, onPress }: { variant: Variant; onPress: () => voi
         <AppText variant="bodyMedium" color={colors.ink} numberOfLines={1}>
           {variant.attributesLabel || 'Default'}
         </AppText>
-        <AppText variant="meta" color={colors.meta}>
-          {formatPaise(variant.pricePaise)}
-          {variant.compareAtPrice ? `  (was ${formatPaise(variant.compareAtPrice)})` : ''}
-          {variant.sku ? `  ·  ${variant.sku}` : ''}
-        </AppText>
+        <View style={styles.priceLine}>
+          <AppText variant="meta" color={colors.ink}>
+            {formatPaise(variant.pricePaise)}
+          </AppText>
+          {variant.compareAtPrice ? (
+            <AppText variant="meta" color={colors.meta} style={styles.strike}>
+              {formatPaise(variant.compareAtPrice)}
+            </AppText>
+          ) : null}
+          {variant.sku ? (
+            <AppText variant="meta" color={colors.meta}>
+              · {variant.sku}
+            </AppText>
+          ) : null}
+        </View>
       </View>
       <View style={styles.variantStock}>
         <AppText variant="bodyMedium" color={available <= 0 ? colors.danger : colors.ink}>
@@ -315,6 +325,13 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
   variantStock: { alignItems: 'flex-end' },
+  priceLine: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 6,
+  },
+  strike: { textDecorationLine: 'line-through' },
   flex: { flex: 1 },
   footer: {
     paddingVertical: spacing.md,
