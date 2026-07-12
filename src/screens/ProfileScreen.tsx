@@ -22,7 +22,7 @@ import { ScreenProps } from '../navigation/types';
 import { useAuth } from '../store/auth';
 import { useKyc, useRetailerMe } from '../api/onboardingHooks';
 import { CatalogExportKind, downloadCatalogCsv } from '../api/catalogueExport';
-import { deleteRetailerAccount } from '../api/onboarding';
+import { requestAccountClosure } from '../api/onboarding';
 import { colors, radii, spacing } from '../theme/theme';
 import {
   ACCOUNT_DELETION_URL,
@@ -50,6 +50,10 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
   const gstin = profile?.gstin ?? retailer?.gstin ?? '—';
   const status = (profile?.status ?? retailer?.status ?? 'pending').toString();
   const initial = (legalName || email).trim().charAt(0).toUpperCase() || '?';
+
+  const subRole = profile?.subRole ?? retailer?.subRole;
+  const canManageAccount = subRole === 'owner' || subRole === 'manager';
+  const closurePending = me.data?.pendingAccountRequest === 'account_deletion';
 
   const kycStatus = kyc.data?.status;
   const kycNeedsAction =
@@ -98,15 +102,17 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
     toast.show('Logged out', 'info');
   };
 
-  const onDeleteAccount = async () => {
+  // Closure is now a request, not an instant delete. The account stays active until an
+  // admin approves; we keep the user signed in and just refresh /retailer/me.
+  const onRequestClosure = async () => {
     setDeleting(true);
     try {
-      await deleteRetailerAccount();
+      await requestAccountClosure();
       setDeleteOpen(false);
-      logout();
-      toast.show('Your account was deleted', 'info');
+      await me.refetch();
+      toast.show('Closure requested — pending admin review', 'info');
     } catch (e: any) {
-      toast.show(e?.message ?? 'Could not delete account', 'error');
+      toast.show(e?.message ?? 'Could not submit closure request', 'error');
     } finally {
       setDeleting(false);
     }
@@ -202,13 +208,23 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
             label="Support"
             onPress={() => Linking.openURL(SUPPORT_URL)}
           />
-          {retailer?.subRole === 'owner' ? (
+          {canManageAccount ? (
             <ActionRow
               icon="trash-outline"
-              label="Delete account"
-              hint="Permanently close this business account"
+              label={closurePending ? 'Closure requested' : 'Request account closure'}
+              hint={
+                closurePending
+                  ? 'Pending admin review — you can reopen anytime after it takes effect'
+                  : 'Submit a request to close this business account (admin-reviewed)'
+              }
               tone="danger"
-              onPress={() => setDeleteOpen(true)}
+              onPress={() => {
+                if (closurePending) {
+                  toast.show('Your closure request is pending admin review', 'info');
+                  return;
+                }
+                setDeleteOpen(true);
+              }}
             />
           ) : null}
         </View>
@@ -297,26 +313,27 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
             color={colors.ink}
             style={styles.sheetTitle}
           >
-            Delete account?
+            Request account closure?
           </AppText>
           <AppText variant="body" color={colors.meta}>
-            Access will end immediately. Your profile and active media will be
-            removed or anonymized. GST, invoice, order, payout and audit records
-            may be retained where legally required.
+            This sends a closure request to the ClosetX team for review. Nothing
+            changes until an admin approves it. Once approved, your store is
+            suspended and your account is closed — but your records are kept, and
+            you can request to reopen the account anytime.
           </AppText>
           <PressableScale
             haptic={false}
             onPress={() => Linking.openURL(ACCOUNT_DELETION_URL)}
           >
             <AppText variant="bodyMedium" color={colors.ink}>
-              Read account deletion details
+              Read account closure details
             </AppText>
           </PressableScale>
           <PrimaryButton
-            label="Permanently delete account"
+            label="Submit closure request"
             tone="danger"
             loading={deleting}
-            onPress={onDeleteAccount}
+            onPress={onRequestClosure}
           />
           <PrimaryButton
             label="Cancel"

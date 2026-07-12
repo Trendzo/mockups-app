@@ -59,7 +59,8 @@ export function ResubmitScreen({ navigation, route }: ScreenProps<'Resubmit'>) {
         storeName: a.storeName,
         pan: a.pan,
       });
-      setMustReupload(data.mustReuploadDocKinds ?? []);
+      // The must-reupload flags live INSIDE the application row (not top-level).
+      setMustReupload(a.mustReuploadDocKinds ?? []);
       setLoaded(true);
     } catch (e: any) {
       toast.show(e?.message ?? 'Could not load application', 'error');

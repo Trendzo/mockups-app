@@ -1,5 +1,4 @@
 import {
-  deleteJson,
   getJson,
   postJson,
   postMultipart,
@@ -13,6 +12,7 @@ import {
   ApplicationStatusInfo,
   ChangeRequest,
   ChangeRequestInput,
+  DocKind,
   IdentityCheck,
   KycCycle,
   RetailerMe,
@@ -21,6 +21,21 @@ import {
   ThreadMessage,
   UploadResult,
 } from '../types/onboarding';
+
+// ---- Appeal thread (suspended/terminated account) ----
+export interface AppealMessage {
+  id: string;
+  storeId: string;
+  authorKind: 'admin' | 'retailer' | 'system' | string;
+  body: string;
+  attachments: string[];
+  createdAt: string;
+}
+export interface AppealThread {
+  storeStatus: string;
+  canAppeal: boolean;
+  messages: AppealMessage[];
+}
 
 // ---- A) Document upload (public; any file up to 25MB) ----
 export async function uploadDocument(file: UploadFile): Promise<UploadResult> {
@@ -117,6 +132,50 @@ export async function postMessage(
   }
 }
 
+/** Submit the specific documents an admin requested during docs_requested. */
+export async function submitClarificationDocuments(
+  id: string,
+  input: { applicantEmail: string; documents: { kind: DocKind; url: string }[]; note?: string },
+): Promise<{ status: string; remainingDocKinds: DocKind[] }> {
+  try {
+    const res = await postJson<{ data: { status: string; remainingDocKinds: DocKind[] } }>(
+      `/applications/${id}/documents`,
+      {
+        applicantEmail: input.applicantEmail.trim().toLowerCase(),
+        documents: input.documents,
+        ...(input.note?.trim() ? { note: input.note.trim() } : {}),
+      },
+    );
+    return unwrapEnvelope(res);
+  } catch (e) {
+    throw normalizeAuthError(e);
+  }
+}
+
+// ---- Suspend/terminate appeal thread (authed retailer) ----
+export async function getAccountAppeal(): Promise<AppealThread> {
+  try {
+    const res = await getJson<{ data: AppealThread }>('/retailer/account/appeal');
+    return unwrapEnvelope<AppealThread>(res);
+  } catch (e) {
+    throw normalizeAuthError(e);
+  }
+}
+
+export async function postAccountAppeal(input: {
+  body: string;
+  attachmentUrls?: string[];
+}): Promise<void> {
+  try {
+    await postJson('/retailer/account/appeal', {
+      body: input.body,
+      ...(input.attachmentUrls?.length ? { attachmentUrls: input.attachmentUrls } : {}),
+    });
+  } catch (e) {
+    throw normalizeAuthError(e);
+  }
+}
+
 // ---- Resubmit ----
 export async function fetchForResubmit(
   id: string,
@@ -163,9 +222,23 @@ export async function getRetailerMe(): Promise<RetailerMe> {
   }
 }
 
-export async function deleteRetailerAccount(): Promise<void> {
+/**
+ * Request business-account closure (owner/manager). Files an admin-reviewed request —
+ * nothing is deleted or suspended until an admin approves. On approval the store is
+ * suspended and accounts marked `closed` (reversibly). Replaces the old destructive delete.
+ */
+export async function requestAccountClosure(reason?: string): Promise<void> {
   try {
-    await deleteJson('/retailer/account', { confirmation: 'DELETE' });
+    await postJson('/retailer/account/close-request', reason ? { reason } : {});
+  } catch (e) {
+    throw normalizeAuthError(e);
+  }
+}
+
+/** Request to reopen a CLOSED account (owner/manager). Admin approval restores it to active. */
+export async function requestAccountReopen(reason?: string): Promise<void> {
+  try {
+    await postJson('/retailer/account/reopen-request', reason ? { reason } : {});
   } catch (e) {
     throw normalizeAuthError(e);
   }

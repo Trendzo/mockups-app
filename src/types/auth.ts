@@ -1,6 +1,6 @@
 /** Retailer auth (closetx backend). Envelope: { success, data } | { success:false, error }. */
 
-export type RetailerStatus = 'pending_approval' | 'active' | 'terminated';
+export type RetailerStatus = 'pending_approval' | 'active' | 'terminated' | 'closed';
 export type RetailerSubRole = 'owner' | 'manager' | 'staff' | 'delivery_agent';
 
 export interface Retailer {

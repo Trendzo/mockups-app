@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
+  Linking,
   ScrollView,
   StyleSheet,
   TextInput,
@@ -25,9 +26,10 @@ import {
   getApplicationStatus,
   getMessages,
   postMessage,
+  submitClarificationDocuments,
   uploadDocument,
 } from '../api/onboarding';
-import { ApplicationStatus, ThreadMessage } from '../types/onboarding';
+import { ApplicationStatus, DocKind, ThreadMessage } from '../types/onboarding';
 import { inferMimeType } from '../utils/image';
 import { colors, radii, spacing, type as typeScale } from '../theme/theme';
 
@@ -167,6 +169,15 @@ export function ApplicationStatusScreen({
                 <PrimaryButton label="Fix & resubmit" tone="accent" onPress={() => navigation.navigate('Resubmit', { applicationId, email })} />
               ) : null}
 
+              {status === 'docs_requested' && (statusQ.data?.mustReuploadDocKinds?.length ?? 0) > 0 ? (
+                <RequestedDocs
+                  applicationId={applicationId}
+                  email={email}
+                  kinds={statusQ.data!.mustReuploadDocKinds!}
+                  onSubmitted={() => { statusQ.refetch(); messagesQ.refetch(); }}
+                />
+              ) : null}
+
               {showThread ? (
                 <View style={styles.thread}>
                   <AppText variant="sectionLabel" color={colors.meta}>Messages</AppText>
@@ -211,17 +222,118 @@ export function ApplicationStatusScreen({
 }
 
 function Bubble({ message }: { message: ThreadMessage }) {
-  const mine = message.from === 'applicant';
+  // The serialized author is 'admin' | 'applicant'; treat anything non-admin as "mine".
+  const mine = message.authorKind !== 'admin';
+  const label = mine ? 'You' : message.authorLabel ?? 'ClosetX admin';
   return (
     <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleThem]}>
+      <View style={styles.bubbleHead}>
+        <AppText variant="meta" color={mine ? colors.onDarkMuted : colors.meta}>{label}</AppText>
+        {message.fieldKey ? (
+          <AppText variant="meta" color={mine ? colors.onDarkMuted : colors.meta}> · {message.fieldKey}</AppText>
+        ) : null}
+      </View>
       <AppText variant="body" color={mine ? colors.accentInk : colors.ink}>
         {message.body}
       </AppText>
-      {message.attachmentUrls?.length ? (
-        <AppText variant="meta" color={mine ? colors.onDarkMuted : colors.meta}>
-          📎 {message.attachmentUrls.length} attachment(s)
-        </AppText>
+      {message.attachments?.length ? (
+        <View style={styles.bubbleAtts}>
+          {message.attachments.map((url, i) => (
+            <PressableScale key={url} onPress={() => Linking.openURL(url).catch(() => {})}>
+              <AppText
+                variant="meta"
+                color={mine ? colors.onDarkMuted : colors.ink}
+                style={styles.attLink}
+              >
+                📎 Attachment {i + 1}
+              </AppText>
+            </PressableScale>
+          ))}
+        </View>
       ) : null}
+    </View>
+  );
+}
+
+const DOC_LABELS: Record<string, string> = {
+  gst_certificate: 'GST certificate',
+  pan: 'PAN card',
+  address_proof: 'Address proof',
+  bank_proof: 'Bank proof (cancelled cheque)',
+  storefront_photo: 'Storefront photo',
+  other: 'Other document',
+};
+
+/** Structured upload slots for the exact doc kinds the admin requested in docs_requested. */
+function RequestedDocs({
+  applicationId,
+  email,
+  kinds,
+  onSubmitted,
+}: {
+  applicationId: string;
+  email: string;
+  kinds: DocKind[];
+  onSubmitted: () => void;
+}) {
+  const toast = useToast();
+  const [urls, setUrls] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const pick = async (kind: DocKind) => {
+    const res = await launchImageLibrary({ mediaType: 'photo', selectionLimit: 1, quality: 0.9, maxWidth: 2400, maxHeight: 2400 });
+    const asset = res.assets?.[0];
+    if (!asset?.uri) return;
+    setBusy(kind);
+    try {
+      const up = await uploadDocument({ uri: asset.uri, name: asset.fileName ?? `${kind}_${Date.now()}.jpg`, type: asset.type ?? inferMimeType(asset.uri) });
+      setUrls((p) => ({ ...p, [kind]: up.url }));
+    } catch (e: any) {
+      toast.show(e?.message ?? 'Upload failed', 'error');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const allUploaded = kinds.every((k) => urls[k]);
+  const submit = async () => {
+    if (!allUploaded || submitting) return;
+    setSubmitting(true);
+    try {
+      await submitClarificationDocuments(applicationId, {
+        applicantEmail: email,
+        documents: kinds.map((k) => ({ kind: k, url: urls[k]! })),
+      });
+      toast.show('Documents submitted for review', 'success');
+      onSubmitted();
+    } catch (e: any) {
+      toast.show(e?.message ?? 'Could not submit', 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <View style={styles.reqCard}>
+      <AppText variant="sectionLabel" color={colors.meta}>Documents requested</AppText>
+      {kinds.map((k) => (
+        <PressableScale key={k} onPress={() => pick(k)} style={styles.reqRow} toScale={0.98}>
+          <Icon name={urls[k] ? 'checkmark' : 'attach'} size={20} color={colors.ink} />
+          <AppText variant="body" color={colors.ink} style={styles.flex}>{DOC_LABELS[k] ?? k}</AppText>
+          {busy === k ? (
+            <ActivityIndicator color={colors.ink} />
+          ) : (
+            <AppText variant="meta" color={colors.meta}>{urls[k] ? 'Uploaded' : 'Upload'}</AppText>
+          )}
+        </PressableScale>
+      ))}
+      <PrimaryButton
+        label={submitting ? 'Submitting…' : 'Submit documents'}
+        tone="accent"
+        disabled={!allUploaded || submitting}
+        onPress={submit}
+      />
     </View>
   );
 }
@@ -231,6 +343,11 @@ const styles = StyleSheet.create({
   content: { paddingTop: spacing.md, paddingBottom: spacing.xl, gap: spacing.md },
   header: { gap: spacing.xs },
   h1: { fontSize: 24, lineHeight: 28 },
+  bubbleHead: { flexDirection: 'row', alignItems: 'center', marginBottom: 2 },
+  bubbleAtts: { marginTop: 4, gap: 2 },
+  attLink: { textDecorationLine: 'underline' },
+  reqCard: { backgroundColor: colors.surface, borderRadius: radii.card, padding: spacing.md, gap: spacing.sm },
+  reqRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xs },
   reasonCard: { backgroundColor: colors.surface, borderRadius: radii.card, padding: spacing.md, gap: spacing.xs },
   thread: { gap: spacing.sm, marginTop: spacing.sm },
   bubble: { maxWidth: '85%', borderRadius: radii.card, padding: spacing.md, gap: 2 },

@@ -5,7 +5,7 @@
 
 // ---- Enums ----
 export type ApplicationStatus = 'pending' | 'docs_requested' | 'approved' | 'rejected';
-export type AccountStatus = 'pending_approval' | 'active' | 'terminated';
+export type AccountStatus = 'pending_approval' | 'active' | 'terminated' | 'closed';
 export type StoreStatus = 'onboarding' | 'active' | 'paused' | 'suspended' | 'terminated';
 export type KycCycleStatus = 'pending' | 'submitted' | 'approved' | 'rejected' | 'overdue';
 export type KycDocStatus = 'missing' | 'pending_review' | 'verified' | 'rejected';
@@ -14,7 +14,9 @@ export type ChangeRequestField =
   | 'address'
   | 'bank_account'
   | 'gstin'
-  | 'pos_billing_activation';
+  | 'pos_billing_activation'
+  | 'account_deletion'
+  | 'account_reopen';
 export type ChangeRequestStatus = 'pending' | 'under_review' | 'approved' | 'rejected';
 
 export type DocKind =
@@ -99,19 +101,23 @@ export interface ApplicationStatusInfo {
   mustReuploadDocKinds?: DocKind[];
 }
 
-// ---- Message thread ----
+// ---- Message thread (canonical serialized shape from the backend) ----
 export interface ThreadMessage {
   id: string;
-  from: 'admin' | 'applicant' | string;
+  authorKind: 'admin' | 'applicant' | string;
+  authorLabel?: string;
   body: string;
-  attachmentUrls?: string[];
+  attachments?: string[];
+  fieldKey?: string | null;
   createdAt?: string;
 }
 
 // ---- Resubmit ----
+// The backend returns the full application row (mustReuploadDocKinds lives INSIDE it)
+// plus a separate documents array — not a flattened prefill.
 export interface ResubmitPrefill {
-  application: Partial<ApplicationInput>;
-  mustReuploadDocKinds: DocKind[];
+  application: Partial<ApplicationInput> & { mustReuploadDocKinds?: DocKind[] };
+  documents?: { kind: DocKind; url: string }[];
 }
 
 // ---- Post-login: /retailer/me ----
@@ -137,6 +143,8 @@ export interface RetailerMe {
   store: Store | null;
   termsAcceptanceRequired?: boolean;
   currentTermsVersion?: string;
+  /** In-flight account-lifecycle request (closure or reopen) awaiting admin review. */
+  pendingAccountRequest?: 'account_deletion' | 'account_reopen' | null;
 }
 
 export interface TermsInfo {
