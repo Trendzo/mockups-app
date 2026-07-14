@@ -19,6 +19,8 @@ authHttp.interceptors.request.use(config => {
 export function normalizeAuthError(err: unknown): AuthError {
   if (axios.isAxiosError(err)) {
     const status = err.response?.status;
+    // Keep the raw server body so callers can show the real cause of a 500.
+    const detail = rawBody(err.response?.data);
     const data = err.response?.data as
       | {
           error?: {
@@ -34,6 +36,7 @@ export function normalizeAuthError(err: unknown): AuthError {
         code: e.code ?? 'error',
         message: friendly(e.code, e.message),
         status,
+        detail,
         applicationId: e.details?.applicationId,
         ownerEmail: e.details?.ownerEmail,
       };
@@ -46,10 +49,21 @@ export function normalizeAuthError(err: unknown): AuthError {
         status,
       };
     }
-    return { code: 'error', message: `Request failed (${status}).`, status };
+    return { code: 'error', message: `Request failed (${status}).`, status, detail };
   }
   if (err instanceof Error) return { code: 'error', message: err.message };
   return { code: 'error', message: 'Unexpected error.' };
+}
+
+/** Stringify a server error body (truncated) so it can be shown/logged safely. */
+function rawBody(data: unknown): string | undefined {
+  if (data == null) return undefined;
+  try {
+    const s = typeof data === 'string' ? data : JSON.stringify(data);
+    return s.length > 600 ? `${s.slice(0, 600)}…` : s;
+  } catch {
+    return undefined;
+  }
 }
 
 function friendly(code?: string, message?: string): string {

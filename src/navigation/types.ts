@@ -2,7 +2,6 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Mode, ModelGender } from '../types/enums';
 import { PublishResult, Submission } from '../types/api';
 import { VariantMode } from '../types/catalog';
-import { Invoice } from '../types/billing';
 import { UploadFile } from '../utils/image';
 
 /** A captured/picked local image passing through the flow. */
@@ -15,9 +14,11 @@ export interface LocalPhoto {
 export type RootStackParamList = {
   // Auth + onboarding (application-first)
   Login: undefined;
-  ApplicationForm: undefined;
+  ApplicationForm: { verifiedPhone?: string } | undefined;
   ApplicationStatus: { applicationId: string; email: string };
   Resubmit: { applicationId: string; email: string };
+  // OpenStreetMap store-location picker (writes address + pincode into the draft).
+  LocationPicker: undefined;
 
   // Post-login gate
   PendingApproval: undefined;
@@ -33,10 +34,6 @@ export type RootStackParamList = {
 
   // QR checkout scanner → pushes picks to an open web Register over SSE
   Scan: undefined;
-
-  // In-app billing (point-of-sale): assemble a bill → invoice receipt
-  Billing: undefined;
-  Invoice: { invoice: Invoice };
 
   // Catalog flow: photo picker (front + optional back/close-ups) → configure
   SelectPhotos: undefined;
@@ -64,8 +61,13 @@ export type RootStackParamList = {
   // Catalog management
   Catalog: undefined;
   ProductDetail: { id: string };
-  ProductForm: { id?: string };
   VariantForm: { listingId: string; variantId?: string; mode: VariantMode };
+
+  // Unified product-creation/edit wizard (state lives in the productDraft store).
+  ProductWizardBasics: undefined;
+  ProductWizardVariants: undefined;
+  ProductWizardDetails: undefined;
+  ProductWizardReview: undefined;
 
   // Dev
   Profile: undefined;

@@ -18,8 +18,9 @@ import {
 import { ScreenProps } from '../navigation/types';
 import { useListing } from '../api/catalogHooks';
 import { deleteListing, updateListing } from '../api/catalogManagement';
+import { useProductDraft } from '../store/productDraft';
 import { useAuth } from '../store/auth';
-import { canWriteCatalog, Listing, Variant } from '../types/catalog';
+import { canWriteCatalog, Variant } from '../types/catalog';
 import { formatPaise } from '../utils/money';
 import { colors, radii, spacing } from '../theme/theme';
 
@@ -140,9 +141,10 @@ export function ProductDetailScreen({ navigation, route }: ScreenProps<'ProductD
             </AppText>
             {canWrite ? (
               <PressableScale
-                onPress={() =>
-                  navigation.navigate('VariantForm', { listingId: id, mode: listing.variantMode })
-                }
+                onPress={() => {
+                  useProductDraft.getState().startEdit(listing);
+                  navigation.navigate('ProductWizardVariants');
+                }}
               >
                 <AppText variant="bodyMedium" color={colors.ink}>
                   + Add
@@ -195,7 +197,10 @@ export function ProductDetailScreen({ navigation, route }: ScreenProps<'ProductD
               label="Edit details"
               tone="ghost"
               style={styles.flex}
-              onPress={() => navigation.navigate('ProductForm', { id })}
+              onPress={() => {
+                useProductDraft.getState().startEdit(listing);
+                navigation.navigate('ProductWizardBasics');
+              }}
             />
             <PrimaryButton
               label="More"

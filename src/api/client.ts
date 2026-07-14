@@ -30,6 +30,14 @@ http.interceptors.response.use(
   res => res,
   error => {
     const status = error?.response?.status;
+    const cfg = error?.config;
+    const where = `${cfg?.method?.toUpperCase?.() ?? ''} ${cfg?.baseURL ?? ''}${cfg?.url ?? ''}`.trim();
+    // Log the full server response so an internal server error's actual body
+    // (message/stack/details) is visible in the Metro/device console.
+    console.error(
+      `[API error] ${where} → ${status ?? 'no response'}`,
+      error?.response?.data ?? error?.message ?? error,
+    );
     const hadToken = !!useAuth.getState().token;
     if (status === 401 && hadToken) {
       useAuth.getState().logout('expired');

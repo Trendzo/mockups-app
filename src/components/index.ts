@@ -1,4 +1,6 @@
 export { AppImage } from './AppImage';
+export { ApplicationWizard } from './ApplicationWizard';
+export type { WizardStepCopy, DocFieldState } from './ApplicationWizard';
 export { AppText } from './AppText';
 export { BackButton } from './BackButton';
 export { Banner } from './Banner';

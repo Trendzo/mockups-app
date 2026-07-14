@@ -30,14 +30,6 @@ export function parseRupeesToPaise(input: string): number | null {
   return paise;
 }
 
-/**
- * Indian apparel GST slab by unit price: 5% up to ₹1000, 12% above. Used to
- * compute tax on a bill line. Returns the rate as a fraction (0.05 / 0.12).
- */
-export function gstRateForUnitPaise(unitPaise: number): number {
-  return unitPaise <= 100_000 ? 0.05 : 0.12;
-}
-
 /** Inverse of parse: paise -> plain editable rupee string ("499.99"). */
 export function paiseToRupeeInput(paise: number | null | undefined): string {
   if (paise == null) return '';

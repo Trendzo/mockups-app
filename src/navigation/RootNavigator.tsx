@@ -7,6 +7,7 @@ import { LoginScreen } from '../screens/LoginScreen';
 import { ApplicationFormScreen } from '../screens/ApplicationFormScreen';
 import { ApplicationStatusScreen } from '../screens/ApplicationStatusScreen';
 import { ResubmitScreen } from '../screens/ResubmitScreen';
+import { LocationPickerScreen } from '../screens/LocationPickerScreen';
 import { PendingApprovalScreen } from '../screens/PendingApprovalScreen';
 import { TermsScreen } from '../screens/TermsScreen';
 import { MainTabs } from './MainTabs';
@@ -15,15 +16,15 @@ import { CaptureScreen } from '../screens/CaptureScreen';
 import { ConfigureScreen } from '../screens/ConfigureScreen';
 import { GeneratingScreen } from '../screens/GeneratingScreen';
 import { ReviewResultsScreen } from '../screens/ReviewResultsScreen';
-import { PublishScreen } from '../screens/PublishScreen';
 import { PublishSuccessScreen } from '../screens/PublishSuccessScreen';
 import { CreationsScreen } from '../screens/CreationsScreen';
 import { ScanScreen } from '../screens/ScanScreen';
-import { BillingScreen } from '../screens/BillingScreen';
-import { InvoiceScreen } from '../screens/InvoiceScreen';
 import { ProductDetailScreen } from '../screens/ProductDetailScreen';
-import { ProductFormScreen } from '../screens/ProductFormScreen';
 import { VariantFormScreen } from '../screens/VariantFormScreen';
+import { BasicsStep } from '../screens/ProductWizard/BasicsStep';
+import { VariantsStep } from '../screens/ProductWizard/VariantsStep';
+import { DetailsStep } from '../screens/ProductWizard/DetailsStep';
+import { ReviewStep } from '../screens/ProductWizard/ReviewStep';
 import { KycScreen } from '../screens/KycScreen';
 import { ChangeRequestScreen } from '../screens/ChangeRequestScreen';
 import { useAuth } from '../store/auth';
@@ -112,6 +113,11 @@ export function RootNavigator() {
         <Stack.Screen name="ApplicationForm" component={ApplicationFormScreen} />
         <Stack.Screen name="ApplicationStatus" component={ApplicationStatusScreen} />
         <Stack.Screen name="Resubmit" component={ResubmitScreen} />
+        <Stack.Screen
+          name="LocationPicker"
+          component={LocationPickerScreen}
+          options={{ animation: 'slide_from_bottom' }}
+        />
       </Stack.Navigator>
     );
   }
@@ -168,7 +174,6 @@ export function RootNavigator() {
           options={{ animation: 'fade', gestureEnabled: false }}
         />
         <Stack.Screen name="ReviewResults" component={ReviewResultsScreen} />
-        <Stack.Screen name="Publish" component={PublishScreen} />
         <Stack.Screen
           name="PublishSuccess"
           component={PublishSuccessScreen}
@@ -180,15 +185,14 @@ export function RootNavigator() {
           component={ScanScreen}
           options={{ animation: 'slide_from_bottom' }}
         />
-        <Stack.Screen name="Billing" component={BillingScreen} />
-        <Stack.Screen
-          name="Invoice"
-          component={InvoiceScreen}
-          options={{ animation: 'fade', gestureEnabled: false }}
-        />
         <Stack.Screen name="ProductDetail" component={ProductDetailScreen} />
-        <Stack.Screen name="ProductForm" component={ProductFormScreen} />
         <Stack.Screen name="VariantForm" component={VariantFormScreen} />
+        {/* Wizard steps swap in place (no page-slide): only the top tab bar +
+            title + content change, so it reads as one page, not a new screen. */}
+        <Stack.Screen name="ProductWizardBasics" component={BasicsStep} options={{ animation: 'none' }} />
+        <Stack.Screen name="ProductWizardVariants" component={VariantsStep} options={{ animation: 'none' }} />
+        <Stack.Screen name="ProductWizardDetails" component={DetailsStep} options={{ animation: 'none' }} />
+        <Stack.Screen name="ProductWizardReview" component={ReviewStep} options={{ animation: 'none' }} />
         <Stack.Screen name="Kyc" component={KycScreen} />
         <Stack.Screen name="ChangeRequest" component={ChangeRequestScreen} />
       </Stack.Navigator>

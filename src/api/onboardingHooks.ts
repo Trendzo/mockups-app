@@ -16,7 +16,9 @@ export function useRetailerMe(enabled = true) {
       if (status === 401 || status === 403) return false;
       return failureCount < 2;
     },
-    staleTime: 30_000,
+    staleTime: 10_000,
+    // Poll so admin-side changes (status, store/profile edits) appear live.
+    refetchInterval: 20_000,
   });
 }
 
@@ -27,7 +29,8 @@ export function useKyc(enabled = true) {
     queryFn: getKyc,
     enabled,
     retry: 0,
-    staleTime: 30_000,
+    staleTime: 10_000,
+    refetchInterval: 30_000,
   });
 }
 
@@ -37,5 +40,8 @@ export function useChangeRequests(enabled = true) {
     queryFn: listChangeRequests,
     enabled,
     retry: 0,
+    staleTime: 10_000,
+    // Admin approves/rejects change requests — poll so the decision shows live.
+    refetchInterval: 20_000,
   });
 }

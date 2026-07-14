@@ -1,25 +1,30 @@
 import React, { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
-import { launchImageLibrary } from 'react-native-image-picker';
+import { Image, ScrollView, StyleSheet, View } from 'react-native';
 import {
   AppImage,
   AppText,
   BackButton,
   Chip,
-  Icon,
-  PressableScale,
   PrimaryButton,
   Screen,
   SegmentedControl,
 } from '../components';
 import { ScreenProps } from '../navigation/types';
 import { Mode, prettyView, viewsForMode } from '../types/enums';
-import { colors, radii, spacing, type as typeScale } from '../theme/theme';
+import { colors, radii, spacing } from '../theme/theme';
 import { prepareUpload } from '../utils/image';
 import { useCaptureDraft } from '../store/captureDraft';
 
 /** Product shots, or on a male / female model. */
 type GenType = 'product' | 'male' | 'female';
+
+// Sample outputs so the retailer sees what each mockup type looks like.
+// Bundled static images (sourced from Unsplash — free to use).
+const EXAMPLES: { label: string; img: ReturnType<typeof require> }[] = [
+  { label: 'Product', img: require('../../assets/examples/product-1.jpg') },
+  { label: 'Male', img: require('../../assets/examples/male-1.jpg') },
+  { label: 'Female', img: require('../../assets/examples/female-1.jpg') },
+];
 
 /** Configure generation (§5.4). Reads garment photos + config from the capture
  *  draft, so "Adjust & regenerate" can return here with everything preserved. */
@@ -28,7 +33,7 @@ export function ConfigureScreen({ navigation }: ScreenProps<'Configure'>) {
   const apparel = draft.front;
   const apparelBack = draft.back;
   const closeupCount = [draft.pattern, draft.logo, draft.tag].filter(Boolean).length;
-  const { mode, modelGender, design, prompt, only } = draft.config;
+  const { mode, modelGender, only } = draft.config;
   const setConfig = draft.setConfig;
   const [busy, setBusy] = useState(false);
 
@@ -61,18 +66,6 @@ export function ConfigureScreen({ navigation }: ScreenProps<'Configure'>) {
         : [...only, view],
     });
 
-  const onAddDesign = async () => {
-    const res = await launchImageLibrary({
-      mediaType: 'photo',
-      selectionLimit: 1,
-      quality: 0.9,
-      maxWidth: 2048,
-      maxHeight: 2048,
-    });
-    const asset = res.assets?.[0];
-    if (asset?.uri) setConfig({ design: { uri: asset.uri } });
-  };
-
   const onGenerate = async () => {
     if (!apparel) return;
     setBusy(true);
@@ -81,7 +74,6 @@ export function ConfigureScreen({ navigation }: ScreenProps<'Configure'>) {
       const apparelBackFile = apparelBack
         ? await prepareUpload(apparelBack.uri)
         : undefined;
-      const designFile = design ? await prepareUpload(design.uri) : undefined;
       const patternFile = draft.pattern
         ? await prepareUpload(draft.pattern.uri)
         : undefined;
@@ -94,7 +86,6 @@ export function ConfigureScreen({ navigation }: ScreenProps<'Configure'>) {
       navigation.navigate('Generating', {
         apparel: apparelFile,
         apparelBack: apparelBackFile,
-        design: designFile,
         pattern: patternFile,
         logo: logoFile,
         tag: tagFile,
@@ -102,7 +93,6 @@ export function ConfigureScreen({ navigation }: ScreenProps<'Configure'>) {
         modelGender:
           mode === Mode.WithModel ? modelGender ?? undefined : undefined,
         mode,
-        prompt: prompt.trim() || undefined,
         only: validOnly.length ? validOnly : undefined,
       });
     } finally {
@@ -169,48 +159,20 @@ export function ConfigureScreen({ navigation }: ScreenProps<'Configure'>) {
           </AppText>
         </Section>
 
-        {/* Add design */}
-        <Section label="Add design">
-          <PressableScale onPress={onAddDesign} style={styles.designBox}>
-            {design ? (
-              <AppImage
-                uri={design.uri}
-                radius={radii.sm}
-                containerStyle={styles.designThumb}
-              />
-            ) : (
-              <View style={styles.designThumbEmpty}>
-                <Icon name="add" size={24} color={colors.inkMuted} />
+        {/* Example results — what each mockup type looks like. */}
+        <Section label="Example results">
+          <View style={styles.examplesRow}>
+            {EXAMPLES.map((ex) => (
+              <View key={ex.label} style={styles.exampleCard}>
+                <Image source={ex.img} style={styles.exampleImg} resizeMode="cover" />
+                <View style={styles.exampleTag}>
+                  <AppText variant="meta" color={colors.accentInk}>
+                    {ex.label}
+                  </AppText>
+                </View>
               </View>
-            )}
-            <View style={styles.flex}>
-              <AppText variant="bodyMedium" color={colors.ink}>
-                {design ? 'Design added' : 'Print a graphic'}
-              </AppText>
-              <AppText variant="meta" color={colors.meta}>
-                {design ? 'Tap to replace' : 'A logo or artwork to print first'}
-              </AppText>
-            </View>
-            {design && (
-              <PressableScale onPress={() => setConfig({ design: null })} style={styles.clearBtn}>
-                <AppText variant="meta" color={colors.danger}>
-                  Remove
-                </AppText>
-              </PressableScale>
-            )}
-          </PressableScale>
-        </Section>
-
-        {/* Prompt */}
-        <Section label="Prompt">
-          <TextInput
-            value={prompt}
-            onChangeText={(text) => setConfig({ prompt: text })}
-            placeholder="e.g. minimal studio, soft light, neutral background"
-            placeholderTextColor={colors.inkMuted}
-            multiline
-            style={styles.promptInput}
-          />
+            ))}
+          </View>
         </Section>
 
         {/* Only views */}
@@ -276,38 +238,25 @@ const styles = StyleSheet.create({
   apparelThumb: { width: 56, height: 56 },
   previewText: { flex: 1, gap: 2 },
   section: { gap: spacing.sm },
-  designBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: radii.card,
-    padding: spacing.md,
-  },
-  designThumb: { width: 48, height: 48 },
-  designThumbEmpty: {
-    width: 48,
-    height: 48,
-    borderRadius: radii.sm,
-    borderWidth: 1.5,
-    borderColor: colors.hairline,
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  flex: { flex: 1 },
-  clearBtn: { padding: spacing.xs },
-  promptInput: {
-    backgroundColor: colors.surface,
-    borderRadius: radii.card,
-    padding: spacing.md,
-    minHeight: 88,
-    textAlignVertical: 'top',
-    color: colors.ink,
-    fontFamily: typeScale.body.fontFamily,
-    fontSize: typeScale.body.fontSize,
-  },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   hint: { marginTop: spacing.xs },
+  examplesRow: { flexDirection: 'row', gap: spacing.sm },
+  exampleCard: {
+    flex: 1,
+    aspectRatio: 3 / 4,
+    borderRadius: radii.card,
+    overflow: 'hidden',
+    backgroundColor: colors.surface,
+  },
+  exampleImg: { width: '100%', height: '100%' },
+  exampleTag: {
+    position: 'absolute',
+    left: spacing.xs,
+    bottom: spacing.xs,
+    backgroundColor: colors.accent,
+    borderRadius: radii.pill,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+  },
   footer: { paddingVertical: spacing.md },
 });

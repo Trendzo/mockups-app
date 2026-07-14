@@ -85,28 +85,6 @@ export function HomeScreen({ navigation }: ScreenProps<'Home'>) {
           />
         </Animated.View>
 
-        {/* New bill (point-of-sale) */}
-        <Animated.View entering={FadeInDown.delay(90).springify()}>
-          <PressableScale
-            onPress={() => navigation.navigate('Billing')}
-            toScale={0.98}
-            style={styles.catalogCard}
-          >
-            <View style={styles.catalogIcon}>
-              <Icon name="receipt-outline" size={22} color={colors.accentInk} />
-            </View>
-            <View style={styles.flex}>
-              <AppText variant="bodyMedium" color={colors.ink}>
-                New bill
-              </AppText>
-              <AppText variant="meta" color={colors.meta}>
-                Ring up products & charge a customer
-              </AppText>
-            </View>
-            <Icon name="chevron-forward" size={18} color={colors.meta} />
-          </PressableScale>
-        </Animated.View>
-
         {/* Overview stats */}
         <Animated.View entering={FadeInDown.delay(120).springify()} style={styles.statsWrap}>
           <View style={styles.statRow}>

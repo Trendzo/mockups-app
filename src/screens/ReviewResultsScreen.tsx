@@ -1,10 +1,9 @@
 import React, { useMemo, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   AppText,
   BackButton,
-  BottomSheet,
   ImageViewer,
   PrimaryButton,
   Screen,
@@ -16,10 +15,10 @@ import { ScreenProps } from '../navigation/types';
 import { useDecideSubmission } from '../api/hooks';
 import { useSession } from '../store/session';
 import { useCaptureDraft } from '../store/captureDraft';
+import { useProductDraft } from '../store/productDraft';
 import { SubmissionStatus } from '../types/enums';
-import { colors, radii, spacing, type as typeScale } from '../theme/theme';
-import { saveRemoteImage, shareRemoteImage } from '../utils/gallery';
-import { ensurePhotoAddPermission, openAppSettings } from '../utils/permissions';
+import { colors, spacing } from '../theme/theme';
+import { shareRemoteImage } from '../utils/gallery';
 import { Haptics } from '../utils/haptics';
 
 /** Review Results (§5.6): grid + viewer + save/share + Approve/Reject/Make again. */
@@ -38,8 +37,7 @@ export function ReviewResultsScreen({
 
   const [submission, setSubmission] = useState(route.params.submission);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
-  const [rejectOpen, setRejectOpen] = useState(false);
-  const [notes, setNotes] = useState('');
+  const [rejecting, setRejecting] = useState(false);
   const [dragging, setDragging] = useState(false);
 
   // Stable item list (id + url + view name). The user arranges the order and
@@ -78,24 +76,6 @@ export function ReviewResultsScreen({
   const canDecide = submission.status === SubmissionStatus.ReadyForReview;
   const canApprove = canDecide && chosen.length > 0;
 
-  const onSave = async (index: number) => {
-    const url = orderedItems[index]?.url;
-    if (!url) return;
-    const perm = await ensurePhotoAddPermission();
-    if (perm === 'blocked') {
-      toast.show('Enable photo access in Settings', 'error');
-      openAppSettings();
-      return;
-    }
-    try {
-      await saveRemoteImage(url);
-      // Explicit confirmation popup that the image was downloaded to the gallery.
-      Alert.alert('Image downloaded', 'Saved to your gallery in the “Trendzo” album.');
-    } catch {
-      Alert.alert("Couldn't download image", 'Please try again.');
-    }
-  };
-
   const onShare = async (index: number) => {
     const url = orderedItems[index]?.url;
     if (!url) return;
@@ -114,35 +94,45 @@ export function ReviewResultsScreen({
         onSuccess: (res) => {
           Haptics.success();
           setStatus(submission.id, res.status);
-          // Keep the full set in local state, but publish only the chosen
-          // mockups in the arranged order.
-          const updated = { ...submission, status: res.status };
-          setSubmission(updated);
-          navigation.navigate('Publish', {
-            submission: { ...updated, outputUrls: chosen.map((it) => it.url) },
-          });
+          setSubmission({ ...submission, status: res.status });
+          // Feed the chosen mockups into the SAME product wizard used for new
+          // catalog products. If the user detoured here from the wizard, keep
+          // their in-progress draft and just append the images; otherwise start
+          // a fresh product with these images pre-loaded.
+          const urls = chosen.map((it) => it.url);
+          const draft = useProductDraft.getState();
+          if (draft.pendingMockup) {
+            draft.addGalleryUrls(urls);
+            draft.setPendingMockup(false);
+          } else {
+            draft.startCreate();
+            draft.addGalleryUrls(urls);
+          }
+          toast.show(`${urls.length} image${urls.length === 1 ? '' : 's'} added — add product details`, 'success');
+          navigation.navigate('ProductWizardBasics');
         },
         onError: (e) => toast.show(e.error, 'error'),
       },
     );
   };
 
+  // One-click reject — no reason/notes prompt.
   const onReject = () => {
+    setRejecting(true);
     decide.mutate(
       {
         id: submission.id,
-        input: { decision: 'reject', revisionNotes: notes.trim() || undefined },
+        input: { decision: 'reject' },
       },
       {
         onSuccess: (res) => {
           setStatus(submission.id, res.status);
-          setRejectOpen(false);
           toast.show('Rejected — capture a new shot', 'info');
           navigation.popToTop();
         },
         onError: (e) => {
           console.warn('[ReviewResults] reject failed:', e.error);
-          setRejectOpen(false);
+          setRejecting(false);
           toast.show(e.error, 'error');
         },
       },
@@ -190,8 +180,9 @@ export function ReviewResultsScreen({
             label="Reject"
             tone="ghost"
             style={styles.flex}
+            loading={rejecting}
             disabled={!canDecide || decide.isPending}
-            onPress={() => setRejectOpen(true)}
+            onPress={onReject}
           />
           {canDecide && hasGarment ? (
             <PrimaryButton
@@ -218,12 +209,12 @@ export function ReviewResultsScreen({
           label={
             canDecide
               ? chosen.length > 0
-                ? `Approve ${chosen.length} → Publish`
+                ? `Approve ${chosen.length} → Add to product`
                 : 'Select at least one'
               : 'Approved'
           }
           tone="accent"
-          loading={decide.isPending && !rejectOpen}
+          loading={decide.isPending && !rejecting}
           disabled={!canApprove}
           onPress={onApprove}
         />
@@ -234,48 +225,8 @@ export function ReviewResultsScreen({
         images={images}
         initialIndex={viewerIndex ?? 0}
         onClose={() => setViewerIndex(null)}
-        onSave={onSave}
         onShare={onShare}
       />
-
-      {/* Reject notes sheet */}
-      <BottomSheet
-        visible={rejectOpen}
-        onClose={() => setRejectOpen(false)}
-        avoidKeyboard
-      >
-        <View style={styles.sheet}>
-            <AppText variant="cardTitle" color={colors.ink} style={styles.sheetTitle}>
-              What should change?
-            </AppText>
-            <AppText variant="meta" color={colors.meta}>
-              Revision notes saved with the rejection.
-            </AppText>
-            <TextInput
-              value={notes}
-              onChangeText={setNotes}
-              placeholder="e.g. lighting too warm, show the back view"
-              placeholderTextColor={colors.inkMuted}
-              multiline
-              style={styles.notesInput}
-            />
-            <View style={styles.row}>
-              <PrimaryButton
-                label="Cancel"
-                tone="surface"
-                style={styles.flex}
-                onPress={() => setRejectOpen(false)}
-              />
-              <PrimaryButton
-                label="Reject"
-                tone="danger"
-                style={styles.flex}
-                loading={decide.isPending}
-                onPress={onReject}
-              />
-            </View>
-        </View>
-      </BottomSheet>
     </Screen>
   );
 }
@@ -311,22 +262,4 @@ const styles = StyleSheet.create({
   },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   flex: { flex: 1 },
-  sheet: {
-    backgroundColor: colors.canvas,
-    borderTopLeftRadius: radii.sheet,
-    borderTopRightRadius: radii.sheet,
-    padding: spacing.lg,
-    gap: spacing.md,
-  },
-  sheetTitle: { fontSize: 20, lineHeight: 24 },
-  notesInput: {
-    backgroundColor: colors.surface,
-    borderRadius: radii.card,
-    padding: spacing.md,
-    minHeight: 96,
-    textAlignVertical: 'top',
-    color: colors.ink,
-    fontFamily: typeScale.body.fontFamily,
-    fontSize: typeScale.body.fontSize,
-  },
 });

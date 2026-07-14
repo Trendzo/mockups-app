@@ -10,13 +10,11 @@ import {
   PressableScale,
   PrimaryButton,
   Screen,
-  Select,
   useToast,
 } from '../components';
 import { ScreenProps } from '../navigation/types';
 import { loginRetailer, loginRetailerOtp } from '../api/auth';
 import { useAuth } from '../store/auth';
-import { COUNTRIES, DEFAULT_ISO } from '../config/countryCodes';
 import { colors, spacing } from '../theme/theme';
 import { Haptics } from '../utils/haptics';
 import { PRIVACY_URL, SUPPORT_URL, TERMS_URL } from '../config/legal';
@@ -30,10 +28,8 @@ const OTP_LENGTH = 4;
 const WIDGET_ID = '3667636f3464353730373939';
 const TOKEN_AUTH = '547225TSvi20QFa026a47d90aP1';
 
-const COUNTRY_OPTIONS = COUNTRIES.map(c => ({
-  value: c.iso,
-  label: `${c.flag}  ${c.name}  +${c.dial}`,
-}));
+// India-only: dial code is fixed at +91 (no country selector).
+const DIAL_CODE = '91';
 
 export function LoginScreen({ navigation }: ScreenProps<'Login'>) {
   const toast = useToast();
@@ -45,7 +41,6 @@ export function LoginScreen({ navigation }: ScreenProps<'Login'>) {
   const [method, setMethod] = useState<'phone' | 'email'>('phone');
 
   // Phone-OTP state
-  const [countryIso, setCountryIso] = useState(DEFAULT_ISO);
   const [phone, setPhone] = useState('');
   const [step, setStep] = useState<'phone' | 'otp'>('phone');
   const [reqId, setReqId] = useState<string | null>(null);
@@ -63,8 +58,6 @@ export function LoginScreen({ navigation }: ScreenProps<'Login'>) {
   const [errors, setErrors] = useState<{ email?: string; password?: string }>(
     {},
   );
-
-  const country = COUNTRIES.find(c => c.iso === countryIso) ?? COUNTRIES[0];
 
   useEffect(() => {
     try {
@@ -93,7 +86,7 @@ export function LoginScreen({ navigation }: ScreenProps<'Login'>) {
     setSending(true);
     try {
       const res: any = await OTPWidget.sendOTP({
-        identifier: `${country.dial}${national}`,
+        identifier: `${DIAL_CODE}${national}`,
       });
       console.log('[LoginScreen] sendOTP response:', res);
       if (res?.type === 'error')
@@ -107,7 +100,7 @@ export function LoginScreen({ navigation }: ScreenProps<'Login'>) {
       Haptics.select();
     } catch (e: any) {
       console.error('[LoginScreen] sendOtp failed:', {
-        identifier: `${country.dial}${national}`,
+        identifier: `${DIAL_CODE}${national}`,
         message: e?.message,
         code: e?.code,
         status: e?.status,
@@ -190,7 +183,8 @@ export function LoginScreen({ navigation }: ScreenProps<'Login'>) {
           "No account for this number yet — let's get you set up.",
           'info',
         );
-        navigation.navigate('ApplicationForm');
+        // Phone is already verified via OTP — carry it into the form (locked).
+        navigation.navigate('ApplicationForm', { verifiedPhone: phone.trim() });
         return;
       }
       if (e?.status === 503) {
@@ -258,7 +252,7 @@ export function LoginScreen({ navigation }: ScreenProps<'Login'>) {
       ? 'Sign in with your email and password.'
       : step === 'phone'
       ? 'Log in with your phone number.'
-      : `Enter the code sent to +${country.dial} ${phone.trim()}.`;
+      : `Enter the code sent to +${DIAL_CODE} ${phone.trim()}.`;
 
   return (
     <Screen edges={['top', 'bottom']}>
@@ -297,15 +291,10 @@ export function LoginScreen({ navigation }: ScreenProps<'Login'>) {
         {method === 'phone' ? (
           step === 'phone' ? (
             <View style={styles.form}>
-              <Select
-                label="Country"
-                options={COUNTRY_OPTIONS}
-                selected={[countryIso]}
-                onChange={v => setCountryIso(v[0] ?? DEFAULT_ISO)}
-              />
               <Field
                 label="Phone number"
                 required
+                prefix="+91"
                 value={phone}
                 onChangeText={setPhone}
                 placeholder="Mobile number"

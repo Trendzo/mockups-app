@@ -38,6 +38,7 @@ export interface AuthError {
   code: string; // e.g. invalid_credentials, application_pending, validation_error
   message: string;
   status?: number;
+  detail?: string; // raw server response body (for debugging server errors)
   applicationId?: string;
   // Owner email of a matched pending/rejected application — supplied by phone-OTP
   // login (which has no email input) so the status/resubmit screens can key on it.

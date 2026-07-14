@@ -15,6 +15,7 @@
     "@react-native-async-storage/async-storage": "^3.1.1",
     "@react-native-camera-roll/camera-roll": "^7.10.2",
     "@react-native-community/blur": "^4.4.1",
+    "@react-native-community/geolocation": "^3.4.0",
     "@react-native/new-app-screen": "0.86.0",
     "@react-navigation/bottom-tabs": "^7.18.7",
     "@react-navigation/native": "^7.3.5",
@@ -37,6 +38,7 @@
     "react-native-screens": "^4.25.2",
     "react-native-vector-icons": "^10.3.0",
     "react-native-vision-camera": "^4.7.3",
+    "react-native-webview": "13.16.1",
     "react-native-worklets": "^0.10.1",
     "zustand": "^5.0.14"
   },
