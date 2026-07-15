@@ -23,6 +23,7 @@ export type RootStackParamList = {
   // Post-login gate
   PendingApproval: undefined;
   Terms: undefined;
+  Privacy: undefined;
 
   // Retailer self-service
   Kyc: undefined;

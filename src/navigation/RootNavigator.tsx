@@ -9,7 +9,7 @@ import { ApplicationStatusScreen } from '../screens/ApplicationStatusScreen';
 import { ResubmitScreen } from '../screens/ResubmitScreen';
 import { LocationPickerScreen } from '../screens/LocationPickerScreen';
 import { PendingApprovalScreen } from '../screens/PendingApprovalScreen';
-import { TermsScreen } from '../screens/TermsScreen';
+import { PrivacyScreen, TermsScreen } from '../screens/TermsScreen';
 import { MainTabs } from './MainTabs';
 import { SelectPhotosScreen } from '../screens/SelectPhotosScreen';
 import { CaptureScreen } from '../screens/CaptureScreen';
@@ -146,12 +146,20 @@ export function RootNavigator() {
     !!store &&
     (store.status === 'onboarding' || store.status === 'active');
 
-  // Legal gate — an onboarding store must accept the Retailer Terms before it can
-  // go live. Block the full app on a terms-only screen until accepted.
+  // Legal gate — an onboarding store must accept the Retailer Terms AND the Privacy
+  // Policy before it can go live. Block the full app on one doc at a time (terms
+  // first) until both are accepted.
   if (active && me.data?.termsAcceptanceRequired) {
     return (
       <Stack.Navigator screenOptions={options}>
         <Stack.Screen name="Terms" component={TermsScreen} />
+      </Stack.Navigator>
+    );
+  }
+  if (active && me.data?.privacyAcceptanceRequired) {
+    return (
+      <Stack.Navigator screenOptions={options}>
+        <Stack.Screen name="Privacy" component={PrivacyScreen} />
       </Stack.Navigator>
     );
   }

@@ -259,6 +259,21 @@ export async function declineTerms(version: string): Promise<void> {
   await postJson('/retailer/terms/decline', { version });
 }
 
+// ---- C3) Privacy Policy (same legal gate as the T&C — kind='privacy' server-side) ----
+export async function getPrivacy(): Promise<TermsInfo> {
+  const res = await getJson<{ data: TermsInfo }>('/retailer/privacy');
+  return unwrapEnvelope<TermsInfo>(res);
+}
+
+export async function acceptPrivacy(version: string): Promise<void> {
+  await postJson('/retailer/privacy/accept', { version });
+}
+
+/** Record a decline (audited); the app then logs the user out. */
+export async function declinePrivacy(version: string): Promise<void> {
+  await postJson('/retailer/privacy/decline', { version });
+}
+
 // ---- D) KYC ----
 export async function getKyc(): Promise<KycCycle | null> {
   try {

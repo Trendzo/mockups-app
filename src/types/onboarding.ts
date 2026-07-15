@@ -152,6 +152,8 @@ export interface RetailerMe {
   store: Store | null;
   termsAcceptanceRequired?: boolean;
   currentTermsVersion?: string;
+  privacyAcceptanceRequired?: boolean;
+  currentPrivacyVersion?: string;
   /** In-flight account-lifecycle request (closure or reopen) awaiting admin review. */
   pendingAccountRequest?: 'account_deletion' | 'account_reopen' | null;
 }

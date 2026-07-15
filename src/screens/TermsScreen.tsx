@@ -2,9 +2,41 @@ import React, { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppText, Icon, PressableScale, PrimaryButton, Screen, useToast } from '../components';
-import { acceptTerms, declineTerms, getTerms } from '../api/onboarding';
+import {
+  acceptPrivacy,
+  acceptTerms,
+  declinePrivacy,
+  declineTerms,
+  getPrivacy,
+  getTerms,
+} from '../api/onboarding';
 import { useAuth } from '../store/auth';
 import { colors, radii, spacing } from '../theme/theme';
+
+type LegalKind = 'terms' | 'privacy';
+
+const COPY: Record<LegalKind, { docName: string; agree: string }> = {
+  terms: {
+    docName: 'Retailer Terms & Conditions',
+    agree: 'I have read and accept the Retailer Terms & Conditions.',
+  },
+  privacy: {
+    docName: 'Privacy Policy',
+    agree: 'I have read and accept the Privacy Policy.',
+  },
+};
+
+const API: Record<
+  LegalKind,
+  {
+    get: typeof getTerms;
+    accept: typeof acceptTerms;
+    decline: typeof declineTerms;
+  }
+> = {
+  terms: { get: getTerms, accept: acceptTerms, decline: declineTerms },
+  privacy: { get: getPrivacy, accept: acceptPrivacy, decline: declinePrivacy },
+};
 
 /**
  * Legal gate — a store cannot go live until the Retailer Terms are accepted.
@@ -12,17 +44,28 @@ import { colors, radii, spacing } from '../theme/theme';
  * records the version + IP server-side, then re-fetches `me` to release the gate.
  */
 export function TermsScreen() {
+  return <LegalDocScreen kind="terms" />;
+}
+
+/** Same gate for the Privacy Policy — shown once the terms are in (`me.privacyAcceptanceRequired`). */
+export function PrivacyScreen() {
+  return <LegalDocScreen kind="privacy" />;
+}
+
+function LegalDocScreen({ kind }: { kind: LegalKind }) {
+  const copy = COPY[kind];
+  const calls = API[kind];
   const qc = useQueryClient();
   const toast = useToast();
   const logout = useAuth((s) => s.logout);
   const [agreed, setAgreed] = useState(false);
 
-  const { data: terms } = useQuery({ queryKey: ['retailer-terms'], queryFn: getTerms });
+  const { data: doc } = useQuery({ queryKey: ['retailer-legal', kind], queryFn: calls.get });
 
   const accept = useMutation({
-    mutationFn: () => acceptTerms(terms!.version),
+    mutationFn: () => calls.accept(doc!.version),
     onSuccess: () => {
-      toast.show('Terms accepted', 'success');
+      toast.show(`${copy.docName} accepted`, 'success');
       void qc.invalidateQueries({ queryKey: ['retailer-me'] });
     },
     onError: (e: unknown) =>
@@ -31,13 +74,13 @@ export function TermsScreen() {
 
   // Declining is recorded, then the user is logged out — re-prompted next login until accepted.
   const decline = useMutation({
-    mutationFn: () => declineTerms(terms!.version),
+    mutationFn: () => calls.decline(doc!.version),
     onSettled: () => logout(),
   });
   function onDecline() {
     Alert.alert(
-      'Decline terms?',
-      'Declining the Retailer Terms will log you out. You must accept them to use your store.',
+      `Decline ${kind === 'terms' ? 'terms' : 'privacy policy'}?`,
+      `Declining the ${copy.docName} will log you out. You must accept it to use your store.`,
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Decline & log out', style: 'destructive', onPress: () => decline.mutate() },
@@ -47,13 +90,13 @@ export function TermsScreen() {
 
   return (
     <Screen>
-      <AppText variant="cardTitle">Retailer Terms &amp; Conditions</AppText>
+      <AppText variant="cardTitle">{copy.docName}</AppText>
       <AppText variant="meta" color={colors.meta} style={styles.sub}>
         Accept to activate your store and start selling.
       </AppText>
 
       <ScrollView style={styles.box} contentContainerStyle={styles.boxInner}>
-        <AppText variant="body">{terms?.shortText ?? 'Loading…'}</AppText>
+        <AppText variant="body">{doc?.shortText ?? 'Loading…'}</AppText>
       </ScrollView>
 
       <PressableScale onPress={() => setAgreed((a) => !a)} style={styles.row}>
@@ -61,13 +104,13 @@ export function TermsScreen() {
           {agreed && <Icon name="checkmark" size={16} color={colors.accentInk} />}
         </View>
         <AppText variant="body" style={styles.rowText}>
-          I have read and accept the Retailer Terms &amp; Conditions.
+          {copy.agree}
         </AppText>
       </PressableScale>
 
       <PrimaryButton
         label="Accept & continue"
-        disabled={!agreed || !terms}
+        disabled={!agreed || !doc}
         loading={accept.isPending}
         onPress={() => accept.mutate()}
       />
