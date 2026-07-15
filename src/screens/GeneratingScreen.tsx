@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Alert, StyleSheet, View } from 'react-native';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -73,6 +73,25 @@ export function GeneratingScreen({ navigation, route }: ScreenProps<'Generating'
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Going back mid-generation throws the in-progress work away — confirm first.
+  const confirmCancel = () => {
+    Alert.alert(
+      'Discard generation?',
+      'If you go back now, all generation will be lost.',
+      [
+        { text: 'Keep generating', style: 'cancel' },
+        {
+          text: 'Go back & discard',
+          style: 'destructive',
+          onPress: () => {
+            cancelled.current = true;
+            navigation.goBack();
+          },
+        },
+      ],
+    );
+  };
+
   const spinStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${spin.value * 360}deg` }],
   }));
@@ -126,14 +145,7 @@ export function GeneratingScreen({ navigation, route }: ScreenProps<'Generating'
             />
           </>
         ) : (
-          <PrimaryButton
-            label="Cancel"
-            tone="ghost"
-            onPress={() => {
-              cancelled.current = true;
-              navigation.goBack();
-            }}
-          />
+          <PrimaryButton label="Cancel" tone="ghost" onPress={confirmCancel} />
         )}
       </View>
     </Screen>

@@ -1,5 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  createBrand,
   getCatalogBrands,
   getCatalogCategories,
   getInventory,
@@ -38,6 +39,15 @@ export function useCatalogBrands() {
     queryKey: ['catalog-brands'],
     queryFn: getCatalogBrands,
     staleTime: 5 * 60_000,
+  });
+}
+
+/** Create a brand inline; refreshes the brand picker so the new one is selectable. */
+export function useCreateBrand() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: createBrand,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['catalog-brands'] }),
   });
 }
 

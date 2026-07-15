@@ -38,6 +38,26 @@ export const getCatalogCategories = (gender?: string) =>
 export const getCatalogBrands = () =>
   req<CatalogBrand[]>(() => http.get('/catalog/brands', { params: { activeOnly: true } }));
 
+/** Turn a brand name into a url-safe slug (e.g. "Nike Air" -> "nike-air"). */
+function slugify(s: string): string {
+  return s
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+/**
+ * Create a brand inline from the product wizard. Create lives on the retailer
+ * route `POST /retailer/brands` (the public `/catalog/brands` is GET-only —
+ * POSTing there 404s). Always send a slug alongside the name.
+ */
+export const createBrand = (body: { name: string; slug?: string }) => {
+  const name = body.name.trim();
+  const payload = { name, slug: body.slug?.trim() || slugify(name) };
+  return req<CatalogBrand>(() => http.post('/retailer/brands', payload));
+};
+
 // ---- Listings -----------------------------------------------------------
 export const getListings = (opts?: { status?: ListingStatus; sort?: string }) =>
   req<Listing[]>(() => http.get('/retailer/listings', { params: opts ?? {} }));

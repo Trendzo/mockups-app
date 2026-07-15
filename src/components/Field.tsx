@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   StyleProp,
   StyleSheet,
@@ -8,6 +8,8 @@ import {
   ViewStyle,
 } from 'react-native';
 import { AppText } from './AppText';
+import { Icon } from './Icon';
+import { PressableScale } from './PressableScale';
 import { colors, radii, spacing, type as typeScale } from '../theme/theme';
 
 interface FieldProps extends TextInputProps {
@@ -25,25 +27,49 @@ export function Field({
   error,
   prefix,
   containerStyle,
+  secureTextEntry,
   ...inputProps
 }: FieldProps) {
+  // Password fields get a tap-to-reveal eye toggle everywhere.
+  const isSecure = !!secureTextEntry;
+  const [hidden, setHidden] = useState(true);
+  // A non-editable field reads as visibly locked: grey fill, muted text, a lock
+  // glyph — so it's clearly not editable without having to tap it.
+  const locked = inputProps.editable === false;
   return (
     <View style={[styles.wrap, containerStyle]}>
       <AppText variant="sectionLabel" color={colors.meta} style={styles.label}>
         {label}
         {required ? ' *' : ''}
       </AppText>
-      <View style={[styles.inputRow, error ? styles.inputError : null]}>
+      <View style={[styles.inputRow, locked ? styles.inputLocked : null, error ? styles.inputError : null]}>
         {prefix ? (
-          <AppText variant="bodyMedium" color={colors.ink} style={styles.prefix}>
+          <AppText variant="bodyMedium" color={locked ? colors.meta : colors.ink} style={styles.prefix}>
             {prefix}
           </AppText>
         ) : null}
         <TextInput
           placeholderTextColor={colors.inkMuted}
           {...inputProps}
-          style={[styles.input, inputProps.style]}
+          secureTextEntry={isSecure && hidden}
+          style={[styles.input, locked ? styles.inputLockedText : null, inputProps.style]}
         />
+        {locked ? (
+          <Icon name="lock-closed" size={18} color={colors.inkMuted} style={styles.lock} />
+        ) : isSecure ? (
+          <PressableScale
+            haptic={false}
+            hitSlop={10}
+            onPress={() => setHidden((h) => !h)}
+            style={styles.eye}
+          >
+            <Icon
+              name={hidden ? 'eye-outline' : 'eye-off-outline'}
+              size={20}
+              color={colors.meta}
+            />
+          </PressableScale>
+        ) : null}
       </View>
       {error ? (
         <AppText variant="meta" color={colors.danger} style={styles.errorText}>
@@ -67,7 +93,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
   inputError: { borderColor: colors.danger },
+  inputLocked: { backgroundColor: colors.canvas, borderColor: colors.hairline },
+  inputLockedText: { color: colors.meta },
   prefix: { marginRight: 4 },
+  eye: { paddingLeft: spacing.sm, paddingVertical: spacing.sm },
+  lock: { paddingLeft: spacing.sm },
   input: {
     flex: 1,
     paddingVertical: spacing.md,

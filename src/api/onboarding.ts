@@ -340,6 +340,7 @@ function cleanApplication(input: ApplicationInput): Record<string, unknown> {
     const v = input[k];
     if (typeof v === 'string' && v.trim()) out[k] = v.trim();
   }
+  if (typeof input.znfFinance === 'boolean') out.znfFinance = input.znfFinance;
   if (input.categories?.length) out.categories = input.categories;
   if (input.brands?.length) out.brands = input.brands;
   if (input.documents?.length) out.documents = input.documents;

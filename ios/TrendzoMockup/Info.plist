@@ -37,6 +37,8 @@
 	</dict>
 	<key>NSCameraUsageDescription</key>
 	<string>Trendzo uses the camera to photograph garments for AI mockups.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Trendzo uses your location to detect your store address on the map.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Trendzo saves generated mockups to your photo library.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

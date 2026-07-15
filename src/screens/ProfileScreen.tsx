@@ -55,6 +55,21 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
   const canManageAccount = subRole === 'owner' || subRole === 'manager';
   const closurePending = me.data?.pendingAccountRequest === 'account_deletion';
 
+  // Richer details (shown under "View more" when the backend provides them).
+  // The address can arrive on either the store or the retailer object and under
+  // a few possible key names, so read it defensively from the raw /retailer/me.
+  const meAny = me.data as any;
+  const st = (meAny?.store ?? {}) as Record<string, any>;
+  const rt = (meAny?.retailer ?? {}) as Record<string, any>;
+  const pan = profile?.pan ?? rt.pan ?? st.pan;
+  const contactPhone = profile?.contactPhone ?? rt.contactPhone ?? st.contactPhone;
+  const addressLine = st.addressLine ?? st.address ?? rt.addressLine ?? rt.address;
+  const pincode = st.pincode ?? rt.pincode ?? profile?.pincode;
+  const address = addressLine
+    ? [addressLine, pincode].filter(Boolean).join(', ')
+    : undefined;
+  const [showAll, setShowAll] = useState(false);
+
   const kycStatus = kyc.data?.status;
   const kycNeedsAction =
     kycStatus === 'pending' ||
@@ -160,16 +175,43 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
         {/* Details */}
         <View style={styles.card}>
           <InfoRow label="Business name" value={legalName} />
-          <InfoRow label="Email" value={email} />
-          <InfoRow label="Phone" value={phone} />
-          <InfoRow label="GSTIN" value={gstin} />
-          {store ? (
+          {/* Show the store NAME only — never the raw store id/number. */}
+          {store && (store.name ?? profile?.storeName) ? (
             <InfoRow
               label="Store"
-              value={store.name ?? store.id}
+              value={(store.name ?? profile?.storeName)!}
               chip={store.status}
             />
           ) : null}
+          {address ? <InfoRow label="Address" value={address} /> : null}
+          <InfoRow label="Account status" value={status.replace(/_/g, ' ')} chip={status} />
+
+          {showAll ? (
+            <>
+              <InfoRow label="Email" value={email} />
+              <InfoRow label="Phone" value={phone} />
+              {contactPhone ? <InfoRow label="Alternate phone" value={contactPhone} /> : null}
+              <InfoRow label="GSTIN" value={gstin} />
+              {pan ? <InfoRow label="PAN" value={pan} /> : null}
+              {pincode ? <InfoRow label="Pincode" value={pincode} /> : null}
+              {subRole ? <InfoRow label="Role" value={subRole} /> : null}
+            </>
+          ) : null}
+
+          <PressableScale
+            onPress={() => setShowAll((v) => !v)}
+            haptic={false}
+            style={styles.viewMore}
+          >
+            <AppText variant="meta" color={colors.ink}>
+              {showAll ? 'View less' : 'View more'}
+            </AppText>
+            <Icon
+              name={showAll ? 'chevron-up' : 'chevron-down'}
+              size={16}
+              color={colors.ink}
+            />
+          </PressableScale>
         </View>
 
         {/* Actions */}
@@ -466,6 +508,13 @@ const styles = StyleSheet.create({
   },
   infoRow: { gap: 2 },
   infoValueRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  viewMore: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingTop: spacing.xs,
+  },
   flex: { flex: 1 },
   actions: { gap: spacing.sm },
   actionRow: {

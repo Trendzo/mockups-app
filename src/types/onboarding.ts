@@ -81,6 +81,7 @@ export interface ApplicationInput {
   bankIfsc?: string;
   contactPhone?: string;
   managerName?: string;
+  znfFinance?: boolean; // store opts into ZNF Finance
   categories?: string[];
   brands?: string[];
   documents?: UploadedDoc[];
@@ -136,6 +137,14 @@ export interface RetailerProfile {
   status: AccountStatus;
   storeId?: string;
   subRole?: string;
+  // Optional richer details — surfaced in Profile's "View more" when the
+  // backend returns them (the same fields admin/onboarding capture).
+  pan?: string;
+  contactPhone?: string;
+  addressLine?: string;
+  pincode?: string;
+  stateCode?: string;
+  storeName?: string;
 }
 
 export interface RetailerMe {
@@ -175,7 +184,7 @@ export interface KycCycle {
 // ---- Change requests ----
 export interface ChangeRequestInput {
   field: ChangeRequestField;
-  currentValue: string;
+  currentValue?: string; // no longer collected in-app; admin sees the current value
   requestedValue: string;
   reason: string;
   evidenceUrl?: string;

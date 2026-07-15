@@ -70,11 +70,18 @@ export function DocumentUpload({
     : required
     ? 'warning'
     : 'neutral';
-  const chipLabel = status ?? (value ? 'uploaded' : required ? 'required' : 'optional');
+  // Optional docs show no chip (they used to read "optional"); still not required.
+  const chipLabel = status ?? (value ? 'uploaded' : required ? 'required' : null);
 
   return (
-    <View style={[styles.row, error ? styles.rowError : null]}>
-      <PressableScale onPress={pick} toScale={0.98} style={styles.thumbBox} disabled={busy}>
+    // The whole row is tappable to open the picker — not just the thumbnail.
+    <PressableScale
+      onPress={pick}
+      disabled={busy}
+      toScale={0.99}
+      style={[styles.row, error ? styles.rowError : null]}
+    >
+      <View style={styles.thumbBox}>
         {busy ? (
           <ActivityIndicator color={colors.ink} />
         ) : value ? (
@@ -82,7 +89,7 @@ export function DocumentUpload({
         ) : (
           <Icon name="cloud-upload-outline" size={22} color={colors.inkMuted} />
         )}
-      </PressableScale>
+      </View>
 
       <View style={styles.body}>
         <View style={styles.titleRow}>
@@ -90,13 +97,11 @@ export function DocumentUpload({
             {label}
             {required ? ' *' : ''}
           </AppText>
-          <StatusChip label={chipLabel} tone={chipTone} />
+          {chipLabel ? <StatusChip label={chipLabel} tone={chipTone} /> : null}
         </View>
-        <PressableScale onPress={pick} disabled={busy} style={styles.action}>
-          <AppText variant="meta" color={colors.ink}>
-            {value ? 'Replace file' : 'Upload file'}
-          </AppText>
-        </PressableScale>
+        <AppText variant="meta" color={colors.ink} style={styles.action}>
+          {value ? 'Replace file' : 'Upload file'}
+        </AppText>
         {error ? (
           <AppText variant="meta" color={colors.danger}>
             {error}
@@ -109,7 +114,7 @@ export function DocumentUpload({
           <Icon name="close" size={16} color={colors.meta} />
         </PressableScale>
       ) : null}
-    </View>
+    </PressableScale>
   );
 }
 

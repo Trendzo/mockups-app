@@ -32,7 +32,6 @@ export function ChangeRequestScreen({ navigation }: ScreenProps<'ChangeRequest'>
   const listQ = useChangeRequests();
 
   const [field, setField] = useState<ChangeRequestField | null>(null);
-  const [currentValue, setCurrentValue] = useState('');
   const [requestedValue, setRequestedValue] = useState('');
   const [reason, setReason] = useState('');
   const [evidenceUrl, setEvidenceUrl] = useState<string | null>(null);
@@ -55,7 +54,6 @@ export function ChangeRequestScreen({ navigation }: ScreenProps<'ChangeRequest'>
     try {
       await createChangeRequest({
         field,
-        currentValue: currentValue.trim(),
         requestedValue: requestedValue.trim(),
         reason: reason.trim(),
         evidenceUrl: evidenceUrl ?? undefined,
@@ -63,7 +61,6 @@ export function ChangeRequestScreen({ navigation }: ScreenProps<'ChangeRequest'>
       Haptics.success();
       toast.show('Change request submitted', 'success');
       setField(null);
-      setCurrentValue('');
       setRequestedValue('');
       setReason('');
       setEvidenceUrl(null);
@@ -103,12 +100,11 @@ export function ChangeRequestScreen({ navigation }: ScreenProps<'ChangeRequest'>
             onChange={(v) => setField((v[0] as ChangeRequestField) ?? null)}
             error={errors.field}
           />
-          <Field label="Current value" value={currentValue} onChangeText={setCurrentValue} placeholder="What it is now (optional)" />
-          <Field label="Requested value" required value={requestedValue} onChangeText={setRequestedValue} placeholder="What it should be" error={errors.requestedValue} />
+          <Field label="New value" required value={requestedValue} onChangeText={setRequestedValue} placeholder="What it should be" error={errors.requestedValue} />
           <Field label="Reason" required value={reason} onChangeText={setReason} placeholder="Why this change (3–500 chars)" multiline error={errors.reason} />
 
           <View style={styles.section}>
-            <AppText variant="sectionLabel" color={colors.meta}>Evidence (optional)</AppText>
+            <AppText variant="sectionLabel" color={colors.meta}>Evidence</AppText>
             <DocumentUpload
               label="Supporting document"
               value={evidenceUrl}

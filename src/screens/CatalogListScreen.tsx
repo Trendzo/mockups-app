@@ -23,6 +23,7 @@ import {
 } from '../components';
 import { ScreenProps } from '../navigation/types';
 import { useListings } from '../api/catalogHooks';
+import { useProductDraft } from '../store/productDraft';
 import { useAuth } from '../store/auth';
 import { canWriteCatalog, Listing, ListingStatus } from '../types/catalog';
 import { formatPaise } from '../utils/money';
@@ -189,7 +190,10 @@ export function CatalogListScreen({ navigation }: ScreenProps<'Catalog'>) {
 
       {canWrite ? (
         <PressableScale
-          onPress={() => navigation.navigate('ProductForm', {})}
+          onPress={() => {
+            useProductDraft.getState().startCreate();
+            navigation.navigate('ProductWizardBasics');
+          }}
           style={[styles.fab, { bottom: insets.bottom + 86 }]}
         >
           <Icon name="add" size={20} color={colors.accentInk} />

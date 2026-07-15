@@ -11,6 +11,7 @@ export interface ApplicationFields {
   ownerName: string;
   ownerEmail: string;
   ownerPhone: string;
+  contactPhone: string; // alternate/contact phone (backend: contactPhone)
   password: string;
   addressLine: string;
   pincode: string;
@@ -28,6 +29,7 @@ export const EMPTY_APPLICATION: ApplicationFields = {
   ownerName: '',
   ownerEmail: '',
   ownerPhone: '',
+  contactPhone: '',
   password: '',
   addressLine: '',
   pincode: '',
@@ -40,10 +42,12 @@ export const EMPTY_APPLICATION: ApplicationFields = {
 interface ApplicationDraftState {
   fields: ApplicationFields;
   docs: Partial<Record<DocKind, string>>;
+  znfFinance: boolean; // store opts into ZNF Finance (yes/no)
   step: number;
   hydrated: boolean;
   setField: (k: keyof ApplicationFields, v: string) => void;
   setDoc: (kind: DocKind, url: string | undefined) => void;
+  setZnfFinance: (v: boolean) => void;
   setStep: (n: number) => void;
   clear: () => void;
   _setHydrated: () => void;
@@ -62,6 +66,7 @@ export const useApplicationDraft = create<ApplicationDraftState>()(
     (set) => ({
       fields: EMPTY_APPLICATION,
       docs: {},
+      znfFinance: false,
       step: 0,
       hydrated: false,
       setField: (k, v) => set((s) => ({ fields: { ...s.fields, [k]: v } })),
@@ -72,8 +77,9 @@ export const useApplicationDraft = create<ApplicationDraftState>()(
           else delete docs[kind];
           return { docs };
         }),
+      setZnfFinance: (v) => set({ znfFinance: v }),
       setStep: (n) => set({ step: n }),
-      clear: () => set({ fields: EMPTY_APPLICATION, docs: {}, step: 0 }),
+      clear: () => set({ fields: EMPTY_APPLICATION, docs: {}, znfFinance: false, step: 0 }),
       _setHydrated: () => set({ hydrated: true }),
     }),
     {
@@ -83,6 +89,7 @@ export const useApplicationDraft = create<ApplicationDraftState>()(
         // Never persist the password.
         fields: { ...s.fields, password: '' },
         docs: s.docs,
+        znfFinance: s.znfFinance,
         step: s.step,
       }),
       // Flip `hydrated` on BOTH success and error. On a rehydration failure

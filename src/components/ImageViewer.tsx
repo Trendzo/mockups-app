@@ -20,7 +20,6 @@ import { AppText } from './AppText';
 import { Icon } from './Icon';
 import { PressableScale } from './PressableScale';
 import { colors, spacing } from '../theme/theme';
-import { prettyView } from '../types/enums';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -72,8 +71,6 @@ export function ImageViewer({
     [],
   );
 
-  const current = images[index];
-
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.backdrop}>
@@ -101,14 +98,13 @@ export function ImageViewer({
           <PressableScale onPress={onClose} style={styles.closeBtn}>
             <Icon name="close" size={26} color={colors.surface} />
           </PressableScale>
+          {/* Just the position counter, centered — no raw file/view code. */}
           <AppText
             variant="bodyMedium"
             color={colors.surface}
             numberOfLines={1}
-            ellipsizeMode="middle"
             style={styles.title}
           >
-            {current?.name ? `${prettyView(current.name)}  ` : ''}
             {index + 1}/{images.length}
           </AppText>
           <View style={styles.closeBtn} />
@@ -136,9 +132,13 @@ export function ImageViewer({
   );
 }
 
-const AFastImage = Animated.createAnimatedComponent(FastImage);
-
 const MAX_SCALE = 4;
+const DOUBLE_TAP_SCALE = 2.5;
+
+function clampWorklet(value: number, min: number, max: number) {
+  'worklet';
+  return Math.min(Math.max(value, min), max);
+}
 
 function ZoomableImage({
   uri,
@@ -165,6 +165,20 @@ function ZoomableImage({
     [onZoomChange],
   );
 
+  // Keep the image from being dragged past its own edges, springing it back
+  // to the nearest in-bounds position.
+  const clampTranslation = () => {
+    'worklet';
+    const maxX = (SCREEN_W * (scale.value - 1)) / 2;
+    const maxY = (SCREEN_H * (scale.value - 1)) / 2;
+    const cx = clampWorklet(translateX.value, -maxX, maxX);
+    const cy = clampWorklet(translateY.value, -maxY, maxY);
+    translateX.value = withTiming(cx);
+    translateY.value = withTiming(cy);
+    savedX.value = cx;
+    savedY.value = cy;
+  };
+
   const resetToFit = () => {
     'worklet';
     scale.value = withTiming(1);
@@ -178,13 +192,14 @@ function ZoomableImage({
 
   const pinch = Gesture.Pinch()
     .onUpdate((e) => {
-      scale.value = Math.min(MAX_SCALE, Math.max(1, savedScale.value * e.scale));
+      scale.value = clampWorklet(savedScale.value * e.scale, 1, MAX_SCALE);
     })
     .onEnd(() => {
       if (scale.value <= 1) {
         resetToFit();
       } else {
         savedScale.value = scale.value;
+        clampTranslation();
         runOnJS(applyZoom)(true);
       }
     });
@@ -196,10 +211,7 @@ function ZoomableImage({
       translateX.value = savedX.value + e.translationX;
       translateY.value = savedY.value + e.translationY;
     })
-    .onEnd(() => {
-      savedX.value = translateX.value;
-      savedY.value = translateY.value;
-    });
+    .onEnd(clampTranslation);
 
   const doubleTap = Gesture.Tap()
     .numberOfTaps(2)
@@ -208,14 +220,19 @@ function ZoomableImage({
       if (scale.value > 1) {
         resetToFit();
       } else {
-        scale.value = withTiming(2.5);
-        savedScale.value = 2.5;
+        scale.value = withTiming(DOUBLE_TAP_SCALE);
+        savedScale.value = DOUBLE_TAP_SCALE;
         runOnJS(applyZoom)(true);
       }
     });
 
   const composed = Gesture.Simultaneous(pinch, pan, doubleTap);
 
+  // The transform lives on a plain Animated.View wrapper — NOT on FastImage
+  // itself. FastImage's native view does not reliably pick up Reanimated
+  // transform updates, so animating it directly leaves the pinch/zoom visually
+  // dead. Wrapping in an Animated.View (as the sortable grid does) is the
+  // pattern that actually moves on both Android and iOS.
   const animStyle = useAnimatedStyle(() => ({
     transform: [
       { translateX: translateX.value },
@@ -227,11 +244,13 @@ function ZoomableImage({
   return (
     <GestureDetector gesture={composed}>
       <View style={styles.page}>
-        <AFastImage
-          source={{ uri }}
-          resizeMode={FastImage.resizeMode.contain}
-          style={[styles.image, animStyle]}
-        />
+        <Animated.View style={[styles.imageWrap, animStyle]}>
+          <FastImage
+            source={{ uri }}
+            resizeMode={FastImage.resizeMode.contain}
+            style={styles.image}
+          />
+        </Animated.View>
       </View>
     </GestureDetector>
   );
@@ -245,7 +264,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  image: { width: SCREEN_W, height: SCREEN_H * 0.8 },
+  imageWrap: { width: SCREEN_W, height: SCREEN_H },
+  image: { width: '100%', height: '100%' },
   topBar: {
     position: 'absolute',
     left: spacing.lg,
