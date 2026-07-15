@@ -170,6 +170,9 @@ export interface KycDocument {
   status: KycDocStatus;
   uploadedAt?: string | null;
   fileUrl?: string | null;
+  /** Why THIS document was rejected. Re-upload just this one to clear it. */
+  reviewerNote?: string | null;
+  reviewedAt?: string | null;
 }
 
 export interface KycCycle {
@@ -178,6 +181,10 @@ export interface KycCycle {
   dueAt?: string | null;
   gracePeriodEndsAt?: string | null;
   lastVerifiedAt?: string | null;
+  submittedAt?: string | null;
+  decidedAt?: string | null;
+  /** The reviewer's covering note when the cycle was sent back. */
+  decisionReason?: string | null;
   documents: KycDocument[];
 }
 

@@ -69,7 +69,12 @@ export function KycScreen({ navigation }: ScreenProps<'Kyc'>) {
   const allUploaded =
     cycle?.documents.every((d) => d.status !== 'missing' && d.status !== 'rejected') ??
     false;
-  const banner = cycle ? BANNER[cycle.status] : null;
+  const base = cycle ? BANNER[cycle.status] : null;
+  // The reviewer's covering note is the whole point of a rejection — surface it.
+  const banner =
+    base && cycle?.status === 'rejected' && cycle.decisionReason
+      ? { ...base, message: cycle.decisionReason }
+      : base;
 
   return (
     <Screen edges={['top', 'bottom']}>
@@ -97,6 +102,8 @@ export function KycScreen({ navigation }: ScreenProps<'Kyc'>) {
                   required={editable && doc.status !== 'verified'}
                   status={uploadingKind === doc.kind ? 'pending_review' : doc.status}
                   value={doc.fileUrl ?? null}
+                  // Exactly what's wrong with THIS file, so only it needs replacing.
+                  error={doc.status === 'rejected' ? doc.reviewerNote ?? 'Rejected — please re-upload' : null}
                   onUploaded={(url) => onUpload(doc.kind, url)}
                 />
               ))}

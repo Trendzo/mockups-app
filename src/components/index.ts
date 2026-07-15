@@ -25,6 +25,7 @@ export { ImageViewer } from './ImageViewer';
 export type { ViewerImage } from './ImageViewer';
 export { MockupGrid } from './MockupGrid';
 export type { MockupItem } from './MockupGrid';
+export { MockupGeneratorSheet } from './MockupGeneratorSheet';
 export { SortableMockupGrid } from './SortableMockupGrid';
 export type { SortableMockupItem } from './SortableMockupGrid';
 export { PressableScale } from './PressableScale';

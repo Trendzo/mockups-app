@@ -65,9 +65,21 @@ export function HomeScreen({ navigation }: ScreenProps<'Home'>) {
 
         {kycNeedsAction ? (
           <Banner
-            tone={kyc.data!.status === 'overdue' ? 'danger' : 'warning'}
-            title={kyc.data!.status === 'overdue' ? 'KYC overdue' : 'KYC verification due'}
-            message="Upload your documents to stay verified."
+            tone={kyc.data!.status === 'pending' ? 'warning' : 'danger'}
+            title={
+              kyc.data!.status === 'rejected'
+                ? 'Some KYC documents were rejected'
+                : kyc.data!.status === 'overdue'
+                  ? 'KYC overdue'
+                  : 'KYC verification due'
+            }
+            message={
+              kyc.data!.status === 'rejected'
+                ? 'Re-upload the rejected documents and submit again.'
+                : kyc.data!.status === 'overdue'
+                  ? 'Submit before the grace period ends or your store will be paused.'
+                  : 'Upload your documents to stay verified.'
+            }
             actionLabel="Complete KYC"
             onAction={() => navigation.navigate('Kyc')}
           />

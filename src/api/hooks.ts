@@ -6,9 +6,10 @@ import {
   getCategories,
   publishSubmission,
 } from './catalog';
-import { createMockups } from './mockups';
+import { createMockups, generateMockupsFromUrl } from './mockups';
 import { getHealth } from './health';
 import { normalizeError } from './errors';
+import { Mode, ModelGender } from '../types/enums';
 import {
   ApiError,
   Brand,
@@ -17,6 +18,7 @@ import {
   CreateSubmissionInput,
   DecisionInput,
   MockupsResult,
+  NamedImage,
   PublishInput,
   PublishResult,
   Submission,
@@ -64,6 +66,17 @@ export function usePublishSubmission() {
 export function useCreateMockups() {
   return useMutation<MockupsResult, ApiError, CreateMockupsInput>({
     mutationFn: (input) => normalized(() => createMockups(input)),
+  });
+}
+
+/** Generate mockups from a hosted apparel URL (variant image flow). */
+export function useGenerateMockups() {
+  return useMutation<
+    NamedImage[],
+    ApiError,
+    { apparelImageUrl: string; mode: Mode; modelGender?: ModelGender }
+  >({
+    mutationFn: (input) => normalized(() => generateMockupsFromUrl(input)),
   });
 }
 

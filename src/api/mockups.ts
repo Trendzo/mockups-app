@@ -76,3 +76,32 @@ export async function createMockups(
     model: model?.images ?? [],
   };
 }
+
+/**
+ * Generate mockups from an ALREADY-HOSTED apparel URL (e.g. `listing.galleryUrls[0]`)
+ * — no upload hop. One `mode` per call. Used by the variant image flow, which
+ * attaches the returned `{name,url}` images to a variant's `imageUrls`.
+ */
+export async function generateMockupsFromUrl(input: {
+  apparelImageUrl: string;
+  mode: Mode;
+  modelGender?: ModelGender;
+}): Promise<NamedImage[]> {
+  if (isMock()) {
+    const model = input.mode === Mode.WithModel;
+    return [
+      { name: model ? 'model-front-studio' : 'front', url: input.apparelImageUrl },
+      { name: model ? 'model-three-quarter' : 'back', url: input.apparelImageUrl },
+    ];
+  }
+
+  const body: Record<string, unknown> = {
+    mode: input.mode,
+    apparelImageUrls: [input.apparelImageUrl],
+  };
+  if (input.mode === Mode.WithModel && input.modelGender) {
+    body.modelGender = input.modelGender;
+  }
+  const res = await postJson<unknown>('/retailer/ai-catalog-beta/mockups', body);
+  return unwrapEnvelope<{ printed: string | null; images: NamedImage[] }>(res).images;
+}
