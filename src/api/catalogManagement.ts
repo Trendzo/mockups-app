@@ -49,7 +49,7 @@ function slugify(s: string): string {
 
 /**
  * Create a brand inline from the product wizard. Create lives on the retailer
- * route `POST /retailer/brands` (the public `/catalog/brands` is GET-only —
+ * route `POST /retailer/brands` (the public `/catalog/brands` is GET-only -
  * POSTing there 404s). Always send a slug alongside the name.
  */
 export const createBrand = (body: { name: string; slug?: string }) => {

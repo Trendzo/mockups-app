@@ -9,7 +9,7 @@ import {
 import { colors, radii, spacing } from '../theme/theme';
 
 /**
- * Segmented OTP input — one box per digit. Digits only, capped at `length`.
+ * Segmented OTP input - one box per digit. Digits only, capped at `length`.
  * Typing auto-advances; Backspace on an empty box steps back; pasting / SMS-autofill
  * of the full code fills every box; editing any single box replaces only that position.
  */

@@ -193,7 +193,7 @@ export function ApplicationStatusScreen({
         </ScrollView>
 
       {showThread ? (
-        <KeyboardStickyView style={styles.composer} minBottom={spacing.sm}>
+        <KeyboardStickyView style={styles.composer} minBottom={0}>
           {attachments.length > 0 ? (
             <AppText variant="meta" color={colors.meta} style={styles.attachNote}>
               {attachments.length} attachment{attachments.length > 1 ? 's' : ''} ready

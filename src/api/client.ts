@@ -24,7 +24,7 @@ http.interceptors.request.use(config => {
 // No refresh endpoint exists on the backend, so the server is authoritative on
 // expiry: a 401 on an authed call ends the session with reason 'expired', which
 // sends the user back to Login (gated on the token) with a clear notice. Reading
-// the token live inside the handler makes this single-flight — the first 401
+// the token live inside the handler makes this single-flight - the first 401
 // clears the token, so concurrent 401s that follow see no token and no-op.
 http.interceptors.response.use(
   res => res,

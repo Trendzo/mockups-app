@@ -26,7 +26,7 @@ const SLOT_LABEL: Record<PhotoSlot, string> = {
 
 /**
  * Garment photo upload (§New Mockup). Front required; back optional; plus three
- * optional close-up references (pattern, logo, tag) — same upload mechanism.
+ * optional close-up references (pattern, logo, tag) - same upload mechanism.
  */
 export function SelectPhotosScreen({ navigation }: ScreenProps<'SelectPhotos'>) {
   const toast = useToast();

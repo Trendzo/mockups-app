@@ -225,7 +225,7 @@ export async function commitProductDraft({ publish }: { publish: boolean }): Pro
         ? [d.single.serverVariantId]
         : [];
 
-  // Edit deletions — variants the user removed from an existing product.
+  // Edit deletions - variants the user removed from an existing product.
   for (const vid of new Set([...d.removedVariantIds, ...staleVariantIds])) {
     await deleteVariant(vid);
   }

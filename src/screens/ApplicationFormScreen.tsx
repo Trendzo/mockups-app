@@ -42,24 +42,24 @@ const STEP_COPY: [WizardStepCopy, WizardStepCopy, WizardStepCopy, WizardStepCopy
   { title: 'Documents', heading: 'Documents', subtitle: 'Attach photos to speed up review. You can add missing ones later.' },
 ];
 
-/** Validate one step's fields. Pure — returns an errors map (empty = valid). */
+/** Validate one step's fields. Pure - returns an errors map (empty = valid). */
 function validateStep(s: number, f: ApplicationFields): Record<string, string> {
   const e: Record<string, string> = {};
   if (s === 0) {
-    if (f.legalName.trim().length < 2) e.legalName = '2–120 characters';
+    if (f.legalName.trim().length < 2) e.legalName = '2-120 characters';
     if (f.gstin.trim().length !== 15) e.gstin = 'GSTIN must be 15 characters';
     if (f.pan.trim() && f.pan.trim().length !== 10) e.pan = 'PAN is 10 characters';
   } else if (s === 1) {
-    if (f.ownerName.trim().length < 2) e.ownerName = '2–120 characters';
+    if (f.ownerName.trim().length < 2) e.ownerName = '2-120 characters';
     if (!EMAIL_RE.test(f.ownerEmail.trim())) e.ownerEmail = 'Enter a valid email';
     if (!PHONE_RE.test(f.ownerPhone.trim())) e.ownerPhone = 'Enter a valid Indian phone';
     // Alternate phone is not required; validate only when the user typed one.
     if (f.contactPhone.trim() && !PHONE_RE.test(f.contactPhone.trim()))
       e.contactPhone = 'Enter a valid Indian phone';
     if (f.password.length < 8 || f.password.length > 128)
-      e.password = '8–128 characters (your login password)';
+      e.password = '8-128 characters (your login password)';
   } else if (s === 2) {
-    if (f.addressLine.trim().length < 5) e.addressLine = '5–300 characters';
+    if (f.addressLine.trim().length < 5) e.addressLine = '5-300 characters';
     if (!PIN_RE.test(f.pincode.trim())) e.pincode = '6-digit pincode';
   }
   return e;
@@ -87,7 +87,7 @@ export function ApplicationFormScreen({ navigation, route }: ScreenProps<'Applic
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
 
-  // Phone-OTP verification — required before a signup can be submitted.
+  // Phone-OTP verification - required before a signup can be submitted.
   const [phoneVerified, setPhoneVerified] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
   const [reqId, setReqId] = useState<string | null>(null);
@@ -100,7 +100,7 @@ export function ApplicationFormScreen({ navigation, route }: ScreenProps<'Applic
     try {
       OTPWidget.initializeWidget(WIDGET_ID, TOKEN_AUTH);
     } catch {
-      // Native module not linked yet (pre-rebuild) — inline verify will error.
+      // Native module not linked yet (pre-rebuild) - inline verify will error.
     }
   }, []);
 
@@ -222,7 +222,7 @@ export function ApplicationFormScreen({ navigation, route }: ScreenProps<'Applic
     try {
       const check = await checkIdentity(f.ownerEmail, toE164(f.ownerPhone));
       if (check.accountExists) {
-        toast.show('An account already exists — please log in.', 'info');
+        toast.show('An account already exists - please log in.', 'info');
         navigation.navigate('Login');
         return;
       }

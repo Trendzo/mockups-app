@@ -5,7 +5,7 @@
 
 /** 49999 -> "₹499.99". Whole rupees render without decimals: 50000 -> "₹500". */
 export function formatPaise(paise: number | null | undefined): string {
-  if (paise == null || Number.isNaN(paise)) return '—';
+  if (paise == null || Number.isNaN(paise)) return '-';
   const rupees = paise / 100;
   const hasFraction = paise % 100 !== 0;
   const formatted = rupees.toLocaleString('en-IN', {

@@ -7,7 +7,6 @@ import {
   Banner,
   BackButton,
   BottomSheet,
-  GenerateMockupCards,
   Icon,
   ImageViewer,
   PressableScale,
@@ -116,7 +115,12 @@ export function ProductDetailScreen({ navigation, route }: ScreenProps<'ProductD
                 toScale={0.98}
                 style={styles.galleryImg}
               >
-                <AppImage uri={url} radius={radii.card} containerStyle={styles.galleryFill} />
+                <AppImage
+                  uri={url}
+                  radius={radii.card}
+                  resizeMode="contain"
+                  containerStyle={styles.galleryFill}
+                />
               </PressableScale>
             ))}
           </ScrollView>
@@ -134,8 +138,8 @@ export function ProductDetailScreen({ navigation, route }: ScreenProps<'ProductD
         ) : null}
 
         <View style={styles.card}>
-          <InfoRow label="Brand" value={listing.brand?.name ?? '—'} />
-          <InfoRow label="Category" value={listing.category?.label ?? '—'} />
+          <InfoRow label="Brand" value={listing.brand?.name ?? '-'} />
+          <InfoRow label="Category" value={listing.category?.label ?? '-'} />
           <InfoRow label="Gender" value={GENDER_LABEL[listing.gender] ?? listing.gender} />
           <InfoRow label="Policy" value={POLICY_LABEL[listing.listingPolicy] ?? listing.listingPolicy} />
           {listing.hsn ? <InfoRow label="HSN" value={listing.hsn} /> : null}
@@ -185,27 +189,6 @@ export function ProductDetailScreen({ navigation, route }: ScreenProps<'ProductD
           )}
         </View>
 
-        {/* AI image generation — results are appended to the product gallery */}
-        {canWrite ? (
-          <View style={styles.section}>
-            <AppText variant="sectionLabel" color={colors.meta}>
-              Generate images
-            </AppText>
-            <GenerateMockupCards
-              apparelUrl={gallery[0]}
-              modelGender={listing.gender === 'him' ? 'him' : 'her'}
-              onGenerated={async (urls) => {
-                try {
-                  await updateListing(id, { galleryUrls: [...gallery, ...urls] });
-                  toast.show('Added to product gallery', 'success');
-                  refresh();
-                } catch (e: any) {
-                  toast.show(e?.message ?? 'Could not save images', 'error');
-                }
-              }}
-            />
-          </View>
-        ) : null}
       </ScrollView>
 
       {canWrite ? (

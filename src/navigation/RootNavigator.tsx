@@ -146,7 +146,7 @@ export function RootNavigator() {
     !!store &&
     (store.status === 'onboarding' || store.status === 'active');
 
-  // Legal gate — an onboarding store must accept the Retailer Terms before it can
+  // Legal gate - an onboarding store must accept the Retailer Terms before it can
   // go live. Block the full app on a terms-only screen until accepted.
   if (active && me.data?.termsAcceptanceRequired) {
     return (

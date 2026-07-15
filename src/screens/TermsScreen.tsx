@@ -7,7 +7,7 @@ import { useAuth } from '../store/auth';
 import { colors, radii, spacing } from '../theme/theme';
 
 /**
- * Legal gate — a store cannot go live until the Retailer Terms are accepted.
+ * Legal gate - a store cannot go live until the Retailer Terms are accepted.
  * Shown from RootNavigator when `me.termsAcceptanceRequired` is true. Accepting
  * records the version + IP server-side, then re-fetches `me` to release the gate.
  */
@@ -29,7 +29,7 @@ export function TermsScreen() {
       toast.show((e as { message?: string })?.message ?? 'Could not record acceptance', 'error'),
   });
 
-  // Declining is recorded, then the user is logged out — re-prompted next login until accepted.
+  // Declining is recorded, then the user is logged out - re-prompted next login until accepted.
   const decline = useMutation({
     mutationFn: () => declineTerms(terms!.version),
     onSettled: () => logout(),

@@ -11,7 +11,7 @@ type Kind =
   | 'notificationWarning'
   | 'notificationError';
 
-/** Thin, safe wrapper — never throws if the native module is unavailable. */
+/** Thin, safe wrapper - never throws if the native module is unavailable. */
 export function haptic(kind: Kind = 'impactLight'): void {
   try {
     ReactNativeHapticFeedback.trigger(kind, options);

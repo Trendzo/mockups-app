@@ -6,7 +6,7 @@ import { Keyboard, Platform } from 'react-native';
  *
  * iOS listens to the `will` events so the value is available before the show
  * animation (lets a footer rise in step with the keyboard). Android uses `did`
- * and, with `adjustResize` in the manifest, the window already resizes — callers
+ * and, with `adjustResize` in the manifest, the window already resizes - callers
  * typically ignore this value on Android and let the resize lift the footer.
  */
 export function useKeyboardHeight(): number {

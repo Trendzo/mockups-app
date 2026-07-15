@@ -62,7 +62,7 @@ function moveIndex(
 /**
  * Selectable + drag-to-reorder 2-column grid of generated mockups (§5.6).
  * Tap toggles selection, long-press lifts an item to drag, the ⤢ button zooms.
- * Built on gesture-handler + reanimated — no extra dependency.
+ * Built on gesture-handler + reanimated - no extra dependency.
  */
 export function SortableMockupGrid({
   items,

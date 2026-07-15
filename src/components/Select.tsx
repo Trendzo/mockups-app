@@ -29,7 +29,7 @@ interface SelectProps {
   clearable?: boolean; // single-select: offer a "None" row
   error?: string | null;
   loading?: boolean;
-  /** Visible hairline border — for triggers sitting on a white card. */
+  /** Visible hairline border - for triggers sitting on a white card. */
   boxed?: boolean;
 }
 

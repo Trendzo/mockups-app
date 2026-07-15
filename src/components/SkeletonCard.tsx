@@ -15,7 +15,7 @@ interface SkeletonProps {
   style?: StyleProp<ViewStyle>;
 }
 
-/** Shimmering placeholder — used for every load, never a blank flash (§6). */
+/** Shimmering placeholder - used for every load, never a blank flash (§6). */
 export function Skeleton({ height = 230, radius = radii.card, style }: SkeletonProps) {
   const progress = useSharedValue(0.4);
 

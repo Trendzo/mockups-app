@@ -31,7 +31,7 @@ function stamp(): string {
 }
 
 /**
- * Download a catalog CSV directly to the device — no share/preview popup.
+ * Download a catalog CSV directly to the device - no share/preview popup.
  * - Android: saves to the public Downloads folder (system completion notification).
  * - iOS: saves into the app's Documents folder (browsable in Files › Trendzo).
  * Resolves once the file is written.
@@ -87,7 +87,7 @@ export async function downloadCatalogCsv(
       const parsed = JSON.parse(await res.text());
       message = parsed?.error?.message ?? parsed?.error ?? message;
     } catch {
-      // non-JSON body — keep the generic message
+      // non-JSON body - keep the generic message
     }
     await fs.unlink(dest).catch(() => {});
     throw new Error(message);

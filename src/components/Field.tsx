@@ -18,7 +18,7 @@ interface FieldProps extends TextInputProps {
   error?: string | null;
   prefix?: string;
   containerStyle?: StyleProp<ViewStyle>;
-  /** Visible hairline border — for inputs sitting on a white card. */
+  /** Visible hairline border - for inputs sitting on a white card. */
   boxed?: boolean;
 }
 
@@ -37,7 +37,7 @@ export function Field({
   const isSecure = !!secureTextEntry;
   const [hidden, setHidden] = useState(true);
   // A non-editable field reads as visibly locked: grey fill, muted text, a lock
-  // glyph — so it's clearly not editable without having to tap it.
+  // glyph - so it's clearly not editable without having to tap it.
   const locked = inputProps.editable === false;
   return (
     <View style={[styles.wrap, containerStyle]}>

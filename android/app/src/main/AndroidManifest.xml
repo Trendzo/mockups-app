@@ -6,11 +6,16 @@
     <!-- Store-location picker (OpenStreetMap): detect current location -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <!-- Save-to-gallery: scoped media on 33+, legacy storage on <=28 -->
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <!-- Save-to-gallery: on API 29+ we write our own media via MediaStore (no read
+         permission needed); only legacy storage on <=28 requires WRITE. -->
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
+    <!-- Google Play "Photo & Video Permissions" policy: photos are picked with the
+         Android system photo picker (no permission), so strip these broad media
+         permissions from the final merged manifest even if a library injects them. -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" tools:node="remove" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <application

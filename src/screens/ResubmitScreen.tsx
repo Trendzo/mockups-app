@@ -24,7 +24,7 @@ type Docs = Partial<Record<DocKind, string>>;
 
 const PIN_RE = /^\d{6}$/;
 
-// Same 5 steps as onboarding — only the headings differ (this is a fix, not a signup).
+// Same 5 steps as onboarding - only the headings differ (this is a fix, not a signup).
 const STEP_COPY: [WizardStepCopy, WizardStepCopy, WizardStepCopy, WizardStepCopy, WizardStepCopy] = [
   { title: 'Business', heading: 'Business details', subtitle: 'Update your registered details, as on GST.' },
   { title: 'Owner', heading: 'Owner details', subtitle: 'Email & phone are locked; edit the rest as needed.' },
@@ -36,11 +36,11 @@ const STEP_COPY: [WizardStepCopy, WizardStepCopy, WizardStepCopy, WizardStepCopy
 /** Validate the editable required fields; returns errors + first bad step (-1 = ok). */
 function validateResubmit(f: ApplicationFields): { errors: Record<string, string>; firstBad: number } {
   const perStep: Record<string, string>[] = [{}, {}, {}];
-  if (f.legalName.trim().length < 2) perStep[0].legalName = '2–120 characters';
+  if (f.legalName.trim().length < 2) perStep[0].legalName = '2-120 characters';
   if (f.gstin.trim().length !== 15) perStep[0].gstin = 'GSTIN must be 15 characters';
   if (f.pan.trim() && f.pan.trim().length !== 10) perStep[0].pan = 'PAN is 10 characters';
-  if (f.ownerName.trim().length < 2) perStep[1].ownerName = '2–120 characters';
-  if (f.addressLine.trim().length < 5) perStep[2].addressLine = '5–300 characters';
+  if (f.ownerName.trim().length < 2) perStep[1].ownerName = '2-120 characters';
+  if (f.addressLine.trim().length < 5) perStep[2].addressLine = '5-300 characters';
   if (!PIN_RE.test(f.pincode.trim())) perStep[2].pincode = '6-digit pincode';
 
   const errors: Record<string, string> = {};
@@ -240,7 +240,7 @@ export function ResubmitScreen({ navigation, route }: ScreenProps<'Resubmit'>) {
   return (
     <Screen edges={['top']}>
       {submitError ? (
-        <Banner tone="danger" title="Resubmit failed — server said" message={submitError} />
+        <Banner tone="danger" title="Resubmit failed - server said" message={submitError} />
       ) : null}
       {mustReupload.length > 0 ? (
         <Banner

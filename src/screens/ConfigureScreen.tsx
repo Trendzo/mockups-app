@@ -22,7 +22,7 @@ import { useCaptureDraft } from '../store/captureDraft';
 type GenType = 'product' | 'male' | 'female';
 
 // Sample outputs so the retailer sees what the selected mockup type looks like.
-// Bundled static images (sourced from Unsplash — free to use), 3 per type.
+// Bundled static images (sourced from Unsplash - free to use), 3 per type.
 const EXAMPLES: Record<GenType, ReturnType<typeof require>[]> = {
   product: [
     require('../../assets/examples/product-1.jpg'),
@@ -182,7 +182,7 @@ export function ConfigureScreen({ navigation }: ScreenProps<'Configure'>) {
           </AppText>
         </Section>
 
-        {/* Example results — 3 samples of the selected mockup type. Tap to view. */}
+        {/* Example results - 3 samples of the selected mockup type. Tap to view. */}
         <Section label={`Example results · ${GEN_TYPE_LABEL[genType]}`}>
           <View style={styles.examplesRow}>
             {EXAMPLES[genType].map((img, i) => (

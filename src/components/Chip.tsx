@@ -10,7 +10,7 @@ interface ChipProps {
   onPress?: () => void;
 }
 
-/** Selectable pill — used for view limits, occasion/age tags (§5.4/§5.7). */
+/** Selectable pill - used for view limits, occasion/age tags (§5.4/§5.7). */
 export function Chip({ label, selected = false, onPress }: ChipProps) {
   return (
     <PressableScale

@@ -40,7 +40,7 @@ export interface AuthError {
   status?: number;
   detail?: string; // raw server response body (for debugging server errors)
   applicationId?: string;
-  // Owner email of a matched pending/rejected application — supplied by phone-OTP
+  // Owner email of a matched pending/rejected application - supplied by phone-OTP
   // login (which has no email input) so the status/resubmit screens can key on it.
   ownerEmail?: string;
 }

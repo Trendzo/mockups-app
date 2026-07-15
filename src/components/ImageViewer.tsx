@@ -93,7 +93,7 @@ export function ImageViewer({
           viewabilityConfig={viewConfigRef.current}
         />
 
-        {/* Top bar: close + counter + share — each on a dark scrim so they stay
+        {/* Top bar: close + counter + share - each on a dark scrim so they stay
             readable over light images. */}
         <View style={[styles.topBar, { top: insets.top + 8 }]}>
           <PressableScale onPress={onClose} style={styles.iconBtn}>
@@ -104,7 +104,7 @@ export function ImageViewer({
               {index + 1}/{images.length}
             </AppText>
           </View>
-          {/* Share — top-right, icon only. */}
+          {/* Share - top-right, icon only. */}
           {onShare ? (
             <PressableScale onPress={() => onShare(index)} style={styles.iconBtn}>
               <Icon name="share-outline" size={22} color={colors.surface} />
@@ -225,7 +225,7 @@ function ZoomableImage({
 
   const composed = Gesture.Simultaneous(pinch, pan, doubleTap);
 
-  // The transform lives on a plain Animated.View wrapper — NOT on FastImage
+  // The transform lives on a plain Animated.View wrapper - NOT on FastImage
   // itself. FastImage's native view does not reliably pick up Reanimated
   // transform updates, so animating it directly leaves the pinch/zoom visually
   // dead. Wrapping in an Animated.View (as the sortable grid does) is the

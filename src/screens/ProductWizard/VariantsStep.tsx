@@ -60,7 +60,7 @@ const GEN_STATUS = [
   'Reading your garment…',
   'Setting the studio light…',
   'Rendering the front view…',
-  'Almost there — polishing pixels…',
+  'Almost there - polishing pixels…',
 ];
 
 // Carousel geometry: full-bleed track with gutters equal to the screen's
@@ -209,7 +209,8 @@ function SingleEditor({
         autoCapitalize="characters"
         autoCorrect={false}
       />
-      <VariantImages target="single" imageUrls={value.imageUrls} />
+      {/* No per-variant photo slots for a single product - its images come from
+          the main gallery in Basics (step 1). */}
     </View>
   );
 }
@@ -274,7 +275,7 @@ function ColorVariantsEditor({ errors }: { errors: Record<string, string> }) {
         </ScrollView>
       </View>
 
-      {/* Position dots — which variant you're on. */}
+      {/* Position dots - which variant you're on. */}
       {d.colors.length > 1 ? (
         <View style={styles.dotsRow}>
           {d.colors.map((c, i) => (
@@ -395,7 +396,7 @@ function ColorCard({
         }}
       />
 
-      {/* Sizes as toggle chips — options depend on the product type. */}
+      {/* Sizes as toggle chips - options depend on the product type. */}
       <AppText variant="sectionLabel" color={colors.meta}>{sizeDef.axis}</AppText>
       {sizeDef.presets.length > 0 ? (
         <ScrollView
@@ -409,7 +410,7 @@ function ColorCard({
           ))}
         </ScrollView>
       ) : null}
-      {/* Type a size and hit return — no extra "+" button. */}
+      {/* Type a size and hit return - no extra "+" button. */}
       <Field
         boxed
         label="Add a custom size"
@@ -451,32 +452,54 @@ function ColorCard({
         <AppText variant="meta" color={colors.meta}>Tap sizes above to add them.</AppText>
       )}
 
-      <VariantImages imageUrls={imgs} onAddImages={addImgs} onRemoveImage={removeImg} />
+      <VariantImages
+        imageUrls={imgs}
+        onAddImages={addImgs}
+        onRemoveImage={removeImg}
+        allowMockup
+        mockupKey={color.id}
+      />
     </View>
   );
 }
 
-/** Per-variant photos: two camera slots (front/back of the garment) + upload.
+/** Which mockup subject to generate. Product = flat garment (no model). */
+type ModelKind = 'product' | 'him' | 'her';
+
+/** Per-variant photos: two camera slots (front/back of the garment).
  *  Pass `target` for a single variant, or `onAddImages`/`onRemoveImage` to
- *  drive a whole colour (applies the same images to every size). */
+ *  drive a whole colour (applies the same images to every size). Mockup
+ *  generation is colour-only: pass `allowMockup` + a `mockupKey` (the colour id)
+ *  so the generated preview persists in the draft across step navigation. */
 function VariantImages({
   target,
   imageUrls,
   onAddImages,
   onRemoveImage,
+  allowMockup = false,
+  mockupKey,
 }: {
   target?: VariantTarget;
   imageUrls: string[];
   onAddImages?: (urls: string[]) => void;
   onRemoveImage?: (i: number) => void;
+  allowMockup?: boolean;
+  mockupKey?: string;
 }) {
   const d = useProductDraft();
   const toast = useToast();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [shooting, setShooting] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [generated, setGenerated] = useState<string[]>([]);
+  const [modelKind, setModelKind] = useState<ModelKind>('product');
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+
+  // Generated-but-unadopted mockups live in the draft (keyed by colour) so they
+  // survive a detour to Details and back - local state would be lost on remount.
+  const generated = allowMockup && mockupKey ? d.variantMockups[mockupKey] ?? [] : [];
+  const setGenerated = (urls: string[]) => {
+    if (mockupKey) d.setVariantMockups(mockupKey, urls);
+  };
 
   const MAX_PHOTOS = 2;
   const addImages = (urls: string[]) => {
@@ -493,6 +516,9 @@ function VariantImages({
     const next = urls.slice(0, MAX_PHOTOS);
     if (onAddImages) onAddImages(next);
     else if (target) d.addVariantImages(target, next);
+    // These are now the variant's photos - clear the preview so the card doesn't
+    // keep offering to re-adopt mockups it already applied.
+    setGenerated([]);
   };
 
   // Slots fill in order (front, then back). Capturing the front camera opens it
@@ -513,16 +539,25 @@ function VariantImages({
     navigation.navigate('Capture', { slot: slotIndex === 0 ? 'front' : 'back', sink: 'custom' });
   };
 
-  // Generate FRONT product mockups from the captured photo — no back / hanger
-  // / flat-lay views.
+  // Generate mockups from the captured photo. Product = flat (no model); Him/Her
+  // = on a male/female model. Front views only - no back / hanger / flat-lay.
   const generate = async () => {
-    if (generating || !imageUrls[0]) return;
+    const source = imageUrls[0];
+    if (generating || !source) return;
     setGenerating(true);
     try {
-      const images = await createMockupsFromUrl(imageUrls[0], Mode.WithoutModel);
+      const useModel = modelKind !== 'product';
+      const images = await createMockupsFromUrl(
+        source,
+        useModel ? Mode.WithModel : Mode.WithoutModel,
+        useModel ? (modelKind as 'him' | 'her') : undefined,
+      );
       const fronts = images.filter((im) => !/back|hanger|flat/i.test(im.name));
       const urls = (fronts.length ? fronts : images).map((im) => im.url).slice(0, 2);
       if (!urls.length) throw new Error('No mockups returned');
+      // Drop the source photo we generated from - the mockups take its place.
+      const srcIdx = imageUrls.indexOf(source);
+      if (srcIdx >= 0) removeImage(srcIdx);
       setGenerated(urls);
       toast.show('Mockup ready', 'success');
     } catch (e: any) {
@@ -531,6 +566,11 @@ function VariantImages({
       setGenerating(false);
     }
   };
+
+  // Show the generate controls only for colours, with a source photo and room
+  // for the result. Once both slots are full the photos are final - hide it.
+  const canGenerate =
+    allowMockup && imageUrls.length > 0 && imageUrls.length < MAX_PHOTOS;
 
   return (
     <View style={styles.imgBlock}>
@@ -544,7 +584,12 @@ function VariantImages({
           if (url) {
             return (
               <View key={`${url}-${i}`} style={styles.photoSlot}>
-                <AppImage uri={url} radius={radii.sm} containerStyle={styles.photoSlotFill} />
+                <AppImage
+                  uri={url}
+                  radius={radii.sm}
+                  resizeMode="contain"
+                  containerStyle={styles.photoSlotFill}
+                />
                 <PressableScale
                   onPress={() => removeImage(i)}
                   style={styles.thumbRemove}
@@ -585,20 +630,32 @@ function VariantImages({
         })}
       </View>
 
-      {/* Black "generate mockup" CTA — like the Home card — once a photo exists. */}
-      {imageUrls[0] ? (
-        <PressableScale onPress={generate} disabled={generating} style={styles.genCta}>
-          {generating ? (
-            <ActivityIndicator color={colors.accentInk} />
-          ) : (
-            <>
-              <Icon name="sparkles" size={18} color={colors.accentInk} />
-              <AppText variant="bodyMedium" color={colors.accentInk}>
-                Generate mockup
-              </AppText>
-            </>
-          )}
-        </PressableScale>
+      {/* Colour-only mockup generation: pick the subject, then the black CTA. */}
+      {canGenerate ? (
+        <>
+          <SegmentedControl<ModelKind>
+            compact
+            value={modelKind}
+            onChange={setModelKind}
+            options={[
+              { value: 'product', label: 'Product' },
+              { value: 'him', label: 'Him' },
+              { value: 'her', label: 'Her' },
+            ]}
+          />
+          <PressableScale onPress={generate} disabled={generating} style={styles.genCta}>
+            {generating ? (
+              <ActivityIndicator color={colors.accentInk} />
+            ) : (
+              <>
+                <Icon name="sparkles" size={18} color={colors.accentInk} />
+                <AppText variant="bodyMedium" color={colors.accentInk}>
+                  Generate mockup
+                </AppText>
+              </>
+            )}
+          </PressableScale>
+        </>
       ) : null}
 
       {/* Status copy while generating (mirrors the Generating screen). */}
@@ -610,9 +667,9 @@ function VariantImages({
         />
       ) : null}
 
-      {/* Generated mockups — tap to open full-screen; "Use these" sets them as
+      {/* Generated mockups - tap to open full-screen; "Use these" sets them as
           the variant photos. */}
-      {generated.length ? (
+      {allowMockup && generated.length ? (
         <View style={styles.genBlock}>
           <View style={styles.genHead}>
             <AppText variant="sectionLabel" color={colors.meta}>
@@ -632,7 +689,12 @@ function VariantImages({
                 toScale={0.98}
                 style={styles.photoSlot}
               >
-                <AppImage uri={url} radius={radii.sm} containerStyle={styles.photoSlotFill} />
+                <AppImage
+                  uri={url}
+                  radius={radii.sm}
+                  resizeMode="contain"
+                  containerStyle={styles.photoSlotFill}
+                />
               </PressableScale>
             ))}
           </View>
@@ -651,7 +713,7 @@ function VariantImages({
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  // paddingTop must match Basics/Details/Review exactly — a different value
+  // paddingTop must match Basics/Details/Review exactly - a different value
   // makes the shared header jump when hopping between wizard steps. Horizontal
   // padding lives here (not on Screen) so the carousel can break out full-bleed.
   content: {
@@ -678,7 +740,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.hairline,
   },
-  // Carousel — break out of the screen's horizontal padding on BOTH sides so
+  // Carousel - break out of the screen's horizontal padding on BOTH sides so
   // the centred card has equal gutters left and right.
   carouselWrap: { marginHorizontal: -spacing.screenH },
   carouselContent: { paddingHorizontal: SIDE },
@@ -687,7 +749,7 @@ const styles = StyleSheet.create({
   pageFab: {
     position: 'absolute',
     right: spacing.screenH,
-    bottom: 96,
+    bottom: 132, // clear of the "Next" footer button
     width: 56,
     height: 56,
     borderRadius: 28,

@@ -63,7 +63,7 @@ export function VariantFormScreen({ navigation, route }: ScreenProps<'VariantFor
     setSeeded(true);
   }, [isEdit, seeded, existing]);
 
-  // Mockups generate from a hosted apparel image — the listing's first gallery photo.
+  // Mockups generate from a hosted apparel image - the listing's first gallery photo.
   const gallery = listingQ.data?.galleryUrls ?? [];
   const apparelSource = gallery[0] ?? null;
 

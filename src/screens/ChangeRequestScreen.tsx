@@ -43,7 +43,7 @@ export function ChangeRequestScreen({ navigation }: ScreenProps<'ChangeRequest'>
     if (!field) e.field = 'Pick a field';
     if (!requestedValue.trim()) e.requestedValue = 'Required';
     if (reason.trim().length < 3 || reason.trim().length > 500)
-      e.reason = '3–500 characters';
+      e.reason = '3-500 characters';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -101,7 +101,7 @@ export function ChangeRequestScreen({ navigation }: ScreenProps<'ChangeRequest'>
             error={errors.field}
           />
           <Field label="New value" required value={requestedValue} onChangeText={setRequestedValue} placeholder="What it should be" error={errors.requestedValue} />
-          <Field label="Reason" required value={reason} onChangeText={setReason} placeholder="Why this change (3–500 chars)" multiline error={errors.reason} />
+          <Field label="Reason" required value={reason} onChangeText={setReason} placeholder="Why this change (3-500 chars)" multiline error={errors.reason} />
 
           <View style={styles.section}>
             <AppText variant="sectionLabel" color={colors.meta}>Evidence</AppText>

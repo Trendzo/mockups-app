@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthResult, Retailer } from '../types/auth';
 import { queryClient } from '../api/queryClient';
 
-/** Why the session ended — drives whether Login shows a "session expired" notice. */
+/** Why the session ended - drives whether Login shows a "session expired" notice. */
 export type LogoutReason = 'user' | 'expired';
 
 interface AuthState {

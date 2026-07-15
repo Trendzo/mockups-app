@@ -18,7 +18,7 @@ interface HeroHeadlineProps {
 
 /**
  * The signature stacked editorial headline (§2.4). Lines sit tight with no gap;
- * some ink, some muted — e.g. "Exploring / Minds / Inspiring / Change".
+ * some ink, some muted - e.g. "Exploring / Minds / Inspiring / Change".
  */
 export function HeroHeadline({
   lines,

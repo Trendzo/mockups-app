@@ -74,7 +74,7 @@ export function DocumentUpload({
   const chipLabel = status ?? (value ? 'uploaded' : required ? 'required' : null);
 
   return (
-    // The whole row is tappable to open the picker — not just the thumbnail.
+    // The whole row is tappable to open the picker - not just the thumbnail.
     <PressableScale
       onPress={pick}
       disabled={busy}

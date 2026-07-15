@@ -37,7 +37,7 @@ export interface ApplicationWizardProps {
   step: number;
   setStep: (n: number) => void;
   errors: Record<string, string>;
-  /** Per-step titles/headings — lets each screen (apply vs resubmit) differ. */
+  /** Per-step titles/headings - lets each screen (apply vs resubmit) differ. */
   stepCopy: [WizardStepCopy, WizardStepCopy, WizardStepCopy, WizardStepCopy, WizardStepCopy];
   submitLabel: string;
   busy: boolean;
@@ -67,7 +67,7 @@ export interface ApplicationWizardProps {
  * Address → Bank → Documents). Used by both the onboarding "apply" screen and
  * the "fix & resubmit" screen so the exact same fields are editable in both.
  * Only the headings, the submit action, and a few onboarding-only bits (phone
- * OTP, map picker, login password) differ — all passed in via props.
+ * OTP, map picker, login password) differ - all passed in via props.
  */
 export function ApplicationWizard({
   fields: f,
@@ -109,7 +109,7 @@ export function ApplicationWizard({
   };
 
   // iOS has no window resize, so lift the footer by the keyboard height. Android
-  // uses adjustResize (manifest), which already raises it — keep it at safe-area.
+  // uses adjustResize (manifest), which already raises it - keep it at safe-area.
   const iosKeyboard = Platform.OS === 'ios' ? keyboardHeight : 0;
   const footerPadBottom = (iosKeyboard > 0 ? iosKeyboard : insets.bottom) + spacing.md;
 
@@ -137,7 +137,7 @@ export function ApplicationWizard({
         style={styles.flex}
         showsVerticalScrollIndicator={false}
         // "always" so a tap (e.g. a document row) fires on the FIRST press even
-        // when the keyboard is open — "handled" makes the first tap only dismiss it.
+        // when the keyboard is open - "handled" makes the first tap only dismiss it.
         keyboardShouldPersistTaps="always"
         keyboardDismissMode="interactive"
         contentContainerStyle={styles.content}
@@ -160,7 +160,7 @@ export function ApplicationWizard({
             )}
             <Field label="Alternate phone" prefix="+91" value={f.contactPhone} onChangeText={set('contactPhone')} placeholder="9876543210" keyboardType="phone-pad" maxLength={10} error={errors.contactPhone} />
             {showPasswordField ? (
-              <Field label="Password" required value={f.password} onChangeText={set('password')} placeholder="8–128 characters" secureTextEntry autoCapitalize="none" error={errors.password} />
+              <Field label="Password" required value={f.password} onChangeText={set('password')} placeholder="8-128 characters" secureTextEntry autoCapitalize="none" error={errors.password} />
             ) : null}
           </StepBlock>
         ) : null}

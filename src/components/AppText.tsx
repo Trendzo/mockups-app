@@ -11,7 +11,7 @@ interface AppTextProps extends TextProps {
   children: React.ReactNode;
 }
 
-/** Typed text primitive — every text style flows through the §2.2 scale. */
+/** Typed text primitive - every text style flows through the §2.2 scale. */
 export function AppText({
   variant = 'body',
   color = colors.ink,

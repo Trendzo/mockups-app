@@ -13,7 +13,7 @@ import { colors, radii, spacing } from '../../theme/theme';
 import { Haptics } from '../../utils/haptics';
 
 interface Props {
-  /** Ordered gallery URLs — first is the primary. */
+  /** Ordered gallery URLs - first is the primary. */
   urls: string[];
   /** Fires on drop with the new order. */
   onReorder: (urls: string[]) => void;
@@ -230,7 +230,12 @@ function Cell({
     <Animated.View style={[styles.cell, { width: colW, height: cellH }, animStyle]}>
       <GestureDetector gesture={pan}>
         <Animated.View style={StyleSheet.absoluteFill}>
-          <AppImage uri={url} radius={radii.card} containerStyle={styles.image} />
+          <AppImage
+            uri={url}
+            radius={radii.card}
+            resizeMode="contain"
+            containerStyle={styles.image}
+          />
           <Animated.View style={[styles.primaryBadge, badgeStyle]} pointerEvents="none">
             <AppText variant="navCounter" color={colors.accentInk}>
               PRIMARY
