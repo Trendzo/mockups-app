@@ -26,7 +26,7 @@ const STATUS_MESSAGES = [
   'Printing the design…',
   'Setting the studio light…',
   'Rendering the views…',
-  'Almost there — polishing pixels…',
+  'Almost there - polishing pixels…',
 ];
 
 /** GENERATING (§5.5): honest indeterminate progress (no polling endpoint) + cancel. */
@@ -73,7 +73,7 @@ export function GeneratingScreen({ navigation, route }: ScreenProps<'Generating'
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Going back mid-generation throws the in-progress work away — confirm first.
+  // Going back mid-generation throws the in-progress work away - confirm first.
   const confirmCancel = () => {
     Alert.alert(
       'Discard generation?',

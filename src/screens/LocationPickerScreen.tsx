@@ -26,7 +26,7 @@ import { useApplicationDraft } from '../store/applicationDraft';
 import { colors, radii, spacing, type as typeScale } from '../theme/theme';
 
 // Leaflet + OpenStreetMap map. A fixed centre pin means "the map centre is the
-// selected point" (Zomato-style) — panning the map re-selects. Talks to RN via
+// selected point" (Zomato-style) - panning the map re-selects. Talks to RN via
 // postMessage; RN drives it back with window.__setView(...).
 const MAP_HTML = `<!DOCTYPE html>
 <html>

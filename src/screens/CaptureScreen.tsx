@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import {
   Camera,
@@ -79,29 +79,36 @@ export function CaptureScreen({ navigation, route }: ScreenProps<'Capture'>) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [device?.id]);
 
-  // The front camera has no flash — make sure it's off there.
+  // The front camera has no flash - make sure it's off there.
   useEffect(() => {
     if (position === 'front') setFlash('off');
   }, [position]);
 
-  const pinch = Gesture.Pinch()
-    .onBegin(() => {
-      zoomStart.value = zoom.value;
-    })
-    .onUpdate((e) => {
-      const next = zoomStart.value * e.scale;
-      const clamped = Math.min(Math.max(next, minZoom), maxZoom);
-      zoom.value = clamped;
-      runOnJS(reportZoom)(clamped);
-    });
-  const doubleTap = Gesture.Tap()
-    .numberOfTaps(2)
-    .onEnd(() => {
-      const reset = device?.neutralZoom ?? minZoom;
-      zoom.value = reset;
-      runOnJS(reportZoom)(reset);
-    });
-  const zoomGesture = Gesture.Simultaneous(pinch, doubleTap);
+  // Gestures MUST be memoized. reportZoom fires setZoomLabel on every pinch frame,
+  // which re-renders this component; if the gesture objects were rebuilt each render
+  // the GestureDetector would swap them mid-pinch and cancel the in-progress zoom
+  // (symptom: pinch in, then it snaps straight back out). Stable identity fixes it.
+  const neutralZoom = device?.neutralZoom ?? minZoom;
+  const zoomGesture = useMemo(() => {
+    const pinch = Gesture.Pinch()
+      .onBegin(() => {
+        zoomStart.value = zoom.value;
+      })
+      .onUpdate((e) => {
+        const next = zoomStart.value * e.scale;
+        const clamped = Math.min(Math.max(next, minZoom), maxZoom);
+        zoom.value = clamped;
+        runOnJS(reportZoom)(clamped);
+      });
+    const doubleTap = Gesture.Tap()
+      .numberOfTaps(2)
+      .onEnd(() => {
+        zoom.value = neutralZoom;
+        runOnJS(reportZoom)(neutralZoom);
+      });
+    return Gesture.Simultaneous(pinch, doubleTap);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [minZoom, maxZoom, neutralZoom]);
   const cameraAnimatedProps = useAnimatedProps(
     () => ({ zoom: zoom.value }),
     [zoom],
@@ -141,7 +148,7 @@ export function CaptureScreen({ navigation, route }: ScreenProps<'Capture'>) {
     }
     setBusy(true);
     Haptics.shutter();
-    // Chain the flash in/out with withSequence — nesting a withTiming inside a
+    // Chain the flash in/out with withSequence - nesting a withTiming inside a
     // completion callback re-enters the value setter and blows the stack.
     flashOpacity.value = withSequence(
       withTiming(0.9, { duration: 60 }),
@@ -251,7 +258,7 @@ export function CaptureScreen({ navigation, route }: ScreenProps<'Capture'>) {
               color={grid ? colors.accentInk : colors.surface}
             />
           </PressableScale>
-          {/* Flash only on the back camera — the front camera has no flash. */}
+          {/* Flash only on the back camera - the front camera has no flash. */}
           {position === 'back' ? (
             <PressableScale
               onPress={() => setFlash((f) => (f === 'off' ? 'on' : 'off'))}

@@ -55,7 +55,7 @@ interface ApplicationDraftState {
 
 /**
  * Draft of the retailer application, persisted so a user who leaves mid-form
- * returns to exactly where they were — same fields, docs, and step.
+ * returns to exactly where they were - same fields, docs, and step.
  *
  * The password is deliberately NOT persisted: writing a plaintext credential to
  * AsyncStorage is a security risk. It is re-entered on return and validated at

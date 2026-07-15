@@ -134,7 +134,7 @@ export function ReviewResultsScreen({
             draft.startCreate();
             draft.addGalleryUrls(urls);
           }
-          toast.show(`${urls.length} image${urls.length === 1 ? '' : 's'} added — add product details`, 'success');
+          toast.show(`${urls.length} image${urls.length === 1 ? '' : 's'} added - add product details`, 'success');
           leavingRef.current = true;
           navigation.navigate('ProductWizardBasics');
         },
@@ -143,7 +143,7 @@ export function ReviewResultsScreen({
     );
   };
 
-  // One-click reject — no reason/notes prompt.
+  // One-click reject - no reason/notes prompt.
   const onReject = () => {
     setRejecting(true);
     decide.mutate(
@@ -154,7 +154,7 @@ export function ReviewResultsScreen({
       {
         onSuccess: (res) => {
           setStatus(submission.id, res.status);
-          toast.show('Rejected — capture a new shot', 'info');
+          toast.show('Rejected - capture a new shot', 'info');
           leavingRef.current = true;
           navigation.popToTop();
         },

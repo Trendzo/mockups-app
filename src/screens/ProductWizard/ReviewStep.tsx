@@ -35,8 +35,8 @@ export function ReviewStep({ navigation }: ScreenProps<'ProductWizardReview'>) {
   const [busy, setBusy] = useState<false | 'draft' | 'publish'>(false);
   const [error, setError] = useState<string | null>(null);
 
-  const brandName = brandsQ.data?.find((b) => b.id === d.brandId)?.name ?? '—';
-  const categoryLabel = categoriesQ.data?.find((c) => c.id === d.categoryId)?.label ?? '—';
+  const brandName = brandsQ.data?.find((b) => b.id === d.brandId)?.name ?? '-';
+  const categoryLabel = categoriesQ.data?.find((c) => c.id === d.categoryId)?.label ?? '-';
   const gender = d.genders.length >= 2 ? 'unisex' : d.genders[0] ?? 'unisex';
 
   const commit = async (publish: boolean) => {
@@ -98,7 +98,7 @@ export function ReviewStep({ navigation }: ScreenProps<'ProductWizardReview'>) {
 
         {/* Basics */}
         <Section title="Basic information" onEdit={() => navigation.navigate('ProductWizardBasics')}>
-          <Row label="Name" value={d.name || '—'} />
+          <Row label="Name" value={d.name || '-'} />
           <Row label="Brand" value={brandName} />
           <Row label="Category" value={categoryLabel} />
           <Row label="Gender" value={GENDER_LABEL[gender]} />
@@ -192,7 +192,7 @@ function Row({ label, value }: { label: string; value: string }) {
 function priceText(price: string, mrp: string): string {
   const p = parseRupeesToPaise(price);
   const m = mrp.trim() ? parseRupeesToPaise(mrp) : null;
-  const base = p != null ? formatPaise(p) : '—';
+  const base = p != null ? formatPaise(p) : '-';
   return m != null ? `${base}  (MRP ${formatPaise(m)})` : base;
 }
 
@@ -224,7 +224,7 @@ function ColorSummary({ color }: { color: ColorDraft }) {
         <View key={row.id} style={styles.variantLine}>
           <View style={styles.flex}>
             <AppText variant="meta" color={colors.ink}>
-              {row.size || '—'} · {priceText(row.price, row.mrp)}
+              {row.size || '-'} · {priceText(row.price, row.mrp)}
             </AppText>
             <AppText variant="meta" color={colors.meta}>
               Stock {row.stock || '0'}

@@ -1,10 +1,10 @@
 /**
- * Trendzo Retailer — Design System
+ * Trendzo Retailer - Design System
  * Editorial / Swiss / brutalist-minimal. Warm light-gray canvas, one loud
  * chartreuse accent, giant stacked grotesk headlines, strict 8pt grid.
  *
  * Tokens mirror MASTER PROMPT §2. Hex values are the documented starting
- * point — swap in exact screenshot-picked values here for a perfect match.
+ * point - swap in exact screenshot-picked values here for a perfect match.
  */
 
 export const colors = {

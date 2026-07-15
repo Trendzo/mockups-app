@@ -19,7 +19,7 @@ interface PressableScaleProps extends PressableProps {
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 /**
- * Press-in scale (0.97) + spring on release — applied to all cards/buttons (§6).
+ * Press-in scale (0.97) + spring on release - applied to all cards/buttons (§6).
  * Uses React Native's own Animated (not reanimated) for the press feedback: the
  * reanimated-wrapped Pressable can drop the first tap on the New Architecture,
  * which made buttons feel like they needed multiple presses. A generous hitSlop

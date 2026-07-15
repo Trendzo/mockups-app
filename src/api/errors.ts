@@ -41,7 +41,7 @@ export function normalizeError(err: unknown): ApiError {
         return { error: 'Not found.', status };
       case 502:
         return {
-          error: 'Image generation failed. Your photo is safe — try again.',
+          error: 'Image generation failed. Your photo is safe - try again.',
           status,
         };
       case 500:
@@ -54,8 +54,8 @@ export function normalizeError(err: unknown): ApiError {
   return { error: 'Unexpected error.' };
 }
 
-/** True when the failure was a generation failure (502) — keep photo, offer retry. */
+/** True when the failure was a generation failure (502) - keep photo, offer retry. */
 export const isGenerationFailure = (e: ApiError) => e.status === 502;
 
-/** True when the server was unreachable — link the user to Dev Settings. */
+/** True when the server was unreachable - link the user to Dev Settings. */
 export const isUnreachable = (e: ApiError) => e.status == null;

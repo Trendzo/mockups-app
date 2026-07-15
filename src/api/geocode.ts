@@ -1,7 +1,7 @@
 /**
  * OpenStreetMap geocoding via Nominatim (no API key). Used by the store-address
  * location picker. Note Nominatim's usage policy: ≤1 req/sec, send an
- * identifying User-Agent, and cache/debounce — the picker debounces both search
+ * identifying User-Agent, and cache/debounce - the picker debounces both search
  * and reverse lookups. For heavy production use, switch BASE to a self-hosted or
  * paid Nominatim instance.
  */

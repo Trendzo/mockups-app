@@ -8,7 +8,7 @@ import { GENDER_LABELS, LISTING_POLICY_LABELS } from '../types/enums';
 import { colors, radii, spacing } from '../theme/theme';
 import { Haptics } from '../utils/haptics';
 
-/** Success screen — created draft listing + variant (§5.7). */
+/** Success screen - created draft listing + variant (§5.7). */
 export function PublishSuccessScreen({
   navigation,
   route,

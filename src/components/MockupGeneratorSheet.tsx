@@ -18,7 +18,7 @@ type GenKind = 'product' | 'model';
 interface Props {
   /** Already-hosted apparel image the mockups are generated from. */
   apparelImageUrl: string | null;
-  /** URLs already attached to the variant — shown as pre-selected/disabled. */
+  /** URLs already attached to the variant - shown as pre-selected/disabled. */
   existing: string[];
   onAdd: (urls: string[]) => void;
   onClose: () => void;
@@ -26,7 +26,7 @@ interface Props {
 
 /**
  * Bottom-sheet body that turns a hosted apparel image into AI mockups and lets the
- * retailer pick which generated images to attach to a variant. Stateless endpoint —
+ * retailer pick which generated images to attach to a variant. Stateless endpoint -
  * every "Generate" is a fresh call; picks accumulate only in local state.
  */
 export function MockupGeneratorSheet({ apparelImageUrl, existing, onAdd, onClose }: Props) {
@@ -54,7 +54,7 @@ export function MockupGeneratorSheet({ apparelImageUrl, existing, onAdd, onClose
         onSuccess: (images) => {
           setResults(images);
           setPicked([]);
-          if (!images.length) toast.show('No mockups came back — try again', 'info');
+          if (!images.length) toast.show('No mockups came back - try again', 'info');
         },
         onError: (e) => toast.show(e?.error ?? 'Generation failed', 'error'),
       },
@@ -69,7 +69,7 @@ export function MockupGeneratorSheet({ apparelImageUrl, existing, onAdd, onClose
 
       {!apparelImageUrl ? (
         <AppText variant="meta" color={colors.meta}>
-          Add a gallery image to this product first — the mockups are generated from it.
+          Add a gallery image to this product first - the mockups are generated from it.
         </AppText>
       ) : (
         <>

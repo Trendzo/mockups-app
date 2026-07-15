@@ -106,7 +106,7 @@ export function HomeScreen({ navigation }: ScreenProps<'Home'>) {
               icon="cube-outline"
             />
             <StatTile
-              value={avgPaise != null ? formatPaise(avgPaise) : '—'}
+              value={avgPaise != null ? formatPaise(avgPaise) : '-'}
               label="Avg. price"
               icon="pricetag-outline"
             />
@@ -147,7 +147,7 @@ export function HomeScreen({ navigation }: ScreenProps<'Home'>) {
           </View>
           {recent.length === 0 ? (
             <AppText variant="meta" color={colors.meta} style={styles.empty}>
-              No products yet — publish a mockup and it shows up here.
+              No products yet - publish a mockup and it shows up here.
             </AppText>
           ) : (
             recent.map((l) => (
@@ -197,7 +197,7 @@ function StatTile({
 }
 
 function ProductMiniRow({ listing, onPress }: { listing: Listing; onPress: () => void }) {
-  const price = listing.variants?.[0] ? formatPaise(listing.variants[0].pricePaise) : '—';
+  const price = listing.variants?.[0] ? formatPaise(listing.variants[0].pricePaise) : '-';
   const thumb = listing.galleryUrls?.[0];
   return (
     <PressableScale onPress={onPress} toScale={0.98} style={styles.miniRow}>

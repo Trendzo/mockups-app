@@ -9,7 +9,7 @@ import { colors, spacing } from '../theme/theme';
 export interface BottomNavTab {
   key: string;
   icon: string;
-  /** Icon family — defaults to Ionicons ('ion'). Use 'mci' for MaterialCommunityIcons glyphs. */
+  /** Icon family - defaults to Ionicons ('ion'). Use 'mci' for MaterialCommunityIcons glyphs. */
   set?: IconSet;
   label: string;
   active?: boolean;

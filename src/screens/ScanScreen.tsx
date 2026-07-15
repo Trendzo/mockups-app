@@ -99,7 +99,7 @@ export function ScanScreen({ navigation }: ScreenProps<'Scan'>) {
     (async () => setPermission(await ensureCameraPermission()))();
   }, []);
 
-  // ── Connected registers (device picker) — refresh on mount + whenever the screen refocuses ──
+  // ── Connected registers (device picker) - refresh on mount + whenever the screen refocuses ──
   const refreshRegisters = useCallback(async () => {
     try {
       const list = await listRegisters();
@@ -109,7 +109,7 @@ export function ScanScreen({ navigation }: ScreenProps<'Scan'>) {
         setTarget(TARGET_ALL);
       }
     } catch {
-      /* best-effort — leave the last-known list */
+      /* best-effort - leave the last-known list */
     }
   }, [target, setTarget]);
 
@@ -230,7 +230,7 @@ export function ScanScreen({ navigation }: ScreenProps<'Scan'>) {
   }, [clearCard]);
 
   // Swipe (only while the menu is closed) and tap (opens the menu) share the card. Race() picks
-  // whichever activates first — a drag → pan, a stationary press → tap — so they never clash.
+  // whichever activates first - a drag → pan, a stationary press → tap - so they never clash.
   const pan = Gesture.Pan()
     .enabled(!menuOpen)
     .onUpdate((e) => {
@@ -267,14 +267,14 @@ export function ScanScreen({ navigation }: ScreenProps<'Scan'>) {
     transform: [{ translateX: translateX.value }],
   }));
   // Reveal layers behind the card: green (add) shows as the card is dragged right, red (skip)
-  // as it's dragged left — filling the space the card vacates.
+  // as it's dragged left - filling the space the card vacates.
   const greenStyle = useAnimatedStyle(() => ({
     opacity: Math.max(0, Math.min(1, translateX.value / SWIPE_THRESHOLD)),
   }));
   const redStyle = useAnimatedStyle(() => ({
     opacity: Math.max(0, Math.min(1, -translateX.value / SWIPE_THRESHOLD)),
   }));
-  // The card container's own background — always behind the (opaque) card, so it can only show in
+  // The card container's own background - always behind the (opaque) card, so it can only show in
   // the space the card vacates as it slides. Green right = add, red left = skip.
   const stackStyle = useAnimatedStyle(() => ({
     backgroundColor: interpolateColor(
@@ -299,7 +299,7 @@ export function ScanScreen({ navigation }: ScreenProps<'Scan'>) {
 
   const showCamera = permission === 'granted' && device != null;
   const connected = registers.length > 0;
-  // The camera only runs when at least one register is connected — otherwise there's nowhere to
+  // The camera only runs when at least one register is connected - otherwise there's nowhere to
   // send a scan, so we stay on a black screen with the picker/banner shown.
   const cameraLive = showCamera && connected;
   const targetLabel =
@@ -357,7 +357,7 @@ export function ScanScreen({ navigation }: ScreenProps<'Scan'>) {
             </PressableScale>
           </View>
 
-          {/* Register picker — expands / collapses smoothly. */}
+          {/* Register picker - expands / collapses smoothly. */}
           <Animated.View style={[styles.pickerClip, pickerAnimStyle]}>
             <View
               style={styles.pickerInner}
@@ -390,8 +390,11 @@ export function ScanScreen({ navigation }: ScreenProps<'Scan'>) {
 
               {!connected && (
                 <View style={styles.banner}>
-                  <AppText variant="meta" color={colors.ink} style={styles.center}>
-                    No register connected. Open the Register page on your counter device, then swipe up to refresh.
+                  <AppText variant="bodyMedium" color={colors.ink} style={styles.center}>
+                    Register billing - coming soon
+                  </AppText>
+                  <AppText variant="meta" color={colors.meta} style={styles.center}>
+                    We're putting the finishing touches on in-app register &amp; billing. Hang tight!
                   </AppText>
                 </View>
               )}
@@ -399,7 +402,7 @@ export function ScanScreen({ navigation }: ScreenProps<'Scan'>) {
           </Animated.View>
         </View>
 
-        {/* Scan area — swipe up to refresh; reticle shows when the camera is live. */}
+        {/* Scan area - swipe up to refresh; reticle shows when the camera is live. */}
         {!card && (
           <GestureDetector gesture={reloadPan}>
             <View style={styles.scanArea}>
@@ -554,6 +557,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.canvas,
     borderRadius: radii.sm,
     padding: spacing.md,
+    gap: spacing.xs,
   },
 
   // Fills the screen and centres the card; the pan gesture lives here.

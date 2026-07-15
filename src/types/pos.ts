@@ -1,6 +1,6 @@
 /** POS scan → register types (mirror of the backend pos shapes). */
 
-/** A product row resolved from a scanned QR/code — enough to render the confirm card. */
+/** A product row resolved from a scanned QR/code - enough to render the confirm card. */
 export interface PosLookupRow {
   variantId: string;
   listingId: string;

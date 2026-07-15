@@ -208,7 +208,7 @@ export function CatalogListScreen({ navigation }: ScreenProps<'Catalog'>) {
 
 function ProductRow({ listing, onPress }: { listing: Listing; onPress: () => void }) {
   const variants = listing.variants ?? [];
-  const price = variants[0] ? formatPaise(variants[0].pricePaise) : '—';
+  const price = variants[0] ? formatPaise(variants[0].pricePaise) : '-';
   const stock = totalStock(listing);
   const thumb = listing.galleryUrls?.[0];
   return (

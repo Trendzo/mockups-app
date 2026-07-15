@@ -21,7 +21,7 @@ interface CardProps {
 
 const toneBg: Record<CardTone, string> = {
   gray: colors.cardGray,
-  yellow: colors.accent, // now black — the primary/dark card
+  yellow: colors.accent, // now black - the primary/dark card
   surface: colors.surface,
 };
 

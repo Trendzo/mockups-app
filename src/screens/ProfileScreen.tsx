@@ -44,10 +44,10 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
   const store = me.data?.store;
 
   // Prefer the fresh /retailer/me, fall back to the persisted auth snapshot.
-  const legalName = profile?.legalName ?? retailer?.legalName ?? '—';
-  const email = profile?.email ?? retailer?.email ?? '—';
-  const phone = profile?.phone ?? retailer?.phone ?? '—';
-  const gstin = profile?.gstin ?? retailer?.gstin ?? '—';
+  const legalName = profile?.legalName ?? retailer?.legalName ?? '-';
+  const email = profile?.email ?? retailer?.email ?? '-';
+  const phone = profile?.phone ?? retailer?.phone ?? '-';
+  const gstin = profile?.gstin ?? retailer?.gstin ?? '-';
   const status = (profile?.status ?? retailer?.status ?? 'pending').toString();
   const initial = (legalName || email).trim().charAt(0).toUpperCase() || '?';
 
@@ -125,7 +125,7 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
       await requestAccountClosure();
       setDeleteOpen(false);
       await me.refetch();
-      toast.show('Closure requested — pending admin review', 'info');
+      toast.show('Closure requested - pending admin review', 'info');
     } catch (e: any) {
       toast.show(e?.message ?? 'Could not submit closure request', 'error');
     } finally {
@@ -175,7 +175,7 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
         {/* Details */}
         <View style={styles.card}>
           <InfoRow label="Business name" value={legalName} />
-          {/* Show the store NAME only — never the raw store id/number. */}
+          {/* Show the store NAME only - never the raw store id/number. */}
           {store && (store.name ?? profile?.storeName) ? (
             <InfoRow
               label="Store"
@@ -256,7 +256,7 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
               label={closurePending ? 'Closure requested' : 'Request account closure'}
               hint={
                 closurePending
-                  ? 'Pending admin review — you can reopen anytime after it takes effect'
+                  ? 'Pending admin review - you can reopen anytime after it takes effect'
                   : 'Submit a request to close this business account (admin-reviewed)'
               }
               tone="danger"
@@ -360,7 +360,7 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
           <AppText variant="body" color={colors.meta}>
             This sends a closure request to the ClosetX team for review. Nothing
             changes until an admin approves it. Once approved, your store is
-            suspended and your account is closed — but your records are kept, and
+            suspended and your account is closed - but your records are kept, and
             you can request to reopen the account anytime.
           </AppText>
           <PressableScale

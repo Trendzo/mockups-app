@@ -6,7 +6,7 @@ import { mockMockups } from './mock';
 
 /**
  * Same POST /retailer/ai-catalog-beta/mockups, but from an already-hosted
- * apparel URL (e.g. a listing gallery photo) — no re-upload. Used by the
+ * apparel URL (e.g. a listing gallery photo) - no re-upload. Used by the
  * variant screen's "generate images" cards.
  */
 export async function createMockupsFromUrl(
@@ -28,7 +28,7 @@ export async function createMockupsFromUrl(
 }
 
 /**
- * POST /retailer/ai-catalog-beta/mockups (closetx). Stateless — no DB row.
+ * POST /retailer/ai-catalog-beta/mockups (closetx). Stateless - no DB row.
  * One `mode` per call, so for both product + model we call twice and merge.
  * Returns { printed, images:[{name,url}] }.
  */
@@ -79,7 +79,7 @@ export async function createMockups(
 
 /**
  * Generate mockups from an ALREADY-HOSTED apparel URL (e.g. `listing.galleryUrls[0]`)
- * — no upload hop. One `mode` per call. Used by the variant image flow, which
+ * - no upload hop. One `mode` per call. Used by the variant image flow, which
  * attaches the returned `{name,url}` images to a variant's `imageUrls`.
  */
 export async function generateMockupsFromUrl(input: {

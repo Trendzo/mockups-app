@@ -56,7 +56,7 @@ export function WizardHeader({
         <View style={styles.spacer} />
       </View>
 
-      {/* Slim step tabs — tap to jump. */}
+      {/* Slim step tabs - tap to jump. */}
       <View style={styles.tabs}>
         {([1, 2, 3, 4] as const).map((i) => {
           const current = i === step;

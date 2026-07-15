@@ -6,6 +6,7 @@ import {
   Banner,
   Field,
   HeroHeadline,
+  Icon,
   OtpInput,
   PressableScale,
   PrimaryButton,
@@ -15,6 +16,7 @@ import {
 import { ScreenProps } from '../navigation/types';
 import { loginRetailer, loginRetailerOtp } from '../api/auth';
 import { useAuth } from '../store/auth';
+import { useRecentPhones } from '../store/recentPhones';
 import { colors, spacing } from '../theme/theme';
 import { Haptics } from '../utils/haptics';
 import { PRIVACY_URL, SUPPORT_URL, TERMS_URL } from '../config/legal';
@@ -31,6 +33,12 @@ const TOKEN_AUTH = '547225TSvi20QFa026a47d90aP1';
 // India-only: dial code is fixed at +91 (no country selector).
 const DIAL_CODE = '91';
 
+/** Display a 10-digit number as "XXXXX XXXXX" (space after 5). Storage stays raw. */
+const formatPhone = (raw: string) => {
+  const d = raw.replace(/\D/g, '').slice(0, 10);
+  return d.length > 5 ? `${d.slice(0, 5)} ${d.slice(5)}` : d;
+};
+
 export function LoginScreen({ navigation }: ScreenProps<'Login'>) {
   const toast = useToast();
   const setAuth = useAuth(s => s.setAuth);
@@ -42,6 +50,9 @@ export function LoginScreen({ navigation }: ScreenProps<'Login'>) {
 
   // Phone-OTP state
   const [phone, setPhone] = useState('');
+  const recentPhones = useRecentPhones((s) => s.phones);
+  const addRecentPhone = useRecentPhones((s) => s.add);
+  const removeRecentPhone = useRecentPhones((s) => s.remove);
   const [step, setStep] = useState<'phone' | 'otp'>('phone');
   const [reqId, setReqId] = useState<string | null>(null);
   const [otp, setOtp] = useState('');
@@ -63,7 +74,7 @@ export function LoginScreen({ navigation }: ScreenProps<'Login'>) {
     try {
       OTPWidget.initializeWidget(WIDGET_ID, TOKEN_AUTH);
     } catch {
-      // Native module not linked yet (pre-rebuild) — phone login will error;
+      // Native module not linked yet (pre-rebuild) - phone login will error;
       // email login still works.
     }
   }, []);
@@ -97,6 +108,7 @@ export function LoginScreen({ navigation }: ScreenProps<'Login'>) {
       setOtp('');
       setStep('otp');
       setResendIn(RESEND_SECONDS);
+      addRecentPhone(national); // remember for quick refill next time
       Haptics.select();
     } catch (e: any) {
       console.error('[LoginScreen] sendOtp failed:', {
@@ -140,7 +152,7 @@ export function LoginScreen({ navigation }: ScreenProps<'Login'>) {
       if (!accessToken) throw new Error('Verification failed');
       const result = await loginRetailerOtp(String(accessToken));
       console.log(
-        '[LoginScreen] loginRetailerOtp succeeded — token received:',
+        '[LoginScreen] loginRetailerOtp succeeded - token received:',
         !!result?.token,
       );
       Haptics.success();
@@ -180,16 +192,16 @@ export function LoginScreen({ navigation }: ScreenProps<'Login'>) {
       // Verified phone with no account and no application → start signup.
       if (e?.code === 'invalid_credentials' && e?.status) {
         toast.show(
-          "No account for this number yet — let's get you set up.",
+          "No account for this number yet - let's get you set up.",
           'info',
         );
-        // Phone is already verified via OTP — carry it into the form (locked).
+        // Phone is already verified via OTP - carry it into the form (locked).
         navigation.navigate('ApplicationForm', { verifiedPhone: phone.trim() });
         return;
       }
       if (e?.status === 503) {
         toast.show(
-          'OTP login is temporarily unavailable — use email + password.',
+          'OTP login is temporarily unavailable - use email + password.',
           'error',
         );
         setMethod('email');
@@ -252,7 +264,7 @@ export function LoginScreen({ navigation }: ScreenProps<'Login'>) {
       ? 'Sign in with your email and password.'
       : step === 'phone'
       ? 'Log in with your phone number.'
-      : `Enter the code sent to +${DIAL_CODE} ${phone.trim()}.`;
+      : `Enter the code sent to +${DIAL_CODE} ${formatPhone(phone)}.`;
 
   return (
     <Screen edges={['top', 'bottom']}>
@@ -295,13 +307,54 @@ export function LoginScreen({ navigation }: ScreenProps<'Login'>) {
                 label="Phone number"
                 required
                 prefix="+91"
-                value={phone}
-                onChangeText={setPhone}
-                placeholder="Mobile number"
+                value={formatPhone(phone)}
+                onChangeText={(t) => setPhone(t.replace(/\D/g, '').slice(0, 10))}
+                placeholder="98765 43210"
                 keyboardType="phone-pad"
-                maxLength={14}
+                textContentType="telephoneNumber"
+                autoComplete="tel"
+                maxLength={11}
                 error={phoneErr}
               />
+
+              {/* Tap a recently-used number to refill it. */}
+              {recentPhones.filter((p) => p !== phone.trim()).length ? (
+                <View style={styles.recentWrap}>
+                  <AppText variant="meta" color={colors.meta}>
+                    Recent
+                  </AppText>
+                  <View style={styles.recentRow}>
+                    {recentPhones
+                      .filter((p) => p !== phone.trim())
+                      .map((p) => (
+                        <View key={p} style={styles.recentChip}>
+                          <PressableScale
+                            onPress={() => {
+                              setPhone(p);
+                              setPhoneErr(undefined);
+                            }}
+                            haptic={false}
+                            style={styles.recentChipMain}
+                          >
+                            <Icon name="time-outline" size={13} color={colors.meta} />
+                            <AppText variant="meta" color={colors.ink}>
+                              +91 {formatPhone(p)}
+                            </AppText>
+                          </PressableScale>
+                          <PressableScale
+                            onPress={() => removeRecentPhone(p)}
+                            haptic={false}
+                            hitSlop={8}
+                            style={styles.recentChipX}
+                          >
+                            <Icon name="close" size={12} color={colors.meta} />
+                          </PressableScale>
+                        </View>
+                      ))}
+                  </View>
+                </View>
+              ) : null}
+
               <PrimaryButton
                 label="Send OTP"
                 tone="accent"
@@ -459,6 +512,22 @@ const styles = StyleSheet.create({
   header: { gap: spacing.sm },
   headline: { marginVertical: spacing.xs },
   form: { gap: spacing.lg },
+  recentWrap: { gap: spacing.xs, marginTop: -spacing.sm },
+  recentRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  recentChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.hairline,
+    paddingLeft: spacing.sm + 2,
+    paddingRight: spacing.xs,
+    height: 34,
+    gap: spacing.xs,
+  },
+  recentChipMain: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  recentChipX: { padding: 4 },
   otpField: { gap: spacing.sm },
   otpRow: {
     flexDirection: 'row',

@@ -94,7 +94,7 @@ export function BasicsStep({ navigation }: ScreenProps<'ProductWizardBasics'>) {
         `[createBrand] POST /catalog/brands failed → ${e?.status ?? '?'}: ${e?.message}`,
         e?.detail ?? e,
       );
-      const detail = e?.detail ? ` — ${e.detail}` : '';
+      const detail = e?.detail ? ` - ${e.detail}` : '';
       toast.show(`${e?.message ?? 'Could not create brand'}${detail}`, 'error');
     }
   };
@@ -193,7 +193,7 @@ export function BasicsStep({ navigation }: ScreenProps<'ProductWizardBasics'>) {
           </View>
         </View>
 
-        {/* Product pricing — variants can override the selling price per colour. */}
+        {/* Product pricing - variants can override the selling price per colour. */}
         <View style={styles.priceRow}>
           <Field
             containerStyle={styles.flexField}

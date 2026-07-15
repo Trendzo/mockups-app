@@ -1,14 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
 import { getKyc, getRetailerMe, listChangeRequests } from './onboarding';
 
-/** GET /retailer/me — drives the post-login app gate. */
+/** GET /retailer/me - drives the post-login app gate. */
 export function useRetailerMe(enabled = true) {
   return useQuery({
     queryKey: ['retailer-me'],
     queryFn: getRetailerMe,
     enabled,
     // Ride out flaky networks so a transient failure doesn't misroute an active
-    // retailer to the pending gate — but never retry an auth failure: the token
+    // retailer to the pending gate - but never retry an auth failure: the token
     // is already invalid, the interceptor has logged out, and retrying just fires
     // more doomed 401s. (getRetailerMe throws a normalized AuthError with .status.)
     retry: (failureCount, error) => {
@@ -22,7 +22,7 @@ export function useRetailerMe(enabled = true) {
   });
 }
 
-/** GET /retailer/kyc — banner + checklist. null when no cycle is due. */
+/** GET /retailer/kyc - banner + checklist. null when no cycle is due. */
 export function useKyc(enabled = true) {
   return useQuery({
     queryKey: ['kyc'],
@@ -41,7 +41,7 @@ export function useChangeRequests(enabled = true) {
     enabled,
     retry: 0,
     staleTime: 10_000,
-    // Admin approves/rejects change requests — poll so the decision shows live.
+    // Admin approves/rejects change requests - poll so the decision shows live.
     refetchInterval: 20_000,
   });
 }

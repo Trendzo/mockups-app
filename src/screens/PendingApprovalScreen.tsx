@@ -22,7 +22,7 @@ import { colors, radii, spacing, type as typeScale } from '../theme/theme';
 /**
  * Post-login gate for retailers whose account/store isn't ready yet
  * (status !== active, or store paused/suspended/terminated), and the landing
- * screen for a `closed` account — where the owner/manager can request a reopen.
+ * screen for a `closed` account - where the owner/manager can request a reopen.
  */
 export function PendingApprovalScreen({ navigation }: ScreenProps<'PendingApproval'>) {
   const me = useRetailerMe();
@@ -88,7 +88,7 @@ export function PendingApprovalScreen({ navigation }: ScreenProps<'PendingApprov
     try {
       await requestAccountReopen();
       await me.refetch();
-      toast.show('Reopen requested — pending admin review', 'info');
+      toast.show('Reopen requested - pending admin review', 'info');
     } catch (e: any) {
       toast.show(e?.message ?? 'Could not submit reopen request', 'error');
     } finally {
@@ -105,7 +105,7 @@ export function PendingApprovalScreen({ navigation }: ScreenProps<'PendingApprov
         title: reopenPending ? 'Reopen request pending' : 'Account closed',
         message: reopenPending
           ? "Your reopen request is with the ClosetX team for review. You'll regain full access once it's approved."
-          : "Your account is closed and your store is suspended. Your data is safe — request to reopen whenever you're ready.",
+          : "Your account is closed and your store is suspended. Your data is safe - request to reopen whenever you're ready.",
       };
     }
     if (status === 'terminated') {
@@ -224,7 +224,7 @@ export function PendingApprovalScreen({ navigation }: ScreenProps<'PendingApprov
         <View style={styles.footer}>
           {isClosed && canManageAccount ? (
             <PrimaryButton
-              label={reopenPending ? 'Reopen requested — pending review' : 'Request to reopen'}
+              label={reopenPending ? 'Reopen requested - pending review' : 'Request to reopen'}
               tone="accent"
               loading={reopening}
               disabled={reopenPending || reopening}
@@ -237,7 +237,7 @@ export function PendingApprovalScreen({ navigation }: ScreenProps<'PendingApprov
     );
   }
 
-  // Pending approval / store paused — the original waiting gate.
+  // Pending approval / store paused - the original waiting gate.
   return (
     <Screen edges={['top', 'bottom']}>
       <ScrollView
@@ -261,7 +261,7 @@ export function PendingApprovalScreen({ navigation }: ScreenProps<'PendingApprov
         {me.data ? (
           <View style={styles.card}>
             <Row label="Account" value={me.data.retailer.legalName} />
-            <Row label="Status" value={status ?? '—'} />
+            <Row label="Status" value={status ?? '-'} />
             <Row label="Store" value={store ? store.status : 'not created yet'} />
           </View>
         ) : null}
@@ -323,7 +323,7 @@ const styles = StyleSheet.create({
   rowValue: { flexShrink: 1, textAlign: 'right', textTransform: 'capitalize' },
   hint: { textAlign: 'center' },
   footer: { gap: spacing.sm, paddingVertical: spacing.md },
-  // Appeal thread + composer — mirrors ApplicationStatusScreen's chat styles.
+  // Appeal thread + composer - mirrors ApplicationStatusScreen's chat styles.
   thread: { gap: spacing.sm },
   bubble: { maxWidth: '85%', borderRadius: radii.card, padding: spacing.md, gap: 2 },
   bubbleMine: { backgroundColor: colors.ink, alignSelf: 'flex-end' },

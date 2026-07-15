@@ -223,7 +223,7 @@ export async function getRetailerMe(): Promise<RetailerMe> {
 }
 
 /**
- * Request business-account closure (owner/manager). Files an admin-reviewed request —
+ * Request business-account closure (owner/manager). Files an admin-reviewed request -
  * nothing is deleted or suspended until an admin approves. On approval the store is
  * suspended and accounts marked `closed` (reversibly). Replaces the old destructive delete.
  */

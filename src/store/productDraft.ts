@@ -7,7 +7,7 @@ import { SizeKind } from '../screens/ProductWizard/sizeKinds';
  * In-progress product draft for the unified creation/edit wizard. Session-only
  * (a global singleton, not persisted): once committed, the backend itself holds
  * the draft as a `draft` listing. Every wizard screen reads/writes this store,
- * so jumping between steps — or detouring into the mockup generator and back —
+ * so jumping between steps - or detouring into the mockup generator and back -
  * keeps every value intact. Nothing is sent to the backend until the Review
  * step calls commitProductDraft().
  */
@@ -53,13 +53,13 @@ interface ProductDraftState {
   editingListingId?: string;
   /** Status of the product being edited (drives the Review buttons). */
   editingStatus?: Listing['status'];
-  /** The listing's variant mode when editing began — a switch means the old
+  /** The listing's variant mode when editing began - a switch means the old
    *  mode's variants get replaced (deleted) on commit. */
   editingVariantMode?: WizardVariantMode;
   /** True while the user has detoured into the mockup generator from the wizard. */
   pendingMockup: boolean;
 
-  // Step 1 — Basics
+  // Step 1 - Basics
   name: string;
   brandId: string | null;
   categoryId: string | null;
@@ -70,15 +70,19 @@ interface ProductDraftState {
   basePrice: string; // rupee input
   baseMrp: string; // compare-at, rupee input
 
-  // Step 2 — Variants
+  // Step 2 - Variants
   variantMode: WizardVariantMode;
   // Size system for variants (null = auto-infer from the category). Lets
   // accessories (rings/chains/shoes) use their own size scale, not S/M/L.
   sizeKind: SizeKind | null;
   single: SingleVariantDraft;
   colors: ColorDraft[];
+  // Freshly generated (not-yet-adopted) mockups, keyed by colour id. Lives in the
+  // draft - not local component state - so the preview survives hopping to Details
+  // and back to the Variants step.
+  variantMockups: Record<string, string[]>;
 
-  // Step 3 — Details
+  // Step 3 - Details
   description: string;
   descriptionLong: string;
   listingPolicy: ListingPolicy;
@@ -134,6 +138,8 @@ interface ProductDraftState {
   // per-variant images
   addVariantImages: (target: VariantTarget, urls: string[]) => void;
   removeVariantImage: (target: VariantTarget, i: number) => void;
+  /** Store (or clear, with []) the generated-but-unadopted mockups for a colour. */
+  setVariantMockups: (key: string, urls: string[]) => void;
 
   // ---- step 3 ----
   setDetails: (
@@ -193,6 +199,7 @@ const emptyState = () => ({
   sizeKind: null as SizeKind | null,
   single: emptySingle(),
   colors: [emptyColor()],
+  variantMockups: {} as Record<string, string[]>,
   description: '',
   descriptionLong: '',
   listingPolicy: 'return' as ListingPolicy,
@@ -283,6 +290,7 @@ function seedFromListing(listing: Listing): Partial<ProductDraftState> {
     hsn: listing.hsn ?? '',
     createdListingId: undefined,
     removedVariantIds: [],
+    variantMockups: {},
   };
 }
 
@@ -435,6 +443,14 @@ export const useProductDraft = create<ProductDraftState>((set) => ({
             : c,
         ),
       };
+    }),
+
+  setVariantMockups: (key, urls) =>
+    set((s) => {
+      const next = { ...s.variantMockups };
+      if (urls.length) next[key] = urls;
+      else delete next[key];
+      return { variantMockups: next };
     }),
 
   setDetails: (patch) => set(patch),

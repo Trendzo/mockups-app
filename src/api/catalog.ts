@@ -34,7 +34,7 @@ export async function uploadImage(file: UploadFile): Promise<string> {
 
 /**
  * POST /retailer/ai-catalog-beta/submissions. Uploads front (+ optional back /
- * design) photos, then submits their URLs. Synchronous — returns outputUrls.
+ * design) photos, then submits their URLs. Synchronous - returns outputUrls.
  * Requires an ACTIVE retailer with a store.
  */
 export async function createSubmission(

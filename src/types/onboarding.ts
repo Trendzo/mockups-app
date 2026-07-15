@@ -115,7 +115,7 @@ export interface ThreadMessage {
 
 // ---- Resubmit ----
 // The backend returns the full application row (mustReuploadDocKinds lives INSIDE it)
-// plus a separate documents array — not a flattened prefill.
+// plus a separate documents array - not a flattened prefill.
 export interface ResubmitPrefill {
   application: Partial<ApplicationInput> & { mustReuploadDocKinds?: DocKind[] };
   documents?: { kind: DocKind; url: string }[];
@@ -137,7 +137,7 @@ export interface RetailerProfile {
   status: AccountStatus;
   storeId?: string;
   subRole?: string;
-  // Optional richer details — surfaced in Profile's "View more" when the
+  // Optional richer details - surfaced in Profile's "View more" when the
   // backend returns them (the same fields admin/onboarding capture).
   pan?: string;
   contactPhone?: string;

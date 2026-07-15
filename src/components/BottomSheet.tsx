@@ -22,7 +22,7 @@ interface BottomSheetProps {
 
 /**
  * Standard bottom sheet. The scrim **fades** in (Modal `fade`) while only the
- * sheet **slides up** (Reanimated) — so the black overlay never sweeps up from
+ * sheet **slides up** (Reanimated) - so the black overlay never sweeps up from
  * the bottom the way `Modal animationType="slide"` does with a tinted backdrop.
  *
  * Every bottom sheet in the app should use this; pass your existing sheet
