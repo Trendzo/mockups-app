@@ -34,8 +34,10 @@ export function PendingApprovalScreen({ navigation }: ScreenProps<'PendingApprov
   const reopenPending = me.data?.pendingAccountRequest === 'account_reopen';
   const canManageAccount = subRole === 'owner' || subRole === 'manager';
 
-  // Suspend/terminate appeal: the in-band channel to contest the action.
-  const showAppeal = store?.status === 'suspended' || status === 'terminated';
+  // Suspend/terminate appeal: the in-band channel to contest the action. Covers a
+  // store-level termination too (store terminated while the account stays active).
+  const showAppeal =
+    store?.status === 'suspended' || store?.status === 'terminated' || status === 'terminated';
   const appealQ = useQuery({
     queryKey: ['account-appeal'],
     queryFn: getAccountAppeal,
@@ -92,11 +94,19 @@ export function PendingApprovalScreen({ navigation }: ScreenProps<'PendingApprov
         message: 'This retailer account has been terminated. Contact support.',
       };
     }
+    if (store && store.status === 'terminated') {
+      return {
+        tone: 'danger' as const,
+        title: 'Store terminated',
+        message:
+          'Your store has been terminated by ClosetX. You can appeal the decision below.',
+      };
+    }
     if (store && store.status === 'suspended') {
       return {
         tone: 'danger' as const,
         title: 'Store suspended',
-        message: 'Your store is suspended. Contact support to restore access.',
+        message: 'Your store is suspended. You can appeal the decision below.',
       };
     }
     if (store && store.status === 'paused') {
