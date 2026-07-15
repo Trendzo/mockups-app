@@ -55,16 +55,19 @@ export function validateProductDraft(): string[] {
     return false;
   };
 
-  if (d.variantMode === 'single') {
-    if (badMoney(d.single.price, d.single.mrp)) problems.push('A valid selling price (MRP must be higher)');
-  } else {
+  // Product pricing lives in Basics; per-colour selling prices only override it.
+  if (badMoney(d.basePrice, d.baseMrp))
+    problems.push('A valid selling price in Basics (MRP must be higher)');
+
+  if (d.variantMode !== 'single') {
     let anySize = false;
     d.colors.forEach((c) => {
       c.sizes.forEach((r) => {
         anySize = true;
         const who = `${c.name || 'a color'} / ${r.size || 'size'}`;
         if (!r.size.trim()) problems.push(`Size name for ${c.name || 'a color'}`);
-        if (badMoney(r.price, r.mrp)) problems.push(`A valid price for ${who}`);
+        // Only validate an override when one was typed.
+        if (r.price.trim() && badMoney(r.price, d.baseMrp)) problems.push(`A valid price for ${who}`);
       });
     });
     if (!anySize) problems.push('At least one variant');
@@ -129,8 +132,9 @@ export async function commitProductDraft({ publish }: { publish: boolean }): Pro
     const size = d.single.size.trim();
     const body = {
       sku: d.single.sku.trim() || undefined,
-      pricePaise: paise(d.single.price),
-      compareAtPrice: comparePrice(d.single.mrp),
+      // Pricing comes from Basics (product-level).
+      pricePaise: paise(d.basePrice),
+      compareAtPrice: comparePrice(d.baseMrp),
       stock: Number(d.single.stock) || 0,
       imageUrls: d.single.imageUrls,
     };
@@ -181,8 +185,9 @@ export async function commitProductDraft({ publish }: { publish: boolean }): Pro
         const body = {
           size,
           sku: row.sku.trim() || undefined,
-          pricePaise: paise(row.price),
-          compareAtPrice: comparePrice(row.mrp),
+          // Per-colour selling price overrides the base; MRP is always base.
+          pricePaise: paise(row.price.trim() || d.basePrice),
+          compareAtPrice: comparePrice(d.baseMrp),
           stock: Number(row.stock) || 0,
           imageUrls: row.imageUrls,
         };
@@ -204,8 +209,24 @@ export async function commitProductDraft({ publish }: { publish: boolean }): Pro
     }
   }
 
+  // Product-type switch while editing (single ⇄ color variants): the old
+  // mode's variants are replaced by the new set, so delete them once the new
+  // ones exist. Their seeded server IDs are still in the untouched half of the
+  // draft.
+  const modeSwitched =
+    d.mode === 'edit' && !!d.editingVariantMode && d.editingVariantMode !== d.variantMode;
+  const staleVariantIds = !modeSwitched
+    ? []
+    : d.variantMode === 'single'
+      ? d.colors
+          .flatMap((c) => c.sizes.map((r) => r.serverVariantId))
+          .filter((x): x is string => !!x)
+      : d.single.serverVariantId
+        ? [d.single.serverVariantId]
+        : [];
+
   // Edit deletions — variants the user removed from an existing product.
-  for (const vid of d.removedVariantIds) {
+  for (const vid of new Set([...d.removedVariantIds, ...staleVariantIds])) {
     await deleteVariant(vid);
   }
 

@@ -5,7 +5,7 @@ import { AppText } from './AppText';
 import { BottomSheet } from './BottomSheet';
 import { Icon } from './Icon';
 import { PressableScale } from './PressableScale';
-import { colors, radii, spacing, type as typeScale } from '../theme/theme';
+import { colors, radii, spacing } from '../theme/theme';
 
 // Concrete cap for the option list (percentage max-heights don't resolve inside
 // the sheet's auto-height animated wrapper).
@@ -13,6 +13,8 @@ const OPTIONS_MAX_HEIGHT = Dimensions.get('window').height * 0.5;
 
 export interface SelectOption {
   label: string;
+  /** Optional colour swatch shown next to the label (e.g. colour pickers). */
+  swatch?: string;
   value: string;
 }
 
@@ -27,6 +29,8 @@ interface SelectProps {
   clearable?: boolean; // single-select: offer a "None" row
   error?: string | null;
   loading?: boolean;
+  /** Visible hairline border — for triggers sitting on a white card. */
+  boxed?: boolean;
 }
 
 /** Dropdown selector (single or multi) rendered as a bottom sheet. */
@@ -41,6 +45,7 @@ export function Select({
   clearable = false,
   error,
   loading = false,
+  boxed = false,
 }: SelectProps) {
   const [open, setOpen] = useState(false);
   const insets = useSafeAreaInsets();
@@ -78,16 +83,31 @@ export function Select({
       <PressableScale
         onPress={() => !loading && setOpen(true)}
         toScale={0.99}
-        style={[styles.trigger, error ? styles.triggerError : null]}
+        style={[
+          styles.trigger,
+          boxed ? styles.triggerBoxed : null,
+          error ? styles.triggerError : null,
+        ]}
       >
-        <AppText
-          variant="bodyMedium"
-          color={empty ? colors.inkMuted : colors.ink}
-          numberOfLines={1}
-          style={styles.triggerText}
-        >
-          {loading ? 'Loading…' : summary}
-        </AppText>
+        <View style={styles.triggerLeft}>
+          {/* Selected colour swatch (single-select options that carry one). */}
+          {!multiple && !empty
+            ? (() => {
+                const sel = options.find((o) => selected.includes(o.value));
+                return sel?.swatch ? (
+                  <View style={[styles.dot, { backgroundColor: sel.swatch }]} />
+                ) : null;
+              })()
+            : null}
+          <AppText
+            variant="bodyMedium"
+            color={empty ? colors.inkMuted : colors.ink}
+            numberOfLines={1}
+            style={styles.triggerText}
+          >
+            {loading ? 'Loading…' : summary}
+          </AppText>
+        </View>
         <Icon name="chevron-down" size={18} color={colors.meta} />
       </PressableScale>
 
@@ -126,6 +146,7 @@ export function Select({
                 <OptionRow
                   key={o.value}
                   label={o.label}
+                  swatch={o.swatch}
                   selected={selected.includes(o.value)}
                   onPress={() => toggle(o.value)}
                 />
@@ -150,21 +171,26 @@ export function Select({
 
 function OptionRow({
   label,
+  swatch,
   selected,
   onPress,
 }: {
   label: string;
+  swatch?: string;
   selected: boolean;
   onPress: () => void;
 }) {
   return (
     <PressableScale onPress={onPress} toScale={0.99} style={styles.optionRow}>
-      <AppText
-        variant="bodyMedium"
-        color={selected ? colors.ink : colors.meta}
-      >
-        {label}
-      </AppText>
+      <View style={styles.optionLeft}>
+        {swatch ? <View style={[styles.dot, { backgroundColor: swatch }]} /> : null}
+        <AppText
+          variant="bodyMedium"
+          color={selected ? colors.ink : colors.meta}
+        >
+          {label}
+        </AppText>
+      </View>
       {selected ? <Icon name="checkmark" size={20} color={colors.ink} /> : null}
     </PressableScale>
   );
@@ -184,7 +210,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
   },
+  triggerBoxed: { borderColor: colors.hairline },
   triggerError: { borderColor: colors.danger },
+  triggerLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  optionLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  dot: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.hairline,
+  },
   triggerText: { flex: 1, marginRight: spacing.sm },
   error: { marginLeft: 2 },
   sheet: {

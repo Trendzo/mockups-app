@@ -27,6 +27,7 @@ import { ScreenProps } from '../navigation/types';
 import { colors, spacing } from '../theme/theme';
 import { Haptics } from '../utils/haptics';
 import { useCaptureDraft } from '../store/captureDraft';
+import { takeCameraSink } from './ProductWizard/cameraSink';
 import { ensureCameraPermission, openAppSettings } from '../utils/permissions';
 
 // vision-camera exposes `zoom` as a Reanimated-animatable prop.
@@ -70,9 +71,18 @@ export function CaptureScreen({ navigation, route }: ScreenProps<'Capture'>) {
   const zoom = useSharedValue(device?.neutralZoom ?? 1);
   const zoomStart = useSharedValue(1);
 
+  // Reset zoom ONLY when the actual camera changes (front↔back). Depending on the
+  // `device` object was resetting zoom on every re-render (useCameraDevice can
+  // return a new reference), which snapped the pinch-zoom straight back to 1×.
   useEffect(() => {
     zoom.value = device?.neutralZoom ?? 1;
-  }, [device, zoom]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [device?.id]);
+
+  // The front camera has no flash — make sure it's off there.
+  useEffect(() => {
+    if (position === 'front') setFlash('off');
+  }, [position]);
 
   const pinch = Gesture.Pinch()
     .onBegin(() => {
@@ -111,10 +121,16 @@ export function CaptureScreen({ navigation, route }: ScreenProps<'Capture'>) {
 
   const acceptPhoto = useCallback(
     (uri: string) => {
-      setPhoto(slot, { uri });
+      // sink 'custom' → deliver to whoever registered the camera sink (e.g. a
+      // variant card) instead of the mockup capture draft.
+      if (route.params.sink === 'custom') {
+        takeCameraSink()?.(uri);
+      } else {
+        setPhoto(slot, { uri });
+      }
       navigation.goBack();
     },
-    [navigation, setPhoto, slot],
+    [navigation, setPhoto, slot, route.params.sink],
   );
 
   const onShutter = useCallback(async () => {
@@ -235,16 +251,19 @@ export function CaptureScreen({ navigation, route }: ScreenProps<'Capture'>) {
               color={grid ? colors.accentInk : colors.surface}
             />
           </PressableScale>
-          <PressableScale
-            onPress={() => setFlash((f) => (f === 'off' ? 'on' : 'off'))}
-            style={[styles.pill, flash === 'on' && styles.pillActive]}
-          >
-            <Icon
-              name={flash === 'on' ? 'flash' : 'flash-off'}
-              size={20}
-              color={flash === 'on' ? colors.accentInk : colors.surface}
-            />
-          </PressableScale>
+          {/* Flash only on the back camera — the front camera has no flash. */}
+          {position === 'back' ? (
+            <PressableScale
+              onPress={() => setFlash((f) => (f === 'off' ? 'on' : 'off'))}
+              style={[styles.pill, flash === 'on' && styles.pillActive]}
+            >
+              <Icon
+                name={flash === 'on' ? 'flash' : 'flash-off'}
+                size={20}
+                color={flash === 'on' ? colors.accentInk : colors.surface}
+              />
+            </PressableScale>
+          ) : null}
         </View>
       </View>
 

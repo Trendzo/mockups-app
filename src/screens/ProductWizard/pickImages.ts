@@ -17,3 +17,9 @@ export async function pickAndUploadImages(selectionLimit = 0): Promise<string[]>
   }
   return urls;
 }
+
+/** Compress + upload one local photo (e.g. from the in-app camera) → remote URL. */
+export async function uploadLocalImage(uri: string): Promise<string> {
+  const file = await prepareUpload(uri);
+  return uploadImage(file);
+}

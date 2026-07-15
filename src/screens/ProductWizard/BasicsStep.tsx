@@ -193,6 +193,29 @@ export function BasicsStep({ navigation }: ScreenProps<'ProductWizardBasics'>) {
           </View>
         </View>
 
+        {/* Product pricing — variants can override the selling price per colour. */}
+        <View style={styles.priceRow}>
+          <Field
+            containerStyle={styles.flexField}
+            label="MRP"
+            prefix="₹"
+            keyboardType="decimal-pad"
+            value={d.baseMrp}
+            onChangeText={(v) => d.setBasics({ baseMrp: v })}
+            placeholder="Higher"
+          />
+          <Field
+            containerStyle={styles.flexField}
+            label="Selling price"
+            required
+            prefix="₹"
+            keyboardType="decimal-pad"
+            value={d.basePrice}
+            onChangeText={(v) => d.setBasics({ basePrice: v })}
+            placeholder="499"
+          />
+        </View>
+
         {/* Gallery */}
         <View style={styles.block}>
           <AppText variant="sectionLabel" color={colors.meta}>
@@ -253,6 +276,8 @@ export function BasicsStep({ navigation }: ScreenProps<'ProductWizardBasics'>) {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   content: { paddingTop: spacing.md, paddingBottom: spacing.lg, gap: spacing.lg },
+  priceRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start' },
+  flexField: { flex: 1 },
   block: { gap: spacing.sm },
   inlineAction: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginLeft: 2 },
   brandCreate: {

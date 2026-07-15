@@ -1,10 +1,13 @@
 import React, { useMemo, useState } from 'react';
-import { Image, ScrollView, StyleSheet, View } from 'react-native';
+import { Image, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   AppImage,
   AppText,
   BackButton,
   Chip,
+  Icon,
+  PressableScale,
   PrimaryButton,
   Screen,
   SegmentedControl,
@@ -18,13 +21,31 @@ import { useCaptureDraft } from '../store/captureDraft';
 /** Product shots, or on a male / female model. */
 type GenType = 'product' | 'male' | 'female';
 
-// Sample outputs so the retailer sees what each mockup type looks like.
-// Bundled static images (sourced from Unsplash — free to use).
-const EXAMPLES: { label: string; img: ReturnType<typeof require> }[] = [
-  { label: 'Product', img: require('../../assets/examples/product-1.jpg') },
-  { label: 'Male', img: require('../../assets/examples/male-1.jpg') },
-  { label: 'Female', img: require('../../assets/examples/female-1.jpg') },
-];
+// Sample outputs so the retailer sees what the selected mockup type looks like.
+// Bundled static images (sourced from Unsplash — free to use), 3 per type.
+const EXAMPLES: Record<GenType, ReturnType<typeof require>[]> = {
+  product: [
+    require('../../assets/examples/product-1.jpg'),
+    require('../../assets/examples/product-2.jpg'),
+    require('../../assets/examples/product-3.jpg'),
+  ],
+  male: [
+    require('../../assets/examples/male-1.jpg'),
+    require('../../assets/examples/male-2.jpg'),
+    require('../../assets/examples/male-3.jpg'),
+  ],
+  female: [
+    require('../../assets/examples/female-1.jpg'),
+    require('../../assets/examples/female-2.jpg'),
+    require('../../assets/examples/female-3.jpg'),
+  ],
+};
+
+const GEN_TYPE_LABEL: Record<GenType, string> = {
+  product: 'Product',
+  male: 'Male',
+  female: 'Female',
+};
 
 /** Configure generation (§5.4). Reads garment photos + config from the capture
  *  draft, so "Adjust & regenerate" can return here with everything preserved. */
@@ -36,6 +57,8 @@ export function ConfigureScreen({ navigation }: ScreenProps<'Configure'>) {
   const { mode, modelGender, only } = draft.config;
   const setConfig = draft.setConfig;
   const [busy, setBusy] = useState(false);
+  const [preview, setPreview] = useState<ReturnType<typeof require> | null>(null);
+  const insets = useSafeAreaInsets();
 
   const availableViews = useMemo(() => viewsForMode(mode), [mode]);
 
@@ -159,18 +182,18 @@ export function ConfigureScreen({ navigation }: ScreenProps<'Configure'>) {
           </AppText>
         </Section>
 
-        {/* Example results — what each mockup type looks like. */}
-        <Section label="Example results">
+        {/* Example results — 3 samples of the selected mockup type. Tap to view. */}
+        <Section label={`Example results · ${GEN_TYPE_LABEL[genType]}`}>
           <View style={styles.examplesRow}>
-            {EXAMPLES.map((ex) => (
-              <View key={ex.label} style={styles.exampleCard}>
-                <Image source={ex.img} style={styles.exampleImg} resizeMode="cover" />
-                <View style={styles.exampleTag}>
-                  <AppText variant="meta" color={colors.accentInk}>
-                    {ex.label}
-                  </AppText>
-                </View>
-              </View>
+            {EXAMPLES[genType].map((img, i) => (
+              <PressableScale
+                key={`${genType}-${i}`}
+                onPress={() => setPreview(img)}
+                toScale={0.97}
+                style={styles.exampleCard}
+              >
+                <Image source={img} style={styles.exampleImg} resizeMode="contain" />
+              </PressableScale>
             ))}
           </View>
         </Section>
@@ -203,6 +226,18 @@ export function ConfigureScreen({ navigation }: ScreenProps<'Configure'>) {
           onPress={onGenerate}
         />
       </View>
+
+      {/* Full-screen preview of a tapped example image. */}
+      <Modal visible={preview != null} transparent animationType="fade" onRequestClose={() => setPreview(null)}>
+        <Pressable style={styles.previewBackdrop} onPress={() => setPreview(null)}>
+          {preview != null ? (
+            <Image source={preview} style={styles.previewImg} resizeMode="contain" />
+          ) : null}
+          <PressableScale onPress={() => setPreview(null)} style={[styles.previewClose, { top: insets.top + 8 }]}>
+            <Icon name="close" size={24} color={colors.surface} />
+          </PressableScale>
+        </Pressable>
+      </Modal>
     </Screen>
   );
 }
@@ -249,14 +284,22 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   exampleImg: { width: '100%', height: '100%' },
-  exampleTag: {
-    position: 'absolute',
-    left: spacing.xs,
-    bottom: spacing.xs,
-    backgroundColor: colors.accent,
-    borderRadius: radii.pill,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-  },
   footer: { paddingVertical: spacing.md },
+  previewBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  previewImg: { width: '100%', height: '100%' },
+  previewClose: {
+    position: 'absolute',
+    right: spacing.lg,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

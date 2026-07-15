@@ -7,7 +7,9 @@ import {
   Banner,
   BackButton,
   BottomSheet,
+  GenerateMockupCards,
   Icon,
+  ImageViewer,
   PressableScale,
   PrimaryButton,
   Screen,
@@ -22,6 +24,7 @@ import { useProductDraft } from '../store/productDraft';
 import { useAuth } from '../store/auth';
 import { canWriteCatalog, Variant } from '../types/catalog';
 import { formatPaise } from '../utils/money';
+import { shareRemoteImage } from '../utils/gallery';
 import { colors, radii, spacing } from '../theme/theme';
 
 const GENDER_LABEL: Record<string, string> = { her: 'Women', him: 'Men', unisex: 'Unisex' };
@@ -41,6 +44,7 @@ export function ProductDetailScreen({ navigation, route }: ScreenProps<'ProductD
 
   const [busy, setBusy] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['listing', id] });
@@ -106,7 +110,14 @@ export function ProductDetailScreen({ navigation, route }: ScreenProps<'ProductD
         {gallery.length ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.gallery}>
             {gallery.map((url, i) => (
-              <AppImage key={`${url}-${i}`} uri={url} radius={radii.card} containerStyle={styles.galleryImg} />
+              <PressableScale
+                key={`${url}-${i}`}
+                onPress={() => setViewerIndex(i)}
+                toScale={0.98}
+                style={styles.galleryImg}
+              >
+                <AppImage uri={url} radius={radii.card} containerStyle={styles.galleryFill} />
+              </PressableScale>
             ))}
           </ScrollView>
         ) : null}
@@ -173,6 +184,28 @@ export function ProductDetailScreen({ navigation, route }: ScreenProps<'ProductD
             ))
           )}
         </View>
+
+        {/* AI image generation — results are appended to the product gallery */}
+        {canWrite ? (
+          <View style={styles.section}>
+            <AppText variant="sectionLabel" color={colors.meta}>
+              Generate images
+            </AppText>
+            <GenerateMockupCards
+              apparelUrl={gallery[0]}
+              modelGender={listing.gender === 'him' ? 'him' : 'her'}
+              onGenerated={async (urls) => {
+                try {
+                  await updateListing(id, { galleryUrls: [...gallery, ...urls] });
+                  toast.show('Added to product gallery', 'success');
+                  refresh();
+                } catch (e: any) {
+                  toast.show(e?.message ?? 'Could not save images', 'error');
+                }
+              }}
+            />
+          </View>
+        ) : null}
       </ScrollView>
 
       {canWrite ? (
@@ -226,6 +259,14 @@ export function ProductDetailScreen({ navigation, route }: ScreenProps<'ProductD
           <PrimaryButton label="Cancel" tone="surface" onPress={() => setMoreOpen(false)} />
         </View>
       </BottomSheet>
+
+      <ImageViewer
+        visible={viewerIndex != null}
+        images={gallery.map((url) => ({ url }))}
+        initialIndex={viewerIndex ?? 0}
+        onClose={() => setViewerIndex(null)}
+        onShare={(i) => shareRemoteImage(gallery[i]).catch(() => {})}
+      />
     </Screen>
   );
 }
@@ -306,6 +347,7 @@ const styles = StyleSheet.create({
   loader: { marginTop: spacing.xl },
   gallery: { marginTop: spacing.xs },
   galleryImg: { width: 150, height: 190, marginRight: spacing.sm },
+  galleryFill: { width: '100%', height: '100%' },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   h1: { flex: 1, fontSize: 24, lineHeight: 28 },
   card: {

@@ -18,6 +18,8 @@ interface FieldProps extends TextInputProps {
   error?: string | null;
   prefix?: string;
   containerStyle?: StyleProp<ViewStyle>;
+  /** Visible hairline border — for inputs sitting on a white card. */
+  boxed?: boolean;
 }
 
 /** Labeled text input with inline error (used across Publish). */
@@ -27,6 +29,7 @@ export function Field({
   error,
   prefix,
   containerStyle,
+  boxed,
   secureTextEntry,
   ...inputProps
 }: FieldProps) {
@@ -42,7 +45,14 @@ export function Field({
         {label}
         {required ? ' *' : ''}
       </AppText>
-      <View style={[styles.inputRow, locked ? styles.inputLocked : null, error ? styles.inputError : null]}>
+      <View
+        style={[
+          styles.inputRow,
+          boxed ? styles.inputBoxed : null,
+          locked ? styles.inputLocked : null,
+          error ? styles.inputError : null,
+        ]}
+      >
         {prefix ? (
           <AppText variant="bodyMedium" color={locked ? colors.meta : colors.ink} style={styles.prefix}>
             {prefix}
@@ -93,6 +103,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
   inputError: { borderColor: colors.danger },
+  inputBoxed: { borderColor: colors.hairline },
   inputLocked: { backgroundColor: colors.canvas, borderColor: colors.hairline },
   inputLockedText: { color: colors.meta },
   prefix: { marginRight: 4 },

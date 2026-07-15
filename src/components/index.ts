@@ -37,5 +37,6 @@ export { SegmentedControl } from './SegmentedControl';
 export type { SegmentOption } from './SegmentedControl';
 export { Skeleton, SkeletonCard } from './SkeletonCard';
 export { StatusTicker } from './StatusTicker';
+export { GenerateMockupCards } from './GenerateMockupCards';
 export { ToastProvider, useToast } from './Toast';
 export { TwoCardGrid } from './TwoCardGrid';

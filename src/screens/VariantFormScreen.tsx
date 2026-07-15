@@ -2,9 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import {
+  AppImage,
   AppText,
   BackButton,
   Field,
+  GenerateMockupCards,
   KeyboardStickyView,
   PrimaryButton,
   Screen,
@@ -21,7 +23,7 @@ import {
   setDefaultVariant,
 } from '../api/catalogManagement';
 import { paiseToRupeeInput, parseRupeesToPaise } from '../utils/money';
-import { colors, spacing } from '../theme/theme';
+import { colors, radii, spacing } from '../theme/theme';
 
 export function VariantFormScreen({ navigation, route }: ScreenProps<'VariantForm'>) {
   const { listingId, variantId, mode } = route.params;
@@ -41,6 +43,12 @@ export function VariantFormScreen({ navigation, route }: ScreenProps<'VariantFor
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [seeded, setSeeded] = useState(false);
+  // AI-generated variant images, attached to the variant on save.
+  const [genUrls, setGenUrls] = useState<string[]>([]);
+
+  // Source photo for generation: the listing's first gallery image.
+  const apparelUrl = listingQ.data?.galleryUrls?.[0];
+  const modelGender = listingQ.data?.gender === 'him' ? 'him' : 'her';
 
   useEffect(() => {
     if (!isEdit || seeded || !existing) return;
@@ -82,6 +90,10 @@ export function VariantFormScreen({ navigation, route }: ScreenProps<'VariantFor
     const compareAtPrice = compareAt.trim() ? parseRupeesToPaise(compareAt) : null;
     const stockN = Number(stock);
     const skuVal = sku.trim() || undefined;
+    // Attach freshly generated images (kept alongside any existing ones).
+    const imageUrls = genUrls.length
+      ? [...(existing?.imageUrls ?? []), ...genUrls]
+      : undefined;
     setBusy(true);
     try {
       if (isEdit) {
@@ -91,6 +103,7 @@ export function VariantFormScreen({ navigation, route }: ScreenProps<'VariantFor
           stock: stockN,
           sku: sku.trim() ? sku.trim() : null,
           isActive: active,
+          ...(imageUrls ? { imageUrls } : {}),
         });
       } else if (mode === 'single') {
         await setDefaultVariant(listingId, {
@@ -98,6 +111,7 @@ export function VariantFormScreen({ navigation, route }: ScreenProps<'VariantFor
           pricePaise,
           compareAtPrice,
           stock: stockN,
+          imageUrls,
         });
       } else if (mode === 'color_size') {
         const groupId =
@@ -110,6 +124,7 @@ export function VariantFormScreen({ navigation, route }: ScreenProps<'VariantFor
           pricePaise,
           compareAtPrice,
           stock: stockN,
+          imageUrls,
         });
       } else {
         await createCustomVariant(listingId, {
@@ -119,6 +134,7 @@ export function VariantFormScreen({ navigation, route }: ScreenProps<'VariantFor
           pricePaise,
           compareAtPrice,
           stock: stockN,
+          imageUrls,
         });
       }
       toast.show(isEdit ? 'Variant updated' : 'Variant added', 'success');
@@ -194,6 +210,30 @@ export function VariantFormScreen({ navigation, route }: ScreenProps<'VariantFor
           </View>
         ) : null}
 
+        {/* AI image generation — product / on-model shots for this variant */}
+        <View style={styles.block}>
+          <AppText variant="sectionLabel" color={colors.meta}>Generate images</AppText>
+          <GenerateMockupCards
+            apparelUrl={apparelUrl}
+            modelGender={modelGender}
+            onGenerated={(urls) => setGenUrls((prev) => [...prev, ...urls])}
+          />
+          {genUrls.length ? (
+            <>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={styles.genThumbs}>
+                  {genUrls.map((url) => (
+                    <AppImage key={url} uri={url} radius={radii.sm + 4} containerStyle={styles.genThumb} />
+                  ))}
+                </View>
+              </ScrollView>
+              <AppText variant="meta" color={colors.meta}>
+                {genUrls.length} generated image{genUrls.length > 1 ? 's' : ''} — attached on save.
+              </AppText>
+            </>
+          ) : null}
+        </View>
+
         {isEdit ? (
           <PrimaryButton label="Delete variant" tone="ghost" loading={busy} onPress={onDelete} />
         ) : null}
@@ -217,6 +257,8 @@ const styles = StyleSheet.create({
   h1: { fontSize: 24, lineHeight: 28 },
   block: { gap: spacing.sm },
   priceRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start' },
+  genThumbs: { flexDirection: 'row', gap: spacing.sm },
+  genThumb: { width: 72, height: 96 },
   footer: {
     paddingTop: spacing.md,
     borderTopWidth: 1,

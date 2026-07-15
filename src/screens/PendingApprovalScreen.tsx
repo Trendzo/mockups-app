@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { Linking, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Linking, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { launchImageLibrary } from 'react-native-image-picker';
 import { useQuery } from '@tanstack/react-query';
 import {
   AppText,
   Banner,
   Icon,
+  KeyboardStickyView,
   PressableScale,
   PrimaryButton,
   Screen,
@@ -12,9 +14,10 @@ import {
 } from '../components';
 import { ScreenProps } from '../navigation/types';
 import { useRetailerMe } from '../api/onboardingHooks';
-import { getAccountAppeal, postAccountAppeal, requestAccountReopen, type AppealMessage } from '../api/onboarding';
+import { getAccountAppeal, postAccountAppeal, requestAccountReopen, uploadDocument, type AppealMessage } from '../api/onboarding';
 import { useAuth } from '../store/auth';
-import { colors, radii, spacing } from '../theme/theme';
+import { inferMimeType } from '../utils/image';
+import { colors, radii, spacing, type as typeScale } from '../theme/theme';
 
 /**
  * Post-login gate for retailers whose account/store isn't ready yet
@@ -44,13 +47,31 @@ export function PendingApprovalScreen({ navigation }: ScreenProps<'PendingApprov
     refetchInterval: showAppeal ? 25_000 : false,
   });
   const [appealText, setAppealText] = useState('');
+  const [attachments, setAttachments] = useState<string[]>([]);
   const [appealing, setAppealing] = useState(false);
+
+  const attachToAppeal = async () => {
+    const res = await launchImageLibrary({ mediaType: 'photo', selectionLimit: 1, quality: 0.9, maxWidth: 2400, maxHeight: 2400 });
+    const asset = res.assets?.[0];
+    if (!asset?.uri) return;
+    try {
+      const up = await uploadDocument({ uri: asset.uri, name: asset.fileName ?? `att_${Date.now()}.jpg`, type: asset.type ?? inferMimeType(asset.uri) });
+      setAttachments((p) => [...p, up.url]);
+    } catch (e: any) {
+      toast.show(e?.message ?? 'Upload failed', 'error');
+    }
+  };
+
   const sendAppeal = async () => {
-    if (!appealText.trim() || appealing) return;
+    if ((!appealText.trim() && attachments.length === 0) || appealing) return;
     setAppealing(true);
     try {
-      await postAccountAppeal({ body: appealText.trim() });
+      await postAccountAppeal({
+        body: appealText.trim() || '(see attachment)',
+        attachmentUrls: attachments,
+      });
       setAppealText('');
+      setAttachments([]);
       await appealQ.refetch();
       toast.show('Appeal sent to ClosetX', 'info');
     } catch (e: any) {
@@ -114,6 +135,99 @@ export function PendingApprovalScreen({ navigation }: ScreenProps<'PendingApprov
     };
   })();
 
+  // Suspended / terminated / closed → the same status-and-messages layout as
+  // the post-onboarding ApplicationStatusScreen, with the appeal thread as the
+  // conversation. Fully replaces the old pending-gate look for these states.
+  if (showAppeal) {
+    return (
+      <Screen edges={['top', 'bottom']}>
+        <ScrollView
+          style={styles.flex}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+          contentContainerStyle={styles.statusContent}
+          refreshControl={
+            <RefreshControl refreshing={me.isFetching} onRefresh={() => me.refetch()} />
+          }
+        >
+          <View style={styles.header}>
+            <AppText variant="sectionLabel" color={colors.meta}>
+              {me.data?.retailer.legalName ?? 'Trendzo Studio'}
+            </AppText>
+            <AppText variant="cardTitle" color={colors.ink} style={styles.statusH1}>
+              Account status
+            </AppText>
+          </View>
+
+          <Banner tone={banner.tone} title={banner.title} message={banner.message} />
+
+          <View style={styles.thread}>
+            <AppText variant="sectionLabel" color={colors.meta}>Messages</AppText>
+            {(appealQ.data?.messages ?? []).length > 0 ? (
+              (appealQ.data?.messages ?? []).map((m: AppealMessage) => {
+                const mine = m.authorKind !== 'admin' && m.authorKind !== 'system';
+                return (
+                  <View key={m.id} style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleThem]}>
+                    <AppText variant="meta" color={mine ? colors.onDarkMuted : colors.meta}>
+                      {m.authorKind === 'admin' ? 'ClosetX admin' : m.authorKind === 'system' ? 'System' : 'You'}
+                    </AppText>
+                    <AppText variant="body" color={mine ? colors.accentInk : colors.ink}>{m.body}</AppText>
+                    {m.attachments?.map((url, i) => (
+                      <PressableScale key={url} onPress={() => Linking.openURL(url).catch(() => {})}>
+                        <AppText variant="meta" color={mine ? colors.onDarkMuted : colors.ink} style={styles.attLink}>📎 Attachment {i + 1}</AppText>
+                      </PressableScale>
+                    ))}
+                  </View>
+                );
+              })
+            ) : (
+              <AppText variant="meta" color={colors.meta}>No messages yet.</AppText>
+            )}
+          </View>
+        </ScrollView>
+
+        <KeyboardStickyView style={styles.composer} minBottom={spacing.sm}>
+          {attachments.length > 0 ? (
+            <AppText variant="meta" color={colors.meta} style={styles.attachNote}>
+              {attachments.length} attachment{attachments.length > 1 ? 's' : ''} ready
+            </AppText>
+          ) : null}
+          <View style={styles.composerRow}>
+            <PressableScale onPress={attachToAppeal} style={styles.attachBtn} toScale={0.9}>
+              <Icon name="attach" size={22} color={colors.ink} />
+            </PressableScale>
+            <TextInput
+              value={appealText}
+              onChangeText={setAppealText}
+              placeholder="Write your appeal…"
+              placeholderTextColor={colors.inkMuted}
+              multiline
+              style={styles.input}
+            />
+            <PressableScale onPress={sendAppeal} disabled={appealing} style={styles.sendBtn} toScale={0.9}>
+              {appealing ? <ActivityIndicator color={colors.accentInk} /> : <Icon name="arrow-up" size={20} color={colors.accentInk} />}
+            </PressableScale>
+          </View>
+        </KeyboardStickyView>
+
+        <View style={styles.footer}>
+          {isClosed && canManageAccount ? (
+            <PrimaryButton
+              label={reopenPending ? 'Reopen requested — pending review' : 'Request to reopen'}
+              tone="accent"
+              loading={reopening}
+              disabled={reopenPending || reopening}
+              onPress={onReopen}
+            />
+          ) : null}
+          <PrimaryButton label="Log out" tone="ghost" onPress={logout} />
+        </View>
+      </Screen>
+    );
+  }
+
+  // Pending approval / store paused — the original waiting gate.
   return (
     <Screen edges={['top', 'bottom']}>
       <ScrollView
@@ -129,7 +243,7 @@ export function PendingApprovalScreen({ navigation }: ScreenProps<'PendingApprov
           Trendzo Studio
         </AppText>
         <AppText variant="cardTitle" color={colors.ink} style={styles.h1}>
-          {isClosed ? 'Account closed' : 'Almost there'}
+          Almost there
         </AppText>
 
         <Banner tone={banner.tone} title={banner.title} message={banner.message} />
@@ -142,68 +256,18 @@ export function PendingApprovalScreen({ navigation }: ScreenProps<'PendingApprov
           </View>
         ) : null}
 
-        {showAppeal ? (
-          <View style={styles.appealCard}>
-            <AppText variant="sectionLabel" color={colors.meta}>Appeal this decision</AppText>
-            <AppText variant="meta" color={colors.meta}>
-              Message the ClosetX team to contest the {status === 'terminated' ? 'termination' : 'suspension'}. They'll reply here.
-            </AppText>
-            {(appealQ.data?.messages ?? []).map((m: AppealMessage) => {
-              const mine = m.authorKind !== 'admin' && m.authorKind !== 'system';
-              return (
-                <View key={m.id} style={[styles.appealBubble, mine ? styles.bubbleMine : styles.bubbleThem]}>
-                  <AppText variant="meta" color={mine ? colors.onDarkMuted : colors.meta}>
-                    {m.authorKind === 'admin' ? 'ClosetX admin' : m.authorKind === 'system' ? 'System' : 'You'}
-                  </AppText>
-                  <AppText variant="body" color={mine ? colors.accentInk : colors.ink}>{m.body}</AppText>
-                  {m.attachments?.map((url, i) => (
-                    <PressableScale key={url} onPress={() => Linking.openURL(url).catch(() => {})}>
-                      <AppText variant="meta" color={mine ? colors.onDarkMuted : colors.ink} style={styles.attLink}>📎 Attachment {i + 1}</AppText>
-                    </PressableScale>
-                  ))}
-                </View>
-              );
-            })}
-            <View style={styles.appealRow}>
-              <TextInput
-                value={appealText}
-                onChangeText={setAppealText}
-                placeholder="Write your appeal…"
-                placeholderTextColor={colors.inkMuted}
-                multiline
-                style={styles.appealInput}
-              />
-              <PrimaryButton label={appealing ? '…' : 'Send'} tone="accent" disabled={appealing || !appealText.trim()} onPress={sendAppeal} />
-            </View>
-          </View>
-        ) : null}
-
         <AppText variant="meta" color={colors.meta} style={styles.hint}>
-          {isClosed && !reopenPending
-            ? canManageAccount
-              ? 'Ready to come back? Request to reopen below.'
-              : 'Ask the account owner to reopen this account.'
-            : 'Pull to refresh, or check back later.'}
+          Pull to refresh, or check back later.
         </AppText>
       </ScrollView>
 
       <View style={styles.footer}>
-        {isClosed && canManageAccount ? (
-          <PrimaryButton
-            label={reopenPending ? 'Reopen requested — pending review' : 'Request to reopen'}
-            tone="accent"
-            loading={reopening}
-            disabled={reopenPending || reopening}
-            onPress={onReopen}
-          />
-        ) : (
-          <PrimaryButton
-            label="Refresh"
-            tone="accent"
-            loading={me.isFetching}
-            onPress={() => me.refetch()}
-          />
-        )}
+        <PrimaryButton
+          label="Refresh"
+          tone="accent"
+          loading={me.isFetching}
+          onPress={() => me.refetch()}
+        />
         <PrimaryButton label="Log out" tone="ghost" onPress={logout} />
       </View>
     </Screen>
@@ -224,7 +288,12 @@ function Row({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
   content: { paddingTop: spacing.xl, paddingBottom: spacing.xl, gap: spacing.md },
+  // Status-and-messages layout (suspended/terminated/closed).
+  statusContent: { paddingTop: spacing.md, paddingBottom: spacing.xl, gap: spacing.md },
+  header: { gap: spacing.xs },
+  statusH1: { fontSize: 24, lineHeight: 28 },
   badge: {
     width: 56,
     height: 56,
@@ -244,22 +313,26 @@ const styles = StyleSheet.create({
   rowValue: { flexShrink: 1, textAlign: 'right', textTransform: 'capitalize' },
   hint: { textAlign: 'center' },
   footer: { gap: spacing.sm, paddingVertical: spacing.md },
-  appealCard: { backgroundColor: colors.surface, borderRadius: 18, padding: spacing.lg, gap: spacing.sm },
-  appealBubble: { borderRadius: radii.card, padding: spacing.sm, gap: 2, maxWidth: '90%' },
+  // Appeal thread + composer — mirrors ApplicationStatusScreen's chat styles.
+  thread: { gap: spacing.sm },
+  bubble: { maxWidth: '85%', borderRadius: radii.card, padding: spacing.md, gap: 2 },
   bubbleMine: { backgroundColor: colors.ink, alignSelf: 'flex-end' },
-  bubbleThem: { backgroundColor: colors.canvas, alignSelf: 'flex-start', borderWidth: 1, borderColor: colors.hairline },
-  appealRow: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm, marginTop: spacing.xs },
-  appealInput: {
+  bubbleThem: { backgroundColor: colors.surface, alignSelf: 'flex-start' },
+  composer: { borderTopWidth: 1, borderTopColor: colors.hairline, paddingVertical: spacing.sm },
+  attachNote: { marginBottom: spacing.xs },
+  composerRow: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm },
+  attachBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+  input: {
     flex: 1,
-    minHeight: 44,
-    maxHeight: 120,
-    backgroundColor: colors.canvas,
+    maxHeight: 100,
+    backgroundColor: colors.surface,
     borderRadius: radii.card,
-    borderWidth: 1,
-    borderColor: colors.hairline,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     color: colors.ink,
+    fontFamily: typeScale.body.fontFamily,
+    fontSize: typeScale.body.fontSize,
   },
+  sendBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
   attLink: { textDecorationLine: 'underline' },
 });

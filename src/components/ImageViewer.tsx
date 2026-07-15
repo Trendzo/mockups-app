@@ -93,40 +93,37 @@ export function ImageViewer({
           viewabilityConfig={viewConfigRef.current}
         />
 
-        {/* Top bar: close + view name + counter */}
+        {/* Top bar: close + counter + share — each on a dark scrim so they stay
+            readable over light images. */}
         <View style={[styles.topBar, { top: insets.top + 8 }]}>
-          <PressableScale onPress={onClose} style={styles.closeBtn}>
-            <Icon name="close" size={26} color={colors.surface} />
+          <PressableScale onPress={onClose} style={styles.iconBtn}>
+            <Icon name="close" size={24} color={colors.surface} />
           </PressableScale>
-          {/* Just the position counter, centered — no raw file/view code. */}
-          <AppText
-            variant="bodyMedium"
-            color={colors.surface}
-            numberOfLines={1}
-            style={styles.title}
-          >
-            {index + 1}/{images.length}
-          </AppText>
-          <View style={styles.closeBtn} />
+          <View style={styles.counterPill}>
+            <AppText variant="meta" color={colors.surface} numberOfLines={1}>
+              {index + 1}/{images.length}
+            </AppText>
+          </View>
+          {/* Share — top-right, icon only. */}
+          {onShare ? (
+            <PressableScale onPress={() => onShare(index)} style={styles.iconBtn}>
+              <Icon name="share-outline" size={22} color={colors.surface} />
+            </PressableScale>
+          ) : (
+            <View style={styles.iconBtn} />
+          )}
         </View>
 
         {/* Bottom actions */}
-        <View style={[styles.actions, { bottom: insets.bottom + 16 }]}>
-          {onSave && (
+        {onSave ? (
+          <View style={[styles.actions, { bottom: insets.bottom + 16 }]}>
             <PressableScale onPress={() => onSave(index)} style={styles.actionBtn}>
               <AppText variant="button" color={colors.ink}>
                 Save
               </AppText>
             </PressableScale>
-          )}
-          {onShare && (
-            <PressableScale onPress={() => onShare(index)} style={styles.actionBtnOutline}>
-              <AppText variant="button" color={colors.surface}>
-                Share
-              </AppText>
-            </PressableScale>
-          )}
-        </View>
+          </View>
+        ) : null}
       </View>
     </Modal>
   );
@@ -274,12 +271,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  title: {
-    flex: 1,
-    textAlign: 'center',
-    marginHorizontal: spacing.sm,
+  counterPill: {
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    borderRadius: 999,
+    paddingHorizontal: spacing.md,
+    height: 28,
+    minWidth: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  closeBtn: { width: 32, alignItems: 'center' },
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   actions: {
     position: 'absolute',
     left: spacing.lg,
@@ -290,13 +298,6 @@ const styles = StyleSheet.create({
   },
   actionBtn: {
     backgroundColor: colors.surface,
-    borderRadius: 999,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.sm + 2,
-  },
-  actionBtnOutline: {
-    borderColor: colors.surface,
-    borderWidth: 1.5,
     borderRadius: 999,
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.sm + 2,

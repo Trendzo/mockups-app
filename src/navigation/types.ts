@@ -37,7 +37,9 @@ export type RootStackParamList = {
 
   // Catalog flow: photo picker (front + optional back/close-ups) → configure
   SelectPhotos: undefined;
-  Capture: { slot: 'front' | 'back' | 'pattern' | 'logo' | 'tag' };
+  // sink 'custom' delivers the shot to a registered cameraSink handler (e.g.
+  // variant photos) instead of the mockup capture draft.
+  Capture: { slot: 'front' | 'back' | 'pattern' | 'logo' | 'tag'; sink?: 'custom' };
   Configure: undefined; // images read from the capture-draft store
   Generating: {
     apparel: UploadFile;

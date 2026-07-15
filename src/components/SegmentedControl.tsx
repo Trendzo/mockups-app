@@ -13,6 +13,8 @@ interface SegmentedControlProps<T extends string> {
   options: SegmentOption<T>[];
   value: T;
   onChange: (value: T) => void;
+  /** Slimmer track for dense screens (smaller vertical padding). */
+  compact?: boolean;
 }
 
 /** Two/three-way selector (e.g. Product views vs On-model). Yellow marks active. */
@@ -20,6 +22,7 @@ export function SegmentedControl<T extends string>({
   options,
   value,
   onChange,
+  compact = false,
 }: SegmentedControlProps<T>) {
   return (
     <View style={styles.track}>
@@ -30,7 +33,7 @@ export function SegmentedControl<T extends string>({
             key={opt.value}
             onPress={() => onChange(opt.value)}
             toScale={0.97}
-            style={[styles.segment, active && styles.segmentActive]}
+            style={[styles.segment, compact && styles.segmentCompact, active && styles.segmentActive]}
           >
             <AppText
               variant="bodyMedium"
@@ -60,6 +63,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md - 2,
     borderRadius: radii.pill,
   },
+  segmentCompact: { paddingVertical: spacing.xs + 2 },
   segmentActive: {
     backgroundColor: colors.accent,
   },

@@ -12,8 +12,8 @@ const SHORT = ['Basics', 'Variants', 'Details', 'Review'];
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 /**
- * Shared wizard header: back control + a tappable 4-step bar (jump to any step
- * freely) + step title. Owns navigation so each step can jump without a prop.
+ * Shared wizard header: nav-bar row (back button + step heading centred on the
+ * same line) over a slim tappable 4-step bar (jump to any step freely).
  */
 export function WizardHeader({
   step,
@@ -41,8 +41,22 @@ export function WizardHeader({
 
   return (
     <View style={styles.wrap}>
-      <BackButton onPress={onBack} />
-      {/* Tappable step tabs — styled as buttons so it's clear you can switch. */}
+      {/* Nav-bar row: back on the left, heading dead-centre. */}
+      <View style={styles.topRow}>
+        <BackButton onPress={onBack} />
+        <AppText
+          variant="bodyMedium"
+          color={colors.ink}
+          numberOfLines={1}
+          style={styles.topTitle}
+        >
+          {TITLES[step - 1]}
+        </AppText>
+        {/* Same footprint as the back button so the title stays centred. */}
+        <View style={styles.spacer} />
+      </View>
+
+      {/* Slim step tabs — tap to jump. */}
       <View style={styles.tabs}>
         {([1, 2, 3, 4] as const).map((i) => {
           const current = i === step;
@@ -66,31 +80,29 @@ export function WizardHeader({
           );
         })}
       </View>
-      <AppText variant="cardTitle" color={colors.ink} style={styles.title}>
-        {TITLES[step - 1]}
-      </AppText>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: { gap: spacing.sm },
+  topRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  topTitle: { flex: 1, textAlign: 'center', fontSize: 17 },
+  spacer: { width: 40, height: 40 },
   tabs: {
     flexDirection: 'row',
-    gap: 6,
-    marginTop: spacing.xs,
+    gap: 4,
     backgroundColor: colors.surface,
     borderRadius: radii.pill,
-    padding: 4,
+    padding: 3,
   },
   tab: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.xs + 2,
     borderRadius: radii.pill,
   },
   tabOn: { backgroundColor: colors.accent },
   tabLabel: { textAlign: 'center' },
-  title: { fontSize: 24, lineHeight: 28 },
 });

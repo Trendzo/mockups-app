@@ -1,8 +1,31 @@
 import { isMock, postJson, unwrapEnvelope } from './client';
 import { CreateMockupsInput, MockupsResult, NamedImage } from '../types/api';
-import { Mode } from '../types/enums';
+import { Mode, ModelGender } from '../types/enums';
 import { uploadImage } from './catalog';
 import { mockMockups } from './mock';
+
+/**
+ * Same POST /retailer/ai-catalog-beta/mockups, but from an already-hosted
+ * apparel URL (e.g. a listing gallery photo) — no re-upload. Used by the
+ * variant screen's "generate images" cards.
+ */
+export async function createMockupsFromUrl(
+  apparelUrl: string,
+  mode: Mode,
+  modelGender?: ModelGender,
+): Promise<NamedImage[]> {
+  if (isMock()) {
+    const r = await mockMockups({ apparel: { uri: apparelUrl } } as CreateMockupsInput);
+    return mode === Mode.WithModel ? r.model : r.product;
+  }
+  const body: Record<string, unknown> = {
+    mode,
+    apparelImageUrls: [apparelUrl],
+  };
+  if (mode === Mode.WithModel && modelGender) body.modelGender = modelGender;
+  const res = await postJson<unknown>('/retailer/ai-catalog-beta/mockups', body);
+  return unwrapEnvelope<{ printed: string | null; images: NamedImage[] }>(res).images;
+}
 
 /**
  * POST /retailer/ai-catalog-beta/mockups (closetx). Stateless — no DB row.

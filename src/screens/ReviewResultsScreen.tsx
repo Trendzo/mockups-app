@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   AppText,
@@ -76,6 +76,32 @@ export function ReviewResultsScreen({
   const canDecide = submission.status === SubmissionStatus.ReadyForReview;
   const canApprove = canDecide && chosen.length > 0;
 
+  // Guard against losing the generated mockups by going back (swipe or button).
+  // Intentional exits (approve/reject/regenerate) set leavingRef to skip the prompt.
+  const leavingRef = useRef(false);
+  useEffect(() => {
+    const unsub = navigation.addListener('beforeRemove', (e) => {
+      if (leavingRef.current || !canDecide) return;
+      e.preventDefault();
+      Alert.alert(
+        'Discard these mockups?',
+        'If you go back now, the generated images will be lost.',
+        [
+          { text: 'Stay', style: 'cancel' },
+          {
+            text: 'Go back & discard',
+            style: 'destructive',
+            onPress: () => {
+              leavingRef.current = true;
+              navigation.dispatch(e.data.action);
+            },
+          },
+        ],
+      );
+    });
+    return unsub;
+  }, [navigation, canDecide]);
+
   const onShare = async (index: number) => {
     const url = orderedItems[index]?.url;
     if (!url) return;
@@ -109,6 +135,7 @@ export function ReviewResultsScreen({
             draft.addGalleryUrls(urls);
           }
           toast.show(`${urls.length} image${urls.length === 1 ? '' : 's'} added — add product details`, 'success');
+          leavingRef.current = true;
           navigation.navigate('ProductWizardBasics');
         },
         onError: (e) => toast.show(e.error, 'error'),
@@ -128,6 +155,7 @@ export function ReviewResultsScreen({
         onSuccess: (res) => {
           setStatus(submission.id, res.status);
           toast.show('Rejected — capture a new shot', 'info');
+          leavingRef.current = true;
           navigation.popToTop();
         },
         onError: (e) => {
@@ -191,7 +219,10 @@ export function ReviewResultsScreen({
               style={styles.flex}
               disabled={decide.isPending}
               // Keep the garment photos + prior settings; go tweak and re-run.
-              onPress={() => navigation.navigate('Configure')}
+              onPress={() => {
+                leavingRef.current = true;
+                navigation.navigate('Configure');
+              }}
             />
           ) : (
             <PrimaryButton
@@ -199,6 +230,7 @@ export function ReviewResultsScreen({
               tone="surface"
               style={styles.flex}
               onPress={() => {
+                leavingRef.current = true;
                 clearDraft();
                 navigation.navigate('SelectPhotos');
               }}

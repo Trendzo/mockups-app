@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { Listing, ListingPolicy, VariantGroup } from '../types/catalog';
 import { paiseToRupeeInput } from '../utils/money';
+import { SizeKind } from '../screens/ProductWizard/sizeKinds';
 
 /**
  * In-progress product draft for the unified creation/edit wizard. Session-only
@@ -52,6 +53,9 @@ interface ProductDraftState {
   editingListingId?: string;
   /** Status of the product being edited (drives the Review buttons). */
   editingStatus?: Listing['status'];
+  /** The listing's variant mode when editing began — a switch means the old
+   *  mode's variants get replaced (deleted) on commit. */
+  editingVariantMode?: WizardVariantMode;
   /** True while the user has detoured into the mockup generator from the wizard. */
   pendingMockup: boolean;
 
@@ -61,9 +65,16 @@ interface ProductDraftState {
   categoryId: string | null;
   genders: Array<'her' | 'him'>; // both = unisex
   gallery: string[]; // ordered remote URLs, index 0 = primary
+  // Product pricing (captured in Basics). Variants may override the selling
+  // price per colour; MRP always comes from here.
+  basePrice: string; // rupee input
+  baseMrp: string; // compare-at, rupee input
 
   // Step 2 — Variants
   variantMode: WizardVariantMode;
+  // Size system for variants (null = auto-infer from the category). Lets
+  // accessories (rings/chains/shoes) use their own size scale, not S/M/L.
+  sizeKind: SizeKind | null;
   single: SingleVariantDraft;
   colors: ColorDraft[];
 
@@ -85,7 +96,11 @@ interface ProductDraftState {
   setPendingMockup: (b: boolean) => void;
 
   // ---- step 1 ----
-  setBasics: (patch: Partial<Pick<ProductDraftState, 'name' | 'brandId' | 'categoryId'>>) => void;
+  setBasics: (
+    patch: Partial<
+      Pick<ProductDraftState, 'name' | 'brandId' | 'categoryId' | 'basePrice' | 'baseMrp'>
+    >,
+  ) => void;
   toggleGender: (g: 'her' | 'him') => void;
   addGalleryUrls: (urls: string[]) => void;
   removeGallery: (i: number) => void;
@@ -95,6 +110,7 @@ interface ProductDraftState {
 
   // ---- step 2 ----
   setVariantMode: (m: WizardVariantMode) => void;
+  setSizeKind: (k: SizeKind | null) => void;
   setSingle: (patch: Partial<SingleVariantDraft>) => void;
   addColor: () => void;
   removeColor: (colorId: string) => void;
@@ -102,6 +118,14 @@ interface ProductDraftState {
   addSizeRow: (colorId: string) => void;
   removeSizeRow: (colorId: string, rowId: string) => void;
   updateSizeRow: (colorId: string, rowId: string, patch: Partial<SizeRow>) => void;
+  /** Reconcile a color's sizes to exactly `labels` (keep existing, add new at base). */
+  setColorSizes: (
+    colorId: string,
+    labels: string[],
+    base: { price: string; mrp: string },
+  ) => void;
+  /** Apply one price + MRP to every size of a color. */
+  setColorPricing: (colorId: string, price: { price: string; mrp: string }) => void;
   generateMatrix: (input: {
     colors: Array<{ name: string; colorHex?: string }>;
     sizes: string[];
@@ -156,13 +180,17 @@ const emptyState = () => ({
   mode: 'create' as WizardMode,
   editingListingId: undefined,
   editingStatus: undefined,
+  editingVariantMode: undefined as WizardVariantMode | undefined,
   pendingMockup: false,
   name: '',
   brandId: null,
   categoryId: null,
   genders: [] as Array<'her' | 'him'>,
   gallery: [] as string[],
+  basePrice: '',
+  baseMrp: '',
   variantMode: 'single' as WizardVariantMode,
+  sizeKind: null as SizeKind | null,
   single: emptySingle(),
   colors: [emptyColor()],
   description: '',
@@ -228,16 +256,22 @@ function seedFromListing(listing: Listing): Partial<ProductDraftState> {
     if (!colors.length) colors = [emptyColor()];
   }
 
+  // Product-level pricing seeds from the first variant (MRP always lives there).
+  const v0 = variants[0];
+
   return {
     mode: 'edit',
     editingListingId: listing.id,
     editingStatus: listing.status,
+    editingVariantMode: variantMode,
     pendingMockup: false,
     name: listing.name,
     brandId: listing.brandId ?? null,
     categoryId: listing.categoryId,
     genders,
     gallery: listing.galleryUrls ?? [],
+    basePrice: v0 ? paiseToRupeeInput(v0.pricePaise) : '',
+    baseMrp: v0 ? paiseToRupeeInput(v0.compareAtPrice ?? null) : '',
     variantMode,
     single,
     colors,
@@ -271,6 +305,7 @@ export const useProductDraft = create<ProductDraftState>((set) => ({
   setGallery: (urls) => set({ gallery: urls }),
 
   setVariantMode: (m) => set({ variantMode: m }),
+  setSizeKind: (k) => set({ sizeKind: k }),
   setSingle: (patch) => set((s) => ({ single: { ...s.single, ...patch } })),
   addColor: () => set((s) => ({ colors: [...s.colors, emptyColor()] })),
   removeColor: (colorId) =>
@@ -316,6 +351,36 @@ export const useProductDraft = create<ProductDraftState>((set) => ({
       colors: s.colors.map((c) =>
         c.id === colorId
           ? { ...c, sizes: c.sizes.map((r) => (r.id === rowId ? { ...r, ...patch } : r)) }
+          : c,
+      ),
+    })),
+  setColorSizes: (colorId, labels, base) =>
+    set((s) => {
+      const removedIds: string[] = [];
+      const colors = s.colors.map((c) => {
+        if (c.id !== colorId) return c;
+        const byLabel = new Map(c.sizes.map((r) => [r.size.trim().toUpperCase(), r]));
+        const keep = new Set(labels.map((l) => l.trim().toUpperCase()));
+        // Track server variants for sizes being dropped so they get deleted on commit.
+        c.sizes.forEach((r) => {
+          if (r.serverVariantId && !keep.has(r.size.trim().toUpperCase())) {
+            removedIds.push(r.serverVariantId);
+          }
+        });
+        const wanted = labels.length ? labels : [''];
+        const sizes = wanted.map((label) => {
+          const found = byLabel.get(label.trim().toUpperCase());
+          return found ? { ...found, size: label } : { ...emptySizeRow(base), size: label };
+        });
+        return { ...c, sizes };
+      });
+      return { colors, removedVariantIds: [...s.removedVariantIds, ...removedIds] };
+    }),
+  setColorPricing: (colorId, price) =>
+    set((s) => ({
+      colors: s.colors.map((c) =>
+        c.id === colorId
+          ? { ...c, sizes: c.sizes.map((r) => ({ ...r, price: price.price, mrp: price.mrp })) }
           : c,
       ),
     })),
