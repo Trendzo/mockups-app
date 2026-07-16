@@ -124,14 +124,40 @@ function LegalDocScreen({ kind }: { kind: LegalKind }) {
 
   const { data: doc } = useQuery({ queryKey: ['retailer-legal', kind], queryFn: calls.get });
 
+  React.useEffect(() => {
+    console.log(`[legal:${kind}] doc loaded`, doc);
+  }, [kind, doc]);
+
   const accept = useMutation({
-    mutationFn: () => calls.accept(doc!.version),
-    onSuccess: () => {
-      toast.show(`${copy.docName} accepted`, 'success');
-      void qc.invalidateQueries({ queryKey: ['retailer-me'] });
+    mutationFn: () => {
+      console.log(`[legal:${kind}] accept → POST /retailer/${kind}/accept`, { version: doc?.version });
+      return calls.accept(doc!.version);
     },
-    onError: (e: unknown) =>
-      toast.show((e as { message?: string })?.message ?? 'Could not record acceptance', 'error'),
+    onSuccess: async (res) => {
+      console.log(`[legal:${kind}] accept succeeded`, res);
+      toast.show(`${copy.docName} accepted`, 'success');
+      // Explicit refetch (not just invalidate) so we can log the fresh gate
+      // values immediately, instead of trusting background invalidation timing.
+      const result = await qc.refetchQueries({ queryKey: ['retailer-me'] });
+      console.log(`[legal:${kind}] retailer-me refetched after accept`, result);
+      const me = qc.getQueryData<{
+        termsAcceptanceRequired?: boolean;
+        privacyAcceptanceRequired?: boolean;
+        currentTermsVersion?: string;
+        currentPrivacyVersion?: string;
+      }>(['retailer-me']);
+      console.log(`[legal:${kind}] gate state after refetch`, {
+        termsAcceptanceRequired: me?.termsAcceptanceRequired,
+        privacyAcceptanceRequired: me?.privacyAcceptanceRequired,
+        currentTermsVersion: me?.currentTermsVersion,
+        currentPrivacyVersion: me?.currentPrivacyVersion,
+        acceptedVersionSent: doc?.version,
+      });
+    },
+    onError: (e: unknown) => {
+      console.log(`[legal:${kind}] accept FAILED`, e);
+      toast.show((e as { message?: string })?.message ?? 'Could not record acceptance', 'error');
+    },
   });
 
   // Declining is recorded, then the user is logged out - re-prompted next login until accepted.
@@ -174,7 +200,10 @@ function LegalDocScreen({ kind }: { kind: LegalKind }) {
         label="Accept & continue"
         disabled={!agreed || !doc}
         loading={accept.isPending}
-        onPress={() => accept.mutate()}
+        onPress={() => {
+          console.log(`[legal:${kind}] "Accept & continue" pressed`, { agreed, doc });
+          accept.mutate();
+        }}
       />
       <PrimaryButton
         label="Decline & log out"

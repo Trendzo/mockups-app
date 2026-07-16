@@ -19,3 +19,13 @@ buildscript {
 }
 
 apply plugin: "com.facebook.react.rootproject"
+
+// NOTE: this checkout lives on an exFAT external drive (can't hold macOS's
+// per-file metadata, so every Gradle-written file gets a shadow "._name"
+// AppleDouble companion, breaking AAPT and directory deletion). We relocate
+// build output off it via symlinks (android/build, android/app/build, each
+// node_modules/*/android/build — see scripts/relocate-android-build-dirs.sh),
+// NOT via project.buildDir: overriding buildDir here breaks CMake autolinking,
+// which hardcodes real "node_modules/<pkg>/android/build/..." paths that a
+// Gradle-only property change doesn't follow. Symlinks keep those paths
+// resolving exactly as before while the bytes live on APFS.

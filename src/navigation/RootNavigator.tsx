@@ -151,7 +151,17 @@ export function RootNavigator() {
   // Legal gate — an onboarding store must accept the Retailer Terms AND the Privacy
   // Policy before it can go live. Block the full app on one doc at a time (terms
   // first) until both are accepted.
+  console.log('[legal-gate] evaluating', {
+    active,
+    termsAcceptanceRequired: me.data?.termsAcceptanceRequired,
+    privacyAcceptanceRequired: me.data?.privacyAcceptanceRequired,
+    currentTermsVersion: me.data?.currentTermsVersion,
+    currentPrivacyVersion: me.data?.currentPrivacyVersion,
+    retailerStatus: retailer?.status,
+    storeStatus: store?.status,
+  });
   if (active && me.data?.termsAcceptanceRequired) {
+    console.log('[legal-gate] → showing Terms screen');
     return (
       <Stack.Navigator screenOptions={options}>
         <Stack.Screen name="Terms" component={TermsScreen} />
@@ -159,12 +169,14 @@ export function RootNavigator() {
     );
   }
   if (active && me.data?.privacyAcceptanceRequired) {
+    console.log('[legal-gate] → showing Privacy screen');
     return (
       <Stack.Navigator screenOptions={options}>
         <Stack.Screen name="Privacy" component={PrivacyScreen} />
       </Stack.Navigator>
     );
   }
+  console.log('[legal-gate] → gate clear, proceeding past legal screens');
 
   // Active retailer with a usable store → full app.
   if (active) {

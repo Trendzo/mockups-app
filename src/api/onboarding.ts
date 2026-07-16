@@ -247,11 +247,13 @@ export async function requestAccountReopen(reason?: string): Promise<void> {
 // ---- C2) Terms & Conditions (legal gate before go-live) ----
 export async function getTerms(): Promise<TermsInfo> {
   const res = await getJson<{ data: TermsInfo }>('/retailer/terms');
+  console.log('[legal:terms] GET /retailer/terms →', res.data);
   return unwrapEnvelope<TermsInfo>(res);
 }
 
 export async function acceptTerms(version: string): Promise<void> {
-  await postJson('/retailer/terms/accept', { version });
+  const res = await postJson<unknown>('/retailer/terms/accept', { version });
+  console.log('[legal:terms] POST /retailer/terms/accept →', res);
 }
 
 /** Record a decline (audited); the app then logs the user out. */
@@ -262,11 +264,13 @@ export async function declineTerms(version: string): Promise<void> {
 // ---- C3) Privacy Policy (same legal gate as the T&C — kind='privacy' server-side) ----
 export async function getPrivacy(): Promise<TermsInfo> {
   const res = await getJson<{ data: TermsInfo }>('/retailer/privacy');
+  console.log('[legal:privacy] GET /retailer/privacy →', res.data);
   return unwrapEnvelope<TermsInfo>(res);
 }
 
 export async function acceptPrivacy(version: string): Promise<void> {
-  await postJson('/retailer/privacy/accept', { version });
+  const res = await postJson<unknown>('/retailer/privacy/accept', { version });
+  console.log('[legal:privacy] POST /retailer/privacy/accept →', res);
 }
 
 /** Record a decline (audited); the app then logs the user out. */
