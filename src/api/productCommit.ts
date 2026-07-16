@@ -145,17 +145,18 @@ export async function commitProductDraft({ publish }: { publish: boolean }): Pro
         compareAtPrice: body.compareAtPrice,
         stock: body.stock,
         imageUrls: body.imageUrls,
-        // Optional single-product size, stored as a variant attribute.
-        attributes: size ? { size } : {},
-        attributesLabel: size,
+        // Optional single-product size. Identity is system-managed on
+        // single/color_size listings: send `size` and the backend derives the
+        // attributes - raw attribute patches 422 there.
+        ...(size ? { size } : {}),
       });
     } else {
       const v = await setDefaultVariant(listingId, body);
       d.setSingleVariantId(v.id);
-      // The default-variant endpoint takes no attributes; set the size (if any)
-      // with a follow-up patch, the same way size variants store it.
+      // The default-variant endpoint takes no size; set it (if any) with a
+      // follow-up system-path patch.
       if (size) {
-        await patchVariant(v.id, { attributes: { size }, attributesLabel: size });
+        await patchVariant(v.id, { size });
       }
     }
   } else {
@@ -198,8 +199,8 @@ export async function commitProductDraft({ publish }: { publish: boolean }): Pro
             compareAtPrice: body.compareAtPrice,
             stock: body.stock,
             imageUrls: body.imageUrls,
-            attributes: { size },
-            attributesLabel: size,
+            // System-managed identity: `size` re-derives attributes/label.
+            ...(size ? { size } : {}),
           });
         } else {
           const v = await createGroupVariant(listingId, groupId, body);

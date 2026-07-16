@@ -144,6 +144,11 @@ export interface PatchVariantInput {
   sku?: string | null;
   isActive?: boolean;
   imageUrls?: string[];
+  /** System path (single/color_size listings): identity is re-derived from
+   *  (group, size) — sending raw attributes on these products 422s. */
+  size?: string;
+  groupId?: string;
+  /** Raw identity - honoured only on legacy custom-mode listings. */
   attributes?: Record<string, string>;
   attributesLabel?: string;
 }
