@@ -24,12 +24,7 @@ import { useKyc, useRetailerMe } from '../api/onboardingHooks';
 import { CatalogExportKind, downloadCatalogCsv } from '../api/catalogueExport';
 import { requestAccountClosure } from '../api/onboarding';
 import { colors, radii, spacing } from '../theme/theme';
-import {
-  ACCOUNT_DELETION_URL,
-  PRIVACY_URL,
-  SUPPORT_URL,
-  TERMS_URL,
-} from '../config/legal';
+import { ACCOUNT_DELETION_URL, SUPPORT_URL } from '../config/legal';
 
 /** Profile (§account): view your retailer details, request changes, log out. */
 export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
@@ -235,15 +230,16 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
             hint="Download your products or inventory"
             onPress={() => setExportOpen(true)}
           />
+          {/* In-app viewers for the same backend-fetched docs shown at signup */}
           <ActionRow
             icon="document-text-outline"
             label="Terms of Service"
-            onPress={() => Linking.openURL(TERMS_URL)}
+            onPress={() => navigation.navigate('LegalDoc', { kind: 'terms' })}
           />
           <ActionRow
             icon="lock-closed-outline"
             label="Privacy Policy"
-            onPress={() => Linking.openURL(PRIVACY_URL)}
+            onPress={() => navigation.navigate('LegalDoc', { kind: 'privacy' })}
           />
           <ActionRow
             icon="help-circle-outline"

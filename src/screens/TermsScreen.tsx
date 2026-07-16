@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AppText, Icon, PressableScale, PrimaryButton, Screen, useToast } from '../components';
+import { WebView } from 'react-native-webview';
+import { AppText, BackButton, Banner, Icon, PressableScale, PrimaryButton, Screen, useToast } from '../components';
+import { ScreenProps } from '../navigation/types';
+import { PRIVACY_URL, TERMS_URL } from '../config/legal';
 import {
   acceptPrivacy,
   acceptTerms,
@@ -50,6 +53,66 @@ export function TermsScreen() {
 /** Same gate for the Privacy Policy — shown once the terms are in (`me.privacyAcceptanceRequired`). */
 export function PrivacyScreen() {
   return <LegalDocScreen kind="privacy" />;
+}
+
+// Public HTML fallbacks — served by the backend's public legal routes. Used
+// when the authed retailer endpoint isn't available on the deployed backend
+// (e.g. /retailer/privacy is newer than the current deployment).
+const PUBLIC_URL: Record<LegalKind, string> = {
+  terms: TERMS_URL,
+  privacy: PRIVACY_URL,
+};
+
+/**
+ * Read-only viewer for the same backend-fetched legal docs — opened from the
+ * Profile page's "Terms of Service" / "Privacy Policy" rows. No accept/decline:
+ * the user already consented at signup / the legal gate.
+ */
+export function LegalDocViewerScreen({ navigation, route }: ScreenProps<'LegalDoc'>) {
+  const { kind } = route.params;
+  const copy = COPY[kind];
+  const q = useQuery({
+    queryKey: ['retailer-legal', kind],
+    queryFn: API[kind].get,
+    retry: false,
+  });
+
+  // Endpoint missing on this backend deployment → show the public page instead.
+  const notFound =
+    (q.error as { status?: number; response?: { status?: number } } | null)?.status === 404 ||
+    (q.error as { response?: { status?: number } } | null)?.response?.status === 404;
+
+  return (
+    <Screen edges={['top', 'bottom']}>
+      <BackButton onPress={() => navigation.goBack()} />
+      <AppText variant="cardTitle">{copy.docName}</AppText>
+      {q.data ? (
+        <AppText variant="meta" color={colors.meta} style={styles.sub}>
+          Version {q.data.version}
+          {q.data.acceptedAt
+            ? ` · accepted ${new Date(q.data.acceptedAt).toLocaleDateString()}`
+            : ''}
+        </AppText>
+      ) : null}
+      {q.isError && notFound ? (
+        <View style={styles.box}>
+          <WebView source={{ uri: PUBLIC_URL[kind] }} style={styles.web} />
+        </View>
+      ) : q.isError ? (
+        <Banner
+          tone="danger"
+          title="Couldn't load the document"
+          message={(q.error as { message?: string })?.message}
+          actionLabel="Retry"
+          onAction={() => q.refetch()}
+        />
+      ) : (
+        <ScrollView style={styles.box} contentContainerStyle={styles.boxInner}>
+          <AppText variant="body">{q.data?.shortText ?? 'Loading…'}</AppText>
+        </ScrollView>
+      )}
+    </Screen>
+  );
 }
 
 function LegalDocScreen({ kind }: { kind: LegalKind }) {
@@ -133,7 +196,9 @@ const styles = StyleSheet.create({
     borderColor: colors.hairline,
     borderRadius: radii.card,
     marginBottom: spacing.md,
+    overflow: 'hidden',
   },
+  web: { flex: 1, backgroundColor: 'transparent' },
   boxInner: { padding: spacing.md },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.md },
   rowText: { flex: 1 },

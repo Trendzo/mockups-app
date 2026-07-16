@@ -24,11 +24,11 @@ function newDraftHasContent(): boolean {
 }
 
 /**
- * The wizard's top-left back button exits straight to Home (not step-by-step).
- * A new product that's complete enough to be valid is saved to drafts on the
- * way out so nothing is lost. A partial/invalid draft can't be persisted (the
- * backend needs at least name + brand + category + price), so we tell the user
- * what's missing rather than silently dropping it.
+ * The wizard's top-left back button exits straight to the Catalog tab (not
+ * step-by-step). A new product that's complete enough to be valid is saved to
+ * drafts on the way out so nothing is lost. A partial/invalid draft can't be
+ * persisted (the backend needs at least name + brand + category + price), so
+ * we tell the user what's missing rather than silently dropping it.
  */
 export function useExitWizardToHome() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -36,7 +36,11 @@ export function useExitWizardToHome() {
   const toast = useToast();
 
   return useCallback(async () => {
-    const goHome = () => navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
+    const goHome = () =>
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Main', params: { screen: 'Catalog' } }],
+      });
 
     if (newDraftHasContent()) {
       if (validateProductDraft().length === 0) {

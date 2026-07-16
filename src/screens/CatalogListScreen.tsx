@@ -5,10 +5,13 @@ import {
   Dimensions,
   FlatList,
   RefreshControl,
+  StyleProp,
   StyleSheet,
   TextInput,
   View,
+  ViewStyle,
 } from 'react-native';
+import Animated, { useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ReanimatedSwipeable, {
   type SwipeableMethods,
@@ -323,9 +326,9 @@ function ProductRow({
   return (
     <ReanimatedSwipeable
       ref={swipeRef}
-      friction={1.6}
-      leftThreshold={72}
-      rightThreshold={72}
+      friction={1}
+      leftThreshold={48}
+      rightThreshold={48}
       overshootLeft={false}
       overshootRight={false}
       containerStyle={styles.swipeContainer}
@@ -335,41 +338,46 @@ function ProductRow({
       onSwipeableClose={() => {
         dragged.current = false;
       }}
-      // Swiping far enough IS the action - no button to tap. Fire it, then snap
-      // the row back. NOTE: `direction` is the SWIPE direction, not the panel
-      // side - swiping RIGHT opens the left Delete panel and reports 'right'.
-      onSwipeableOpen={(direction) => {
+      // Swiping far enough IS the action - no button to tap. `WillOpen` fires
+      // the moment the release crosses the threshold (~48pt), so a slight slide
+      // is enough - waiting for `Open` would mean sliding the full panel width.
+      // NOTE: `direction` is the SWIPE direction, not the panel side - swiping
+      // RIGHT opens the left Publish panel and reports 'right'.
+      onSwipeableWillOpen={(direction) => {
         swipeRef.current?.close();
-        if (String(direction) === 'right') onDelete?.();
-        else onPublish?.();
+        if (String(direction) === 'right') onPublish?.();
+        else onDelete?.();
       }}
-      // Swiping RIGHT reveals this full-width panel on the left → Delete.
+      // Swiping RIGHT reveals this full-width panel on the left → Publish.
+      // NOTE: the library overlays BOTH action containers full-size, so each
+      // panel must hide itself unless ITS swipe is in progress — otherwise one
+      // panel (rendered on top) covers the other.
       renderLeftActions={
-        onDelete
-          ? () => (
-              <View style={[styles.swipeAction, styles.deleteAction]}>
-                <View style={styles.actionStart}>
-                  <Icon name="trash-outline" size={22} color={colors.surface} />
-                  <AppText variant="bodyMedium" color={colors.surface}>
-                    Delete
-                  </AppText>
-                </View>
-              </View>
-            )
-          : undefined
-      }
-      // Swiping LEFT reveals this full-width panel on the right → Publish.
-      renderRightActions={
         canPublish
-          ? () => (
-              <View style={[styles.swipeAction, styles.publishAction]}>
-                <View style={styles.actionEnd}>
+          ? (progress) => (
+              <SwipePanel progress={progress} style={[styles.swipeAction, styles.publishAction]}>
+                <View style={styles.actionStart}>
                   <Icon name="cloud-upload-outline" size={22} color={colors.accentInk} />
                   <AppText variant="bodyMedium" color={colors.accentInk}>
                     Publish
                   </AppText>
                 </View>
-              </View>
+              </SwipePanel>
+            )
+          : undefined
+      }
+      // Swiping LEFT reveals this full-width panel on the right → Delete.
+      renderRightActions={
+        onDelete
+          ? (progress) => (
+              <SwipePanel progress={progress} style={[styles.swipeAction, styles.deleteAction]}>
+                <View style={styles.actionEnd}>
+                  <Icon name="trash-outline" size={22} color={colors.surface} />
+                  <AppText variant="bodyMedium" color={colors.surface}>
+                    Delete
+                  </AppText>
+                </View>
+              </SwipePanel>
             )
           : undefined
       }
@@ -377,6 +385,20 @@ function ProductRow({
       {row}
     </ReanimatedSwipeable>
   );
+}
+
+/** Action panel that is only visible while its own swipe is in progress. */
+function SwipePanel({
+  progress,
+  style,
+  children,
+}: {
+  progress: SharedValue<number>;
+  style: StyleProp<ViewStyle>;
+  children: React.ReactNode;
+}) {
+  const visible = useAnimatedStyle(() => ({ opacity: progress.value > 0 ? 1 : 0 }));
+  return <Animated.View style={[style, visible]}>{children}</Animated.View>;
 }
 
 const styles = StyleSheet.create({

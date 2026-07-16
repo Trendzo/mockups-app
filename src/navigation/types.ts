@@ -28,9 +28,12 @@ export type RootStackParamList = {
   // Retailer self-service
   Kyc: undefined;
   ChangeRequest: undefined;
+  /** Read-only backend-fetched legal doc (Profile → Terms / Privacy). */
+  LegalDoc: { kind: 'terms' | 'privacy' };
 
-  // Bottom-tab container (Home · Catalog · Profile share one persistent bar)
-  Main: undefined;
+  // Bottom-tab container (Home · Catalog · Profile share one persistent bar).
+  // `screen` picks the tab to land on (e.g. the wizard exits to Catalog).
+  Main: { screen?: 'Home' | 'Catalog' | 'Profile' } | undefined;
   Home: undefined;
 
   // QR checkout scanner → pushes picks to an open web Register over SSE

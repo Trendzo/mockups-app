@@ -9,7 +9,7 @@ import { ApplicationStatusScreen } from '../screens/ApplicationStatusScreen';
 import { ResubmitScreen } from '../screens/ResubmitScreen';
 import { LocationPickerScreen } from '../screens/LocationPickerScreen';
 import { PendingApprovalScreen } from '../screens/PendingApprovalScreen';
-import { PrivacyScreen, TermsScreen } from '../screens/TermsScreen';
+import { LegalDocViewerScreen, PrivacyScreen, TermsScreen } from '../screens/TermsScreen';
 import { MainTabs } from './MainTabs';
 import { SelectPhotosScreen } from '../screens/SelectPhotosScreen';
 import { CaptureScreen } from '../screens/CaptureScreen';
@@ -203,6 +203,7 @@ export function RootNavigator() {
         <Stack.Screen name="ProductWizardReview" component={ReviewStep} options={{ animation: 'none' }} />
         <Stack.Screen name="Kyc" component={KycScreen} />
         <Stack.Screen name="ChangeRequest" component={ChangeRequestScreen} />
+        <Stack.Screen name="LegalDoc" component={LegalDocViewerScreen} />
       </Stack.Navigator>
     );
   }
