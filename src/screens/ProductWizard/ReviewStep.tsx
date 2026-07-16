@@ -18,6 +18,7 @@ import { ColorDraft, SingleVariantDraft, useProductDraft } from '../../store/pro
 import { formatPaise, parseRupeesToPaise } from '../../utils/money';
 import { colors, radii, spacing } from '../../theme/theme';
 import { WizardHeader } from './WizardHeader';
+import { useExitWizardToHome } from './useExitToHome';
 
 const GENDER_LABEL: Record<string, string> = { her: 'Women', him: 'Men', unisex: 'Unisex' };
 const POLICY_LABEL: Record<string, string> = {
@@ -29,6 +30,7 @@ const POLICY_LABEL: Record<string, string> = {
 export function ReviewStep({ navigation }: ScreenProps<'ProductWizardReview'>) {
   const d = useProductDraft();
   const qc = useQueryClient();
+  const exitHome = useExitWizardToHome();
   const brandsQ = useCatalogBrands();
   const categoriesQ = useCatalogCategories();
 
@@ -72,7 +74,7 @@ export function ReviewStep({ navigation }: ScreenProps<'ProductWizardReview'>) {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
       >
-        <WizardHeader step={4} onBack={() => navigation.goBack()} />
+        <WizardHeader step={4} onBack={exitHome} />
 
         {error ? <Banner tone="danger" title="Couldn't save" message={error} /> : null}
 

@@ -33,8 +33,9 @@ import { colors, radii, spacing } from '../../theme/theme';
 import { uploadLocalImage } from './pickImages';
 import { setCameraSink } from './cameraSink';
 import { WizardHeader } from './WizardHeader';
+import { useExitWizardToHome } from './useExitToHome';
 import { ColorPickerSheet } from './ColorPickerSheet';
-import { SIZE_KINDS, SizeKindDef, sizeKindDef, inferSizeKind } from './sizeKinds';
+import { SizeKindDef, sizeKindDef, inferSizeKind } from './sizeKinds';
 
 // Colour choices offered in the dropdown (plus "Custom…" → full picker).
 const COLOR_PALETTE: { name: string; hex: string }[] = [
@@ -88,6 +89,7 @@ function variantErrors(
 
 export function VariantsStep({ navigation }: ScreenProps<'ProductWizardVariants'>) {
   const d = useProductDraft();
+  const exitHome = useExitWizardToHome();
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Steps are freely navigable: highlight any problems but never block the move.
@@ -118,7 +120,7 @@ export function VariantsStep({ navigation }: ScreenProps<'ProductWizardVariants'
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={styles.content}
       >
-        <WizardHeader step={2} onBack={() => navigation.goBack()} />
+        <WizardHeader step={2} onBack={exitHome} />
 
         <SegmentedControl<'single' | 'color_size'>
           compact
@@ -245,15 +247,7 @@ function ColorVariantsEditor({ errors }: { errors: Record<string, string> }) {
 
   return (
     <View style={styles.block}>
-      {/* Product type drives which size options appear (rings, chains, shoes…). */}
-      <Select
-        label="Product type (sizes)"
-        placeholder="Choose the size system"
-        options={SIZE_KINDS.map((k) => ({ value: k.kind, label: k.label }))}
-        selected={[kind]}
-        onChange={(v) => d.setSizeKind((v[0] as typeof kind) ?? null)}
-      />
-
+      {/* Size system is auto-inferred from the category (no manual picker). */}
       <View style={styles.carouselWrap}>
         <ScrollView
           ref={scrollRef}

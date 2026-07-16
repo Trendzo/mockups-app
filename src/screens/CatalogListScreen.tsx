@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
+  Dimensions,
   FlatList,
   RefreshControl,
   StyleSheet,
@@ -8,6 +10,10 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import ReanimatedSwipeable, {
+  type SwipeableMethods,
+} from 'react-native-gesture-handler/ReanimatedSwipeable';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   AppImage,
   AppText,
@@ -20,9 +26,11 @@ import {
   SegmentedControl,
   StatusChip,
   toneForStatus,
+  useToast,
 } from '../components';
 import { ScreenProps } from '../navigation/types';
 import { useListings } from '../api/catalogHooks';
+import { deleteListing, updateListing } from '../api/catalogManagement';
 import { useProductDraft } from '../store/productDraft';
 import { useAuth } from '../store/auth';
 import { canWriteCatalog, Listing, ListingStatus } from '../types/catalog';
@@ -32,6 +40,7 @@ import { colors, radii, spacing } from '../theme/theme';
 type StatusFilter = 'all' | ListingStatus;
 type StockFilter = 'all' | 'in_stock' | 'low' | 'out';
 const LOW_STOCK = 5;
+const SCREEN_W = Dimensions.get('window').width;
 
 const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -53,6 +62,45 @@ function totalStock(l: Listing): number {
 export function CatalogListScreen({ navigation }: ScreenProps<'Catalog'>) {
   const insets = useSafeAreaInsets();
   const canWrite = canWriteCatalog(useAuth((s) => s.retailer?.subRole));
+  const qc = useQueryClient();
+  const toast = useToast();
+
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ['listings'] });
+    qc.invalidateQueries({ queryKey: ['inventory'] });
+  };
+
+  // Swipe-right action: publish a draft/retired product.
+  const publish = async (l: Listing) => {
+    try {
+      await updateListing(l.id, { status: 'active' });
+      toast.show('Published', 'success');
+      refresh();
+    } catch (e: any) {
+      // cannot_publish_incomplete lists what's missing in the message.
+      toast.show(e?.message ?? 'Could not publish', 'error');
+    }
+  };
+
+  // Swipe-left action: delete a product (confirm first - it can't be undone).
+  const remove = (l: Listing) => {
+    Alert.alert('Delete product', `Delete "${l.name}"? This can't be undone.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteListing(l.id);
+            toast.show('Product deleted', 'info');
+            refresh();
+          } catch (e: any) {
+            toast.show(e?.message ?? 'Could not delete', 'error');
+          }
+        },
+      },
+    ]);
+  };
 
   const [status, setStatus] = useState<StatusFilter>('all');
   const [stock, setStock] = useState<StockFilter>('all');
@@ -132,6 +180,8 @@ export function CatalogListScreen({ navigation }: ScreenProps<'Catalog'>) {
             <ProductRow
               listing={item}
               onPress={() => navigation.navigate('ProductDetail', { id: item.id })}
+              onDelete={canWrite ? () => remove(item) : undefined}
+              onPublish={canWrite ? () => publish(item) : undefined}
             />
           )}
         />
@@ -206,13 +256,43 @@ export function CatalogListScreen({ navigation }: ScreenProps<'Catalog'>) {
   );
 }
 
-function ProductRow({ listing, onPress }: { listing: Listing; onPress: () => void }) {
+function ProductRow({
+  listing,
+  onPress,
+  onDelete,
+  onPublish,
+}: {
+  listing: Listing;
+  onPress: () => void;
+  onDelete?: () => void;
+  onPublish?: () => void;
+}) {
   const variants = listing.variants ?? [];
   const price = variants[0] ? formatPaise(variants[0].pricePaise) : '-';
   const stock = totalStock(listing);
   const thumb = listing.galleryUrls?.[0];
-  return (
-    <PressableScale onPress={onPress} toScale={0.98} style={styles.row}>
+  const swipeRef = useRef<SwipeableMethods>(null);
+  // True once a swipe drag has begun - lets us swallow the tap that fires on
+  // release so a swipe never navigates. Reset only after the row settles closed.
+  const dragged = useRef(false);
+  // Publishing only makes sense for a not-yet-active product.
+  const canPublish = !!onPublish && listing.status !== 'active';
+  const swipeable = !!onDelete || canPublish;
+
+  const handlePress = () => {
+    if (dragged.current) {
+      // The touch was a swipe, not a tap - close any open action, don't open.
+      dragged.current = false;
+      swipeRef.current?.close();
+      return;
+    }
+    onPress();
+  };
+
+  const row = (
+    // No press-shrink on swipeable rows: the scale-down would pull the row in
+    // and reveal the coloured action panels behind it at the corners/edges.
+    <PressableScale onPress={handlePress} toScale={swipeable ? 1 : 0.98} style={styles.row}>
       {thumb ? (
         <AppImage uri={thumb} radius={radii.sm} containerStyle={styles.thumb} />
       ) : (
@@ -231,6 +311,66 @@ function ProductRow({ listing, onPress }: { listing: Listing; onPress: () => voi
       </View>
       <StatusChip label={listing.status.replace(/_/g, ' ')} tone={toneForStatus(listing.status)} />
     </PressableScale>
+  );
+
+  // Read-only users get a plain row (no swipe actions).
+  if (!onDelete && !canPublish) return row;
+
+  return (
+    <ReanimatedSwipeable
+      ref={swipeRef}
+      friction={1.6}
+      leftThreshold={72}
+      rightThreshold={72}
+      overshootLeft={false}
+      overshootRight={false}
+      containerStyle={styles.swipeContainer}
+      onSwipeableOpenStartDrag={() => {
+        dragged.current = true;
+      }}
+      onSwipeableClose={() => {
+        dragged.current = false;
+      }}
+      // Swiping far enough IS the action - no button to tap. Fire it, then snap
+      // the row back. Swipe LEFT = Delete, swipe RIGHT = Publish.
+      onSwipeableOpen={(direction) => {
+        swipeRef.current?.close();
+        if (String(direction) === 'left') onDelete?.();
+        else onPublish?.();
+      }}
+      // Swipe LEFT reveals this full-width panel → Delete.
+      renderLeftActions={
+        onDelete
+          ? () => (
+              <View style={[styles.swipeAction, styles.deleteAction]}>
+                <View style={styles.actionStart}>
+                  <Icon name="trash-outline" size={22} color={colors.surface} />
+                  <AppText variant="bodyMedium" color={colors.surface}>
+                    Delete
+                  </AppText>
+                </View>
+              </View>
+            )
+          : undefined
+      }
+      // Swipe RIGHT reveals this full-width panel → Publish.
+      renderRightActions={
+        canPublish
+          ? () => (
+              <View style={[styles.swipeAction, styles.publishAction]}>
+                <View style={styles.actionEnd}>
+                  <Icon name="cloud-upload-outline" size={22} color={colors.accentInk} />
+                  <AppText variant="bodyMedium" color={colors.accentInk}>
+                    Publish
+                  </AppText>
+                </View>
+              </View>
+            )
+          : undefined
+      }
+    >
+      {row}
+    </ReanimatedSwipeable>
   );
 }
 
@@ -293,6 +433,30 @@ const styles = StyleSheet.create({
   },
   thumb: { width: 52, height: 52, borderRadius: radii.sm },
   thumbEmpty: { backgroundColor: colors.canvas, alignItems: 'center', justifyContent: 'center' },
+  // Clip the whole swipeable to the card shape so a revealed action can never
+  // bleed past the rounded corners.
+  swipeContainer: { borderRadius: radii.card, overflow: 'hidden' },
+  // Full-width coloured panel behind the row (clipped to the card by the
+  // container). The inner block keeps the label near the edge being revealed.
+  swipeAction: { width: SCREEN_W },
+  actionStart: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.lg,
+  },
+  actionEnd: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.lg,
+  },
+  publishAction: { backgroundColor: colors.accent },
+  deleteAction: { backgroundColor: colors.danger },
   rowBody: { flex: 1, gap: 2 },
   sheet: {
     backgroundColor: colors.surface,

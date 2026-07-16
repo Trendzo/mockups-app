@@ -12,6 +12,7 @@ import { useProductDraft } from '../../store/productDraft';
 import { AGE_GROUP_VALUES, ListingPolicy } from '../../types/catalog';
 import { colors, spacing } from '../../theme/theme';
 import { WizardHeader } from './WizardHeader';
+import { useExitWizardToHome } from './useExitToHome';
 
 const OCCASIONS = ['Casual', 'Formal', 'Party', 'Sport', 'Festive'];
 const POLICIES: { value: ListingPolicy; label: string }[] = [
@@ -22,6 +23,7 @@ const POLICIES: { value: ListingPolicy; label: string }[] = [
 
 export function DetailsStep({ navigation }: ScreenProps<'ProductWizardDetails'>) {
   const d = useProductDraft();
+  const exitHome = useExitWizardToHome();
 
   return (
     <Screen edges={['top']}>
@@ -31,7 +33,7 @@ export function DetailsStep({ navigation }: ScreenProps<'ProductWizardDetails'>)
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={styles.content}
       >
-        <WizardHeader step={3} onBack={() => navigation.goBack()} />
+        <WizardHeader step={3} onBack={exitHome} />
 
         <Field
           label="Description"

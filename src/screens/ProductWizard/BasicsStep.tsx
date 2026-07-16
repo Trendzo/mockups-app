@@ -27,6 +27,7 @@ import { colors, radii, spacing } from '../../theme/theme';
 import { pickAndUploadImages } from './pickImages';
 import { SortableGallery } from './SortableGallery';
 import { WizardHeader } from './WizardHeader';
+import { useExitWizardToHome } from './useExitToHome';
 
 const GENDER_PILLS: { value: 'her' | 'him'; label: string }[] = [
   { value: 'her', label: 'Women' },
@@ -42,6 +43,7 @@ const easeLayout = () => LayoutAnimation.configureNext(LayoutAnimation.Presets.e
 
 export function BasicsStep({ navigation }: ScreenProps<'ProductWizardBasics'>) {
   const toast = useToast();
+  const exitHome = useExitWizardToHome();
   const brandsQ = useCatalogBrands();
   const categoriesQ = useCatalogCategories();
   const createBrand = useCreateBrand();
@@ -108,7 +110,7 @@ export function BasicsStep({ navigation }: ScreenProps<'ProductWizardBasics'>) {
         scrollEnabled={!dragging}
         contentContainerStyle={styles.content}
       >
-        <WizardHeader step={1} onBack={() => navigation.goBack()} />
+        <WizardHeader step={1} onBack={exitHome} />
 
         <Field
           label="Product name"
