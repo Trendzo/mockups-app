@@ -11,6 +11,7 @@ import {
   declinePrivacy,
   declineTerms,
   getPrivacy,
+  getPublicLegal,
   getTerms,
 } from '../api/onboarding';
 import { useAuth } from '../store/auth';
@@ -64,20 +65,21 @@ const PUBLIC_URL: Record<LegalKind, string> = {
 };
 
 /**
- * Read-only viewer for the same backend-fetched legal docs — opened from the
- * Profile page's "Terms of Service" / "Privacy Policy" rows. No accept/decline:
- * the user already consented at signup / the legal gate.
+ * Read-only viewer for the backend-published legal docs — opened from the Profile
+ * page's "Terms of Service" / "Privacy Policy" rows AND the signup consent links.
+ * Fetches the PUBLIC content endpoint (no auth), so it works logged-out too.
+ * No accept/decline: consent is recorded at signup / the legal gate.
  */
 export function LegalDocViewerScreen({ navigation, route }: ScreenProps<'LegalDoc'>) {
   const { kind } = route.params;
   const copy = COPY[kind];
   const q = useQuery({
-    queryKey: ['retailer-legal', kind],
-    queryFn: API[kind].get,
+    queryKey: ['public-legal', kind],
+    queryFn: () => getPublicLegal(kind),
     retry: false,
   });
 
-  // Endpoint missing on this backend deployment → show the public page instead.
+  // Endpoint missing on this backend deployment → show the public HTML page instead.
   const notFound =
     (q.error as { status?: number; response?: { status?: number } } | null)?.status === 404 ||
     (q.error as { response?: { status?: number } } | null)?.response?.status === 404;
@@ -88,10 +90,7 @@ export function LegalDocViewerScreen({ navigation, route }: ScreenProps<'LegalDo
       <AppText variant="cardTitle">{copy.docName}</AppText>
       {q.data ? (
         <AppText variant="meta" color={colors.meta} style={styles.sub}>
-          Version {q.data.version}
-          {q.data.acceptedAt
-            ? ` · accepted ${new Date(q.data.acceptedAt).toLocaleDateString()}`
-            : ''}
+          Version {q.data.label}
         </AppText>
       ) : null}
       {q.isError && notFound ? (

@@ -113,6 +113,8 @@ export function RootNavigator() {
         <Stack.Screen name="ApplicationForm" component={ApplicationFormScreen} />
         <Stack.Screen name="ApplicationStatus" component={ApplicationStatusScreen} />
         <Stack.Screen name="Resubmit" component={ResubmitScreen} />
+        {/* Signup consent links open the docs in-app (public content endpoint, no auth). */}
+        <Stack.Screen name="LegalDoc" component={LegalDocViewerScreen} />
         <Stack.Screen
           name="LocationPicker"
           component={LocationPickerScreen}

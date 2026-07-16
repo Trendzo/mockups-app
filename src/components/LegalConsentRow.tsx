@@ -15,10 +15,17 @@ import { colors, radii, spacing } from '../theme/theme';
 export function LegalConsentRow({
   agreed,
   onToggle,
+  onView,
 }: {
   agreed: boolean;
   onToggle: () => void;
+  /** Open a document in-app (LegalDoc viewer). Falls back to the public web page. */
+  onView?: (kind: 'terms' | 'privacy') => void;
 }) {
+  const open = (kind: 'terms' | 'privacy') => {
+    if (onView) return onView(kind);
+    Linking.openURL(kind === 'terms' ? TERMS_URL : PRIVACY_URL).catch(() => {});
+  };
   return (
     <PressableScale onPress={onToggle} haptic={false} style={styles.row}>
       <View style={[styles.check, agreed && styles.checkOn]}>
@@ -26,21 +33,11 @@ export function LegalConsentRow({
       </View>
       <AppText variant="meta" color={colors.meta} style={styles.text}>
         I agree to the{' '}
-        <AppText
-          variant="meta"
-          color={colors.ink}
-          style={styles.link}
-          onPress={() => Linking.openURL(TERMS_URL).catch(() => {})}
-        >
+        <AppText variant="meta" color={colors.ink} style={styles.link} onPress={() => open('terms')}>
           Terms &amp; Conditions
         </AppText>{' '}
         and the{' '}
-        <AppText
-          variant="meta"
-          color={colors.ink}
-          style={styles.link}
-          onPress={() => Linking.openURL(PRIVACY_URL).catch(() => {})}
-        >
+        <AppText variant="meta" color={colors.ink} style={styles.link} onPress={() => open('privacy')}>
           Privacy Policy
         </AppText>
         .

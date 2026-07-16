@@ -274,6 +274,19 @@ export async function declinePrivacy(version: string): Promise<void> {
   await postJson('/retailer/privacy/decline', { version });
 }
 
+/** PUBLIC (no auth) latest-published legal content — works logged-out (signup links). */
+export interface PublicLegalDoc {
+  kind: 'terms' | 'privacy';
+  docName: string;
+  version: string;
+  label: string;
+  shortText: string;
+}
+export async function getPublicLegal(kind: 'terms' | 'privacy'): Promise<PublicLegalDoc> {
+  const res = await getJson<{ data: PublicLegalDoc }>(`/legal/${kind}`);
+  return unwrapEnvelope<PublicLegalDoc>(res);
+}
+
 // ---- D) KYC ----
 export async function getKyc(): Promise<KycCycle | null> {
   try {

@@ -410,7 +410,11 @@ export function ApplicationFormScreen({ navigation, route }: ScreenProps<'Applic
         onPickLocation={() => navigation.navigate('LocationPicker')}
         beforeNext={guardNext}
         consentSlot={
-          <LegalConsentRow agreed={legalAgreed} onToggle={() => setLegalAgreed((a) => !a)} />
+          <LegalConsentRow
+            agreed={legalAgreed}
+            onToggle={() => setLegalAgreed((a) => !a)}
+            onView={(kind) => navigation.navigate('LegalDoc', { kind })}
+          />
         }
       />
     </Screen>

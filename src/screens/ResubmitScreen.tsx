@@ -288,7 +288,11 @@ export function ResubmitScreen({ navigation, route }: ScreenProps<'Resubmit'>) {
         showPasswordField={false}
         docState={docState}
         consentSlot={
-          <LegalConsentRow agreed={legalAgreed} onToggle={() => setLegalAgreed((a) => !a)} />
+          <LegalConsentRow
+            agreed={legalAgreed}
+            onToggle={() => setLegalAgreed((a) => !a)}
+            onView={(kind) => navigation.navigate('LegalDoc', { kind })}
+          />
         }
       />
     </Screen>
