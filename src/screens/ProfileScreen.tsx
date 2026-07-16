@@ -358,7 +358,7 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
             Request account closure?
           </AppText>
           <AppText variant="body" color={colors.meta}>
-            This sends a closure request to the ClosetX team for review. Nothing
+            This sends a closure request to the Trendzo team for review. Nothing
             changes until an admin approves it. Once approved, your store is
             suspended and your account is closed - but your records are kept, and
             you can request to reopen the account anytime.

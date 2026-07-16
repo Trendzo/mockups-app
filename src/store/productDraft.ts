@@ -102,6 +102,8 @@ interface ProductDraftState {
     >,
   ) => void;
   toggleGender: (g: 'her' | 'him') => void;
+  /** Set the whole gender selection (['her','him'] = unisex). */
+  setGenders: (genders: Array<'her' | 'him'>) => void;
   addGalleryUrls: (urls: string[]) => void;
   removeGallery: (i: number) => void;
   removeGalleryUrl: (url: string) => void;
@@ -300,6 +302,7 @@ export const useProductDraft = create<ProductDraftState>((set) => ({
     set((s) => ({
       genders: s.genders.includes(g) ? s.genders.filter((x) => x !== g) : [...s.genders, g],
     })),
+  setGenders: (genders) => set({ genders }),
 
   addGalleryUrls: (urls) => set((s) => ({ gallery: [...s.gallery, ...urls] })),
   removeGallery: (i) => set((s) => ({ gallery: s.gallery.filter((_, idx) => idx !== i) })),

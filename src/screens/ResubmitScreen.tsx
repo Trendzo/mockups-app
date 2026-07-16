@@ -19,6 +19,7 @@ import { ApplicationFields, EMPTY_APPLICATION } from '../store/applicationDraft'
 import { colors, spacing } from '../theme/theme';
 import { Haptics } from '../utils/haptics';
 import { nationalPhone, toE164 } from '../utils/phone';
+import { isGstStateCode } from '../utils/gstStates';
 
 type Docs = Partial<Record<DocKind, string>>;
 
@@ -161,6 +162,19 @@ export function ResubmitScreen({ navigation, route }: ScreenProps<'Resubmit'>) {
       toast.show('Re-upload the required documents', 'error');
       return;
     }
+    // GST state code: GSTIN's first 2 digits, else the code the application
+    // already carries. Same pre-flight check as the new-application form.
+    const gstPrefix = form.gstin.trim().slice(0, 2);
+    const stateCode = isGstStateCode(gstPrefix) ? gstPrefix : form.stateCode.trim();
+    if (!isGstStateCode(stateCode)) {
+      setErrors((p) => ({
+        ...p,
+        gstin: 'GSTIN must start with the 2-digit state code (e.g. 27 for Maharashtra)',
+      }));
+      setStep(0);
+      toast.show('Check the GSTIN - it must start with the 2-digit state code', 'error');
+      return;
+    }
     setBusy(true);
     try {
       const documents = APPLICATION_DOC_KINDS.filter((d) => docs[d.kind]).map((d) => ({
@@ -178,8 +192,8 @@ export function ResubmitScreen({ navigation, route }: ScreenProps<'Resubmit'>) {
           contactPhone: form.contactPhone.trim() ? toE164(form.contactPhone) : undefined,
           addressLine: form.addressLine,
           pincode: form.pincode,
-          // GSTIN's first 2 digits are the GST state code (no manual entry).
-          stateCode: form.gstin.trim().slice(0, 2),
+          // Validated above: GSTIN prefix, else the application's stored code.
+          stateCode,
           storeName: form.storeName || undefined,
           pan: form.pan || undefined,
           bankLegalName: form.bankLegalName || undefined,

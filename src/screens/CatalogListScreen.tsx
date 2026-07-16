@@ -30,6 +30,7 @@ import {
 } from '../components';
 import { ScreenProps } from '../navigation/types';
 import { useListings } from '../api/catalogHooks';
+import { useRetailerMe } from '../api/onboardingHooks';
 import { deleteListing, updateListing } from '../api/catalogManagement';
 import { useProductDraft } from '../store/productDraft';
 import { useAuth } from '../store/auth';
@@ -61,7 +62,10 @@ function totalStock(l: Listing): number {
 
 export function CatalogListScreen({ navigation }: ScreenProps<'Catalog'>) {
   const insets = useSafeAreaInsets();
-  const canWrite = canWriteCatalog(useAuth((s) => s.retailer?.subRole));
+  // Prefer the fresh /retailer/me sub-role; the login snapshot may omit it.
+  const me = useRetailerMe();
+  const authSubRole = useAuth((s) => s.retailer?.subRole);
+  const canWrite = canWriteCatalog(me.data?.retailer.subRole ?? authSubRole);
   const qc = useQueryClient();
   const toast = useToast();
 
@@ -332,13 +336,14 @@ function ProductRow({
         dragged.current = false;
       }}
       // Swiping far enough IS the action - no button to tap. Fire it, then snap
-      // the row back. Swipe LEFT = Delete, swipe RIGHT = Publish.
+      // the row back. NOTE: `direction` is the SWIPE direction, not the panel
+      // side - swiping RIGHT opens the left Delete panel and reports 'right'.
       onSwipeableOpen={(direction) => {
         swipeRef.current?.close();
-        if (String(direction) === 'left') onDelete?.();
+        if (String(direction) === 'right') onDelete?.();
         else onPublish?.();
       }}
-      // Swipe LEFT reveals this full-width panel → Delete.
+      // Swiping RIGHT reveals this full-width panel on the left → Delete.
       renderLeftActions={
         onDelete
           ? () => (
@@ -353,7 +358,7 @@ function ProductRow({
             )
           : undefined
       }
-      // Swipe RIGHT reveals this full-width panel → Publish.
+      // Swiping LEFT reveals this full-width panel on the right → Publish.
       renderRightActions={
         canPublish
           ? () => (

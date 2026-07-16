@@ -29,9 +29,11 @@ import { SortableGallery } from './SortableGallery';
 import { WizardHeader } from './WizardHeader';
 import { useExitWizardToHome } from './useExitToHome';
 
-const GENDER_PILLS: { value: 'her' | 'him'; label: string }[] = [
+// Unisex = both genders on the listing (['her','him']).
+const GENDER_PILLS: { value: 'her' | 'him' | 'unisex'; label: string }[] = [
   { value: 'her', label: 'Women' },
   { value: 'him', label: 'Men' },
+  { value: 'unisex', label: 'Unisex' },
 ];
 const MAX_IMAGES = 20;
 
@@ -196,11 +198,16 @@ export function BasicsStep({ navigation }: ScreenProps<'ProductWizardBasics'>) {
           </AppText>
           <View style={styles.pillRow}>
             {GENDER_PILLS.map((p) => {
-              const on = d.genders.includes(p.value);
+              const on =
+                p.value === 'unisex'
+                  ? d.genders.length >= 2
+                  : d.genders.length === 1 && d.genders[0] === p.value;
               return (
                 <PressableScale
                   key={p.value}
-                  onPress={() => d.toggleGender(p.value)}
+                  onPress={() =>
+                    d.setGenders(p.value === 'unisex' ? ['her', 'him'] : [p.value])
+                  }
                   toScale={0.97}
                   style={[styles.pill, on ? styles.pillOn : null]}
                 >

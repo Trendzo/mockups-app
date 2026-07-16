@@ -20,6 +20,7 @@ import { useApplicationDraft, ApplicationFields } from '../store/applicationDraf
 import { APPLICATION_DOC_KINDS } from '../types/onboarding';
 import { colors, spacing } from '../theme/theme';
 import { Haptics } from '../utils/haptics';
+import { isGstStateCode } from '../utils/gstStates';
 import { nationalPhone, toE164 } from '../utils/phone';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -48,6 +49,9 @@ function validateStep(s: number, f: ApplicationFields): Record<string, string> {
   if (s === 0) {
     if (f.legalName.trim().length < 2) e.legalName = '2-120 characters';
     if (f.gstin.trim().length !== 15) e.gstin = 'GSTIN must be 15 characters';
+    // A GSTIN always starts with the 2-digit GST state code.
+    else if (!/^\d{2}/.test(f.gstin.trim()))
+      e.gstin = 'GSTIN must start with the 2-digit state code (e.g. 27 for Maharashtra)';
     if (f.pan.trim() && f.pan.trim().length !== 10) e.pan = 'PAN is 10 characters';
   } else if (s === 1) {
     if (f.ownerName.trim().length < 2) e.ownerName = '2-120 characters';
@@ -218,6 +222,21 @@ export function ApplicationFormScreen({ navigation, route }: ScreenProps<'Applic
       return;
     }
 
+    // GST state code: the GSTIN's first 2 digits, else the code geocoded from
+    // the store address (LocationPicker). Catch a bad one HERE with a fixable
+    // field error instead of the backend's opaque "stateCode" rejection.
+    const gstPrefix = f.gstin.trim().slice(0, 2);
+    const stateCode = isGstStateCode(gstPrefix) ? gstPrefix : f.stateCode.trim();
+    if (!isGstStateCode(stateCode)) {
+      setErrors((p) => ({
+        ...p,
+        gstin: 'GSTIN must start with the 2-digit state code (e.g. 27 for Maharashtra)',
+      }));
+      setStep(0);
+      toast.show('Check the GSTIN - it must start with the 2-digit state code', 'error');
+      return;
+    }
+
     setBusy(true);
     try {
       const check = await checkIdentity(f.ownerEmail, toE164(f.ownerPhone));
@@ -250,8 +269,8 @@ export function ApplicationFormScreen({ navigation, route }: ScreenProps<'Applic
         contactPhone: f.contactPhone.trim() ? toE164(f.contactPhone) : undefined,
         addressLine: f.addressLine,
         pincode: f.pincode,
-        // GSTIN's first 2 digits are the GST state code (no manual entry).
-        stateCode: f.gstin.trim().slice(0, 2),
+        // Validated above: GSTIN prefix, else the geocoded address state.
+        stateCode,
         password: f.password,
         storeName: f.storeName || undefined,
         pan: f.pan || undefined,

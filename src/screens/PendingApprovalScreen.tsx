@@ -29,13 +29,25 @@ export function PendingApprovalScreen({ navigation }: ScreenProps<'PendingApprov
   const logout = useAuth((s) => s.logout);
   const toast = useToast();
   const [reopening, setReopening] = useState(false);
+  // Manual pull-to-refresh only: binding the spinner to me.isFetching makes the
+  // page "reload" every 20s background poll.
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await me.refetch();
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const status = me.data?.retailer.status;
   const store = me.data?.store;
   const subRole = me.data?.retailer.subRole;
   const isClosed = status === 'closed';
   const reopenPending = me.data?.pendingAccountRequest === 'account_reopen';
-  const canManageAccount = subRole === 'owner' || subRole === 'manager';
+  // Missing sub-role = the primary account (login/me may not send one).
+  const canManageAccount = !subRole || subRole === 'owner' || subRole === 'manager';
 
   // Suspend/terminate appeal: the in-band channel to contest the action. Covers a
   // store-level termination too (store terminated while the account stays active).
@@ -75,7 +87,7 @@ export function PendingApprovalScreen({ navigation }: ScreenProps<'PendingApprov
       setAppealText('');
       setAttachments([]);
       await appealQ.refetch();
-      toast.show('Appeal sent to ClosetX', 'info');
+      toast.show('Appeal sent to Trendzo', 'info');
     } catch (e: any) {
       toast.show(e?.message ?? 'Could not send appeal', 'error');
     } finally {
@@ -104,7 +116,7 @@ export function PendingApprovalScreen({ navigation }: ScreenProps<'PendingApprov
         tone: 'warning' as const,
         title: reopenPending ? 'Reopen request pending' : 'Account closed',
         message: reopenPending
-          ? "Your reopen request is with the ClosetX team for review. You'll regain full access once it's approved."
+          ? "Your reopen request is with the Trendzo team for review. You'll regain full access once it's approved."
           : "Your account is closed and your store is suspended. Your data is safe - request to reopen whenever you're ready.",
       };
     }
@@ -120,7 +132,7 @@ export function PendingApprovalScreen({ navigation }: ScreenProps<'PendingApprov
         tone: 'danger' as const,
         title: 'Store terminated',
         message:
-          'Your store has been terminated by ClosetX. You can appeal the decision below.',
+          'Your store has been terminated by Trendzo. You can appeal the decision below.',
       };
     }
     if (store && store.status === 'suspended') {
@@ -150,7 +162,9 @@ export function PendingApprovalScreen({ navigation }: ScreenProps<'PendingApprov
   // conversation. Fully replaces the old pending-gate look for these states.
   if (showAppeal) {
     return (
-      <Screen edges={['top', 'bottom']}>
+      // Bottom inset is handled by the composer's KeyboardStickyView — adding
+      // the Screen's bottom edge too would double the blank space under it.
+      <Screen edges={['top']}>
         <ScrollView
           style={styles.flex}
           showsVerticalScrollIndicator={false}
@@ -158,16 +172,23 @@ export function PendingApprovalScreen({ navigation }: ScreenProps<'PendingApprov
           keyboardDismissMode="interactive"
           contentContainerStyle={styles.statusContent}
           refreshControl={
-            <RefreshControl refreshing={me.isFetching} onRefresh={() => me.refetch()} />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
         >
           <View style={styles.header}>
-            <AppText variant="sectionLabel" color={colors.meta}>
-              {me.data?.retailer.legalName ?? 'Trendzo Studio'}
-            </AppText>
-            <AppText variant="cardTitle" color={colors.ink} style={styles.statusH1}>
-              Account status
-            </AppText>
+            <View style={styles.headerText}>
+              <AppText variant="sectionLabel" color={colors.meta}>
+                {me.data?.retailer.legalName ?? 'Trendzo Studio'}
+              </AppText>
+              <AppText variant="cardTitle" color={colors.ink} style={styles.statusH1}>
+                Account status
+              </AppText>
+            </View>
+            <PressableScale onPress={() => logout()} style={styles.logoutBtn}>
+              <AppText variant="bodyMedium" color={colors.ink}>
+                Log out
+              </AppText>
+            </PressableScale>
           </View>
 
           <Banner tone={banner.tone} title={banner.title} message={banner.message} />
@@ -180,7 +201,7 @@ export function PendingApprovalScreen({ navigation }: ScreenProps<'PendingApprov
                 return (
                   <View key={m.id} style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleThem]}>
                     <AppText variant="meta" color={mine ? colors.onDarkMuted : colors.meta}>
-                      {m.authorKind === 'admin' ? 'ClosetX admin' : m.authorKind === 'system' ? 'System' : 'You'}
+                      {m.authorKind === 'admin' ? 'Trendzo team' : m.authorKind === 'system' ? 'System' : 'You'}
                     </AppText>
                     <AppText variant="body" color={mine ? colors.accentInk : colors.ink}>{m.body}</AppText>
                     {m.attachments?.map((url, i) => (
@@ -195,6 +216,20 @@ export function PendingApprovalScreen({ navigation }: ScreenProps<'PendingApprov
               <AppText variant="meta" color={colors.meta}>No messages yet.</AppText>
             )}
           </View>
+
+          {/* Reopen scrolls with the thread so the composer stays the only
+              pinned bottom bar (no blank band when the keyboard opens). */}
+          {isClosed && canManageAccount ? (
+            <View style={styles.scrollActions}>
+              <PrimaryButton
+                label={reopenPending ? 'Reopen requested - pending review' : 'Request to reopen'}
+                tone="accent"
+                loading={reopening}
+                disabled={reopenPending || reopening}
+                onPress={onReopen}
+              />
+            </View>
+          ) : null}
         </ScrollView>
 
         <KeyboardStickyView style={styles.composer} minBottom={spacing.sm}>
@@ -220,19 +255,6 @@ export function PendingApprovalScreen({ navigation }: ScreenProps<'PendingApprov
             </PressableScale>
           </View>
         </KeyboardStickyView>
-
-        <View style={styles.footer}>
-          {isClosed && canManageAccount ? (
-            <PrimaryButton
-              label={reopenPending ? 'Reopen requested - pending review' : 'Request to reopen'}
-              tone="accent"
-              loading={reopening}
-              disabled={reopenPending || reopening}
-              onPress={onReopen}
-            />
-          ) : null}
-          <PrimaryButton label="Log out" tone="ghost" onPress={logout} />
-        </View>
       </Screen>
     );
   }
@@ -243,7 +265,7 @@ export function PendingApprovalScreen({ navigation }: ScreenProps<'PendingApprov
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={
-          <RefreshControl refreshing={me.isFetching} onRefresh={() => me.refetch()} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
         <View style={styles.badge}>
@@ -275,8 +297,8 @@ export function PendingApprovalScreen({ navigation }: ScreenProps<'PendingApprov
         <PrimaryButton
           label="Refresh"
           tone="accent"
-          loading={me.isFetching}
-          onPress={() => me.refetch()}
+          loading={refreshing}
+          onPress={onRefresh}
         />
         <PrimaryButton label="Log out" tone="ghost" onPress={logout} />
       </View>
@@ -302,7 +324,23 @@ const styles = StyleSheet.create({
   content: { paddingTop: spacing.xl, paddingBottom: spacing.xl, gap: spacing.md },
   // Status-and-messages layout (suspended/terminated/closed).
   statusContent: { paddingTop: spacing.md, paddingBottom: spacing.xl, gap: spacing.md },
-  header: { gap: spacing.xs },
+  scrollActions: { gap: spacing.sm, marginTop: spacing.md },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  headerText: { flex: 1, gap: spacing.xs },
+  logoutBtn: {
+    height: 36,
+    paddingHorizontal: spacing.md,
+    borderRadius: radii.pill,
+    borderWidth: 1.5,
+    borderColor: colors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   statusH1: { fontSize: 24, lineHeight: 28 },
   badge: {
     width: 56,

@@ -224,7 +224,9 @@ export function ApplicationStatusScreen({
 function Bubble({ message }: { message: ThreadMessage }) {
   // The serialized author is 'admin' | 'applicant'; treat anything non-admin as "mine".
   const mine = message.authorKind !== 'admin';
-  const label = mine ? 'You' : message.authorLabel ?? 'ClosetX admin';
+  // Always brand admin replies as the Trendzo team — the backend's
+  // authorLabel may carry old "ClosetX admin" branding.
+  const label = mine ? 'You' : 'Trendzo team';
   return (
     <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleThem]}>
       <View style={styles.bubbleHead}>

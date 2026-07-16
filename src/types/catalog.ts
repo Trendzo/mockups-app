@@ -13,6 +13,9 @@ export const AGE_GROUP_VALUES = ['0-2', '3-7', '8-12', '13-17', '18-24', '25-40'
 // Retailer sub-roles that may write to the catalog. staff = read-only.
 export type SubRole = 'owner' | 'manager' | 'staff' | 'delivery_agent';
 export function canWriteCatalog(subRole?: string | null): boolean {
+  // No sub-role on the session (e.g. the login response doesn't send one) =
+  // the primary account — don't lock the owner out of their own catalog.
+  if (!subRole) return true;
   return subRole === 'owner' || subRole === 'manager';
 }
 

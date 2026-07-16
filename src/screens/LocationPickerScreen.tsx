@@ -23,6 +23,7 @@ import {
 import { ScreenProps } from '../navigation/types';
 import { GeoPlace, reverseGeocode, searchPlaces } from '../api/geocode';
 import { useApplicationDraft } from '../store/applicationDraft';
+import { gstStateCode } from '../utils/gstStates';
 import { colors, radii, spacing, type as typeScale } from '../theme/theme';
 
 // Leaflet + OpenStreetMap map. A fixed centre pin means "the map centre is the
@@ -169,6 +170,10 @@ export function LocationPickerScreen({ navigation }: ScreenProps<'LocationPicker
     if (!selected) return;
     if (selected.addressLine) setField('addressLine', selected.addressLine);
     if (selected.pincode) setField('pincode', selected.pincode);
+    // GST state code from the geocoded state — backfills submissions whose
+    // GSTIN can't provide it.
+    const code = gstStateCode(selected.state);
+    if (code) setField('stateCode', code);
     toast.show('Store location added', 'success');
     navigation.goBack();
   };

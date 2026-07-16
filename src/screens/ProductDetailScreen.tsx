@@ -18,6 +18,7 @@ import {
 } from '../components';
 import { ScreenProps } from '../navigation/types';
 import { useListing } from '../api/catalogHooks';
+import { useRetailerMe } from '../api/onboardingHooks';
 import { deleteListing, updateListing } from '../api/catalogManagement';
 import { useProductDraft } from '../store/productDraft';
 import { useAuth } from '../store/auth';
@@ -39,7 +40,10 @@ export function ProductDetailScreen({ navigation, route }: ScreenProps<'ProductD
   const qc = useQueryClient();
   const listingQ = useListing(id);
   const listing = listingQ.data;
-  const canWrite = canWriteCatalog(useAuth((s) => s.retailer?.subRole));
+  // Prefer the fresh /retailer/me sub-role; the login snapshot may omit it.
+  const me = useRetailerMe();
+  const authSubRole = useAuth((s) => s.retailer?.subRole);
+  const canWrite = canWriteCatalog(me.data?.retailer.subRole ?? authSubRole);
 
   const [busy, setBusy] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
