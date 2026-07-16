@@ -85,6 +85,8 @@ export interface ApplicationInput {
   categories?: string[];
   brands?: string[];
   documents?: UploadedDoc[];
+  /** Signup-form consent to the T&C + Privacy Policy (backend pins current versions). */
+  acceptLegal?: boolean;
 }
 
 export interface ApplicationCreated {

@@ -14,6 +14,7 @@ export { StatusChip, toneForStatus } from './StatusChip';
 export type { StatusTone } from './StatusChip';
 export { Card } from './Card';
 export { Chip } from './Chip';
+export { LegalConsentRow } from './LegalConsentRow';
 export { Field } from './Field';
 export { FloatingNavBar } from './FloatingNavBar';
 export { HeroHeadline } from './HeroHeadline';

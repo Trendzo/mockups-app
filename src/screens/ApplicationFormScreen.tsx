@@ -6,6 +6,7 @@ import {
   ApplicationWizard,
   Field,
   Icon,
+  LegalConsentRow,
   OtpInput,
   PressableScale,
   PrimaryButton,
@@ -90,6 +91,7 @@ export function ApplicationFormScreen({ navigation, route }: ScreenProps<'Applic
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  const [legalAgreed, setLegalAgreed] = useState(false);
 
   // Phone-OTP verification - required before a signup can be submitted.
   const [phoneVerified, setPhoneVerified] = useState(false);
@@ -221,6 +223,10 @@ export function ApplicationFormScreen({ navigation, route }: ScreenProps<'Applic
       toast.show('Please verify your phone number to submit', 'error');
       return;
     }
+    if (!legalAgreed) {
+      toast.show('Please accept the Terms & Conditions and Privacy Policy', 'error');
+      return;
+    }
 
     // GST state code: the GSTIN's first 2 digits, else the code geocoded from
     // the store address (LocationPicker). Catch a bad one HERE with a fixable
@@ -278,6 +284,7 @@ export function ApplicationFormScreen({ navigation, route }: ScreenProps<'Applic
         bankAccountNumber: f.bankAccountNumber || undefined,
         bankIfsc: f.bankIfsc || undefined,
         documents,
+        acceptLegal: true,
       });
 
       Haptics.success();
@@ -402,6 +409,9 @@ export function ApplicationFormScreen({ navigation, route }: ScreenProps<'Applic
         showPasswordField
         onPickLocation={() => navigation.navigate('LocationPicker')}
         beforeNext={guardNext}
+        consentSlot={
+          <LegalConsentRow agreed={legalAgreed} onToggle={() => setLegalAgreed((a) => !a)} />
+        }
       />
     </Screen>
   );

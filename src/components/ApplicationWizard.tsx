@@ -60,6 +60,9 @@ export interface ApplicationWizardProps {
 
   // ── Navigation guard (e.g. block leaving Owner until phone verified) ──
   beforeNext?: (fromStep: number) => boolean;
+
+  /** Legal consent row (T&C + Privacy checkbox) rendered above the submit button on the last step. */
+  consentSlot?: React.ReactNode;
 }
 
 /**
@@ -89,6 +92,7 @@ export function ApplicationWizard({
   onPickLocation,
   docState,
   beforeNext,
+  consentSlot,
 }: ApplicationWizardProps) {
   const insets = useSafeAreaInsets();
   const keyboardHeight = useKeyboardHeight();
@@ -220,6 +224,7 @@ export function ApplicationWizard({
             <Chip key={s.title} label={s.title} selected={i === step} onPress={() => go(i)} />
           ))}
         </ScrollView>
+        {isLast ? consentSlot : null}
         <PrimaryButton
           label={isLast ? submitLabel : 'Continue'}
           tone="accent"

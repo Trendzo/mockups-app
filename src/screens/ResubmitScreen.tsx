@@ -6,6 +6,7 @@ import {
   BackButton,
   Banner,
   Field,
+  LegalConsentRow,
   PrimaryButton,
   Screen,
   WizardStepCopy,
@@ -68,6 +69,7 @@ export function ResubmitScreen({ navigation, route }: ScreenProps<'Resubmit'>) {
   const [docErrors, setDocErrors] = useState<Partial<Record<DocKind, string>>>({});
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [legalAgreed, setLegalAgreed] = useState(false);
   // Full server error surfaced on-screen (the device console isn't visible).
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -175,6 +177,10 @@ export function ResubmitScreen({ navigation, route }: ScreenProps<'Resubmit'>) {
       toast.show('Check the GSTIN - it must start with the 2-digit state code', 'error');
       return;
     }
+    if (!legalAgreed) {
+      toast.show('Please accept the Terms & Conditions and Privacy Policy', 'error');
+      return;
+    }
     setBusy(true);
     try {
       const documents = APPLICATION_DOC_KINDS.filter((d) => docs[d.kind]).map((d) => ({
@@ -200,6 +206,7 @@ export function ResubmitScreen({ navigation, route }: ScreenProps<'Resubmit'>) {
           bankAccountNumber: form.bankAccountNumber || undefined,
           bankIfsc: form.bankIfsc || undefined,
           documents,
+          acceptLegal: true,
         },
         { email, password },
       );
@@ -280,6 +287,9 @@ export function ResubmitScreen({ navigation, route }: ScreenProps<'Resubmit'>) {
         phoneEditable={false}
         showPasswordField={false}
         docState={docState}
+        consentSlot={
+          <LegalConsentRow agreed={legalAgreed} onToggle={() => setLegalAgreed((a) => !a)} />
+        }
       />
     </Screen>
   );
