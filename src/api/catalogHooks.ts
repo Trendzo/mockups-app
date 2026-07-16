@@ -3,6 +3,7 @@ import {
   createBrand,
   getCatalogBrands,
   getCatalogCategories,
+  getCatalogSizeScales,
   getInventory,
   getListing,
   getListings,
@@ -30,6 +31,15 @@ export function useCatalogCategories(gender?: string) {
   return useQuery({
     queryKey: ['catalog-categories', gender ?? 'all'],
     queryFn: () => getCatalogCategories(gender),
+    staleTime: 5 * 60_000,
+  });
+}
+
+/** Category-aware size pick-lists (same /catalog/size-scales the web portal uses). */
+export function useCatalogSizeScales(categoryId?: string | null) {
+  return useQuery({
+    queryKey: ['catalog-size-scales', categoryId ?? 'all'],
+    queryFn: () => getCatalogSizeScales(categoryId),
     staleTime: 5 * 60_000,
   });
 }

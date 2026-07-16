@@ -25,7 +25,8 @@ import {
   useProductDraft,
   VariantTarget,
 } from '../../store/productDraft';
-import { useCatalogCategories } from '../../api/catalogHooks';
+import { useCatalogSizeScales } from '../../api/catalogHooks';
+import { SizeScale } from '../../types/catalog';
 import { createMockupsFromUrl } from '../../api/mockups';
 import { Mode } from '../../types/enums';
 import { parseRupeesToPaise } from '../../utils/money';
@@ -35,7 +36,6 @@ import { setCameraSink } from './cameraSink';
 import { WizardHeader } from './WizardHeader';
 import { useExitWizardToHome } from './useExitToHome';
 import { ColorPickerSheet } from './ColorPickerSheet';
-import { SizeKindDef, sizeKindDef, inferSizeKind } from './sizeKinds';
 
 // Colour choices offered in the dropdown (plus "Custom…" → full picker).
 const COLOR_PALETTE: { name: string; hex: string }[] = [
@@ -224,13 +224,12 @@ function SingleEditor({
  */
 function ColorVariantsEditor({ errors }: { errors: Record<string, string> }) {
   const d = useProductDraft();
-  const cats = useCatalogCategories();
+  // Category-aware size scales from the backend (same /catalog/size-scales the
+  // web portal wizard uses); universal scales come back even without a category.
+  const scalesQ = useCatalogSizeScales(d.categoryId);
+  const scales = scalesQ.data ?? [];
   const scrollRef = useRef<ScrollView>(null);
   const [active, setActive] = useState(0);
-  const catLabel = cats.data?.find((c) => c.id === d.categoryId)?.label;
-  // Size system: manual override, else auto-detected from the category.
-  const kind = d.sizeKind ?? inferSizeKind(catLabel);
-  const def = sizeKindDef(kind);
 
   const goTo = (idx: number) => {
     scrollRef.current?.scrollTo({ x: idx * (CARD_W + CARD_GAP), animated: true });
@@ -247,7 +246,7 @@ function ColorVariantsEditor({ errors }: { errors: Record<string, string> }) {
 
   return (
     <View style={styles.block}>
-      {/* Size system is auto-inferred from the category (no manual picker). */}
+      {/* Size options follow the category picked in Basics (no manual picker). */}
       <View style={styles.carouselWrap}>
         <ScrollView
           ref={scrollRef}
@@ -263,7 +262,7 @@ function ColorVariantsEditor({ errors }: { errors: Record<string, string> }) {
         >
           {d.colors.map((color, ci) => (
             <View key={color.id} style={styles.cardSlot}>
-              <ColorCard color={color} index={ci} errors={errors} sizeDef={def} />
+              <ColorCard color={color} index={ci} errors={errors} scales={scales} />
             </View>
           ))}
         </ScrollView>
@@ -287,16 +286,19 @@ function ColorCard({
   color,
   index,
   errors,
-  sizeDef,
+  scales,
 }: {
   color: ColorDraft;
   index: number;
   errors: Record<string, string>;
-  sizeDef: SizeKindDef;
+  scales: SizeScale[];
 }) {
   const d = useProductDraft();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [customSize, setCustomSize] = useState('');
+  // Which scale's chips show (Letter/Waist for apparel, UK/US/EU for footwear…).
+  const [scaleId, setScaleId] = useState<string | null>(null);
+  const activeScale = scales.find((s) => s.id === scaleId) ?? scales[0];
   const first = color.sizes[0];
   const price = first?.price ?? '';
   const chosen = color.sizes.map((r) => r.size).filter(Boolean);
@@ -390,16 +392,33 @@ function ColorCard({
         }}
       />
 
-      {/* Sizes as toggle chips - options depend on the product type. */}
-      <AppText variant="sectionLabel" color={colors.meta}>{sizeDef.axis}</AppText>
-      {sizeDef.presets.length > 0 ? (
+      {/* Sizes as toggle chips - options follow the category's size scales. */}
+      <AppText variant="sectionLabel" color={colors.meta}>Sizes</AppText>
+      {scales.length > 1 ? (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={styles.chipsRow}
         >
-          {sizeDef.presets.map((label) => (
+          {scales.map((s) => (
+            <Chip
+              key={s.id}
+              label={s.name}
+              selected={s.id === activeScale?.id}
+              onPress={() => setScaleId(s.id)}
+            />
+          ))}
+        </ScrollView>
+      ) : null}
+      {activeScale && activeScale.values.length > 0 ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.chipsRow}
+        >
+          {activeScale.values.map((label) => (
             <Chip key={label} label={label} selected={isSel(label)} onPress={() => toggleSize(label)} />
           ))}
         </ScrollView>
@@ -410,7 +429,7 @@ function ColorCard({
         label="Add a custom size"
         value={customSize}
         onChangeText={setCustomSize}
-        placeholder={sizeDef.kind === 'chain' ? 'e.g. 26"' : 'e.g. 4XL'}
+        placeholder="e.g. 4XL"
         autoCorrect={false}
         returnKeyType="done"
         onSubmitEditing={() => {

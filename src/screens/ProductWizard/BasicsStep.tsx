@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   LayoutAnimation,
@@ -55,7 +55,26 @@ export function BasicsStep({ navigation }: ScreenProps<'ProductWizardBasics'>) {
   const [newBrand, setNewBrand] = useState('');
 
   const brandOptions = (brandsQ.data ?? []).map((b) => ({ value: b.id, label: b.name }));
-  const categoryOptions = (categoriesQ.data ?? []).map((c) => ({ value: c.id, label: c.label }));
+
+  // Same rule as the web wizard: a gendered category shows only for its gender;
+  // unisex categories always show. Both pills on = a unisex product. No pill
+  // picked yet = show everything so the user isn't blocked on field order.
+  const gender: 'her' | 'him' | 'unisex' | null =
+    d.genders.length >= 2 ? 'unisex' : d.genders[0] ?? null;
+  const visibleCategories = (categoriesQ.data ?? []).filter(
+    (c) => !gender || c.gender === gender || c.gender === 'unisex',
+  );
+  const categoryOptions = visibleCategories.map((c) => ({ value: c.id, label: c.label }));
+
+  // A gender change can hide the chosen category - drop it so the draft never
+  // carries a category the picker no longer offers.
+  useEffect(() => {
+    if (!categoriesQ.data || !d.categoryId) return;
+    if (!visibleCategories.some((c) => c.id === d.categoryId)) {
+      d.setBasics({ categoryId: null });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gender, categoriesQ.data, d.categoryId]);
 
   const addImages = async () => {
     if (d.gallery.length >= MAX_IMAGES) {

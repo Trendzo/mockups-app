@@ -36,6 +36,17 @@ export interface CatalogCategory {
   isActive?: boolean;
 }
 
+/** Category-aware size pick-list served by GET /catalog/size-scales (same
+ *  source the web portal wizard uses). Empty categorySlugs = universal. */
+export interface SizeScale {
+  id: string;
+  name: string;
+  values: string[];
+  categorySlugs: string[];
+  sortOrder?: number;
+  isActive?: boolean;
+}
+
 export interface Variant {
   id: string;
   listingId: string;

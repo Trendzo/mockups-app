@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { Listing, ListingPolicy, VariantGroup } from '../types/catalog';
 import { paiseToRupeeInput } from '../utils/money';
-import { SizeKind } from '../screens/ProductWizard/sizeKinds';
 
 /**
  * In-progress product draft for the unified creation/edit wizard. Session-only
@@ -72,9 +71,6 @@ interface ProductDraftState {
 
   // Step 2 - Variants
   variantMode: WizardVariantMode;
-  // Size system for variants (null = auto-infer from the category). Lets
-  // accessories (rings/chains/shoes) use their own size scale, not S/M/L.
-  sizeKind: SizeKind | null;
   single: SingleVariantDraft;
   colors: ColorDraft[];
   // Freshly generated (not-yet-adopted) mockups, keyed by colour id. Lives in the
@@ -114,7 +110,6 @@ interface ProductDraftState {
 
   // ---- step 2 ----
   setVariantMode: (m: WizardVariantMode) => void;
-  setSizeKind: (k: SizeKind | null) => void;
   setSingle: (patch: Partial<SingleVariantDraft>) => void;
   addColor: () => void;
   removeColor: (colorId: string) => void;
@@ -196,7 +191,6 @@ const emptyState = () => ({
   basePrice: '',
   baseMrp: '',
   variantMode: 'single' as WizardVariantMode,
-  sizeKind: null as SizeKind | null,
   single: emptySingle(),
   colors: [emptyColor()],
   variantMockups: {} as Record<string, string[]>,
@@ -313,7 +307,6 @@ export const useProductDraft = create<ProductDraftState>((set) => ({
   setGallery: (urls) => set({ gallery: urls }),
 
   setVariantMode: (m) => set({ variantMode: m }),
-  setSizeKind: (k) => set({ sizeKind: k }),
   setSingle: (patch) => set((s) => ({ single: { ...s.single, ...patch } })),
   addColor: () => set((s) => ({ colors: [...s.colors, emptyColor()] })),
   removeColor: (colorId) =>

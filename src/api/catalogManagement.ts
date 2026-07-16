@@ -10,6 +10,7 @@ import {
   Listing,
   ListingStatus,
   PatchVariantInput,
+  SizeScale,
   UpdateListingInput,
   Variant,
   VariantGroup,
@@ -37,6 +38,14 @@ export const getCatalogCategories = (gender?: string) =>
 
 export const getCatalogBrands = () =>
   req<CatalogBrand[]>(() => http.get('/catalog/brands', { params: { activeOnly: true } }));
+
+/** Size scales for a category (universal scales come back even without one). */
+export const getCatalogSizeScales = (categoryId?: string | null) =>
+  req<SizeScale[]>(() =>
+    http.get('/catalog/size-scales', {
+      params: categoryId ? { categoryId } : {},
+    }),
+  );
 
 /** Turn a brand name into a url-safe slug (e.g. "Nike Air" -> "nike-air"). */
 function slugify(s: string): string {
