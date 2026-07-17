@@ -6,10 +6,10 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   AppText,
   BottomSheet,
+  SheetSurface,
   Icon,
   PressableScale,
   PrimaryButton,
@@ -29,7 +29,6 @@ import { ACCOUNT_DELETION_URL, SUPPORT_URL } from '../config/legal';
 /** Profile (§account): view your retailer details, request changes, log out. */
 export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
   const toast = useToast();
-  const insets = useSafeAreaInsets();
   const retailer = useAuth(s => s.retailer);
   const logout = useAuth(s => s.logout);
   const me = useRetailerMe(!!retailer);
@@ -250,11 +249,6 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
             <ActionRow
               icon="trash-outline"
               label={closurePending ? 'Closure requested' : 'Request account closure'}
-              hint={
-                closurePending
-                  ? 'Pending admin review - you can reopen anytime after it takes effect'
-                  : 'Submit a request to close this business account (admin-reviewed)'
-              }
               tone="danger"
               onPress={() => {
                 if (closurePending) {
@@ -278,9 +272,7 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
         }}
         dismissable={phase === 'idle'}
       >
-        <View
-          style={[styles.sheet, { paddingBottom: insets.bottom + spacing.lg }]}
-        >
+        <SheetSurface style={styles.sheet}>
           <AppText
             variant="cardTitle"
             color={colors.ink}
@@ -335,7 +327,7 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
               ) : null}
             </View>
           )}
-        </View>
+        </SheetSurface>
       </BottomSheet>
 
       <BottomSheet
@@ -343,9 +335,7 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
         onClose={() => !deleting && setDeleteOpen(false)}
         dismissable={!deleting}
       >
-        <View
-          style={[styles.sheet, { paddingBottom: insets.bottom + spacing.lg }]}
-        >
+        <SheetSurface style={styles.sheet}>
           <AppText
             variant="cardTitle"
             color={colors.ink}
@@ -379,7 +369,7 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
             disabled={deleting}
             onPress={() => setDeleteOpen(false)}
           />
-        </View>
+        </SheetSurface>
       </BottomSheet>
     </Screen>
   );

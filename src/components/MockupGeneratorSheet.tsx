@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppImage } from './AppImage';
+import { SheetSurface } from './BottomSheet';
 import { AppText } from './AppText';
 import { Icon } from './Icon';
 import { PressableScale } from './PressableScale';
@@ -30,7 +30,6 @@ interface Props {
  * every "Generate" is a fresh call; picks accumulate only in local state.
  */
 export function MockupGeneratorSheet({ apparelImageUrl, existing, onAdd, onClose }: Props) {
-  const insets = useSafeAreaInsets();
   const toast = useToast();
   const gen = useGenerateMockups();
 
@@ -62,7 +61,7 @@ export function MockupGeneratorSheet({ apparelImageUrl, existing, onAdd, onClose
   };
 
   return (
-    <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.lg }]}>
+    <SheetSurface style={styles.sheet}>
       <AppText variant="cardTitle" color={colors.ink} style={styles.title}>
         Generate with AI
       </AppText>
@@ -154,7 +153,7 @@ export function MockupGeneratorSheet({ apparelImageUrl, existing, onAdd, onClose
           onPress={() => onAdd(picked)}
         />
       </View>
-    </View>
+    </SheetSurface>
   );
 }
 

@@ -1,15 +1,10 @@
 import React, { useState } from 'react';
-import { Dimensions, ScrollView, StyleSheet, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { AppText } from './AppText';
-import { BottomSheet } from './BottomSheet';
+import { BottomSheet, SheetSurface } from './BottomSheet';
 import { Icon } from './Icon';
 import { PressableScale } from './PressableScale';
 import { colors, radii, spacing } from '../theme/theme';
-
-// Concrete cap for the option list (percentage max-heights don't resolve inside
-// the sheet's auto-height animated wrapper).
-const OPTIONS_MAX_HEIGHT = Dimensions.get('window').height * 0.5;
 
 export interface SelectOption {
   label: string;
@@ -48,7 +43,10 @@ export function Select({
   boxed = false,
 }: SelectProps) {
   const [open, setOpen] = useState(false);
-  const insets = useSafeAreaInsets();
+  // Concrete cap for the option list (percentage max-heights don't resolve
+  // inside the sheet's auto-height animated wrapper). Measured per render so it
+  // survives rotation - a module-scope Dimensions read never updates.
+  const optionsMaxHeight = useWindowDimensions().height * 0.5;
 
   const summary =
     selected.length === 0
@@ -118,7 +116,7 @@ export function Select({
       ) : null}
 
       <BottomSheet visible={open} onClose={() => setOpen(false)}>
-        <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.lg }]}>
+        <SheetSurface style={styles.sheet}>
             <View style={styles.sheetHeader}>
               <AppText variant="cardTitle" color={colors.ink} style={styles.sheetTitle}>
                 {label}
@@ -129,7 +127,7 @@ export function Select({
             </View>
 
             <ScrollView
-              style={styles.optionScroll}
+              style={[styles.optionScroll, { maxHeight: optionsMaxHeight }]}
               showsVerticalScrollIndicator={false}
             >
               {clearable && !multiple ? (
@@ -163,7 +161,7 @@ export function Select({
                 </AppText>
               </PressableScale>
             ) : null}
-        </View>
+        </SheetSurface>
       </BottomSheet>
     </View>
   );
@@ -241,7 +239,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   sheetTitle: { fontSize: 20, lineHeight: 24 },
-  optionScroll: { flexGrow: 0, maxHeight: OPTIONS_MAX_HEIGHT },
+  optionScroll: { flexGrow: 0 },
   optionRow: {
     flexDirection: 'row',
     alignItems: 'center',

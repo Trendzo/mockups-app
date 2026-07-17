@@ -1,38 +1,24 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Dimensions, ScrollView, StyleSheet, View } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Dimensions, ScrollView, StyleSheet, View } from 'react-native';
 import {
-  AppImage,
   AppText,
   Chip,
   Field,
   Icon,
-  ImageViewer,
   KeyboardStickyView,
   PressableScale,
   PrimaryButton,
   Screen,
   SegmentedControl,
   Select,
-  StatusTicker,
-  useToast,
+  VariantImages,
 } from '../../components';
-import { RootStackParamList, ScreenProps } from '../../navigation/types';
-import {
-  ColorDraft,
-  SingleVariantDraft,
-  useProductDraft,
-  VariantTarget,
-} from '../../store/productDraft';
+import { ScreenProps } from '../../navigation/types';
+import { ColorDraft, SingleVariantDraft, useProductDraft } from '../../store/productDraft';
 import { useCatalogSizeScales } from '../../api/catalogHooks';
 import { SizeScale } from '../../types/catalog';
-import { createMockupsFromUrl } from '../../api/mockups';
-import { Mode } from '../../types/enums';
 import { parseRupeesToPaise } from '../../utils/money';
 import { colors, radii, spacing } from '../../theme/theme';
-import { uploadLocalImage } from './pickImages';
-import { setCameraSink } from './cameraSink';
 import { WizardHeader } from './WizardHeader';
 import { useExitWizardToHome } from './useExitToHome';
 import { ColorPickerSheet } from './ColorPickerSheet';
@@ -55,14 +41,6 @@ const COLOR_PALETTE: { name: string; hex: string }[] = [
   { name: 'Beige', hex: '#D9C6A5' },
 ];
 const CUSTOM_COLOR = 'custom';
-
-// Status copy shown while a variant mockup generates (like the Generating screen).
-const GEN_STATUS = [
-  'Reading your garment…',
-  'Setting the studio light…',
-  'Rendering the front view…',
-  'Almost there - polishing pixels…',
-];
 
 // Carousel geometry: full-bleed track with gutters equal to the screen's
 // standard padding, so the centred card is EXACTLY as wide as every other
@@ -465,260 +443,15 @@ function ColorCard({
         <AppText variant="meta" color={colors.meta}>Tap sizes above to add them.</AppText>
       )}
 
+      {/* The generated preview lives in the draft (keyed by colour) so it
+          survives a detour to Details and back - local state would be lost. */}
       <VariantImages
         imageUrls={imgs}
         onAddImages={addImgs}
         onRemoveImage={removeImg}
         allowMockup
-        mockupKey={color.id}
-      />
-    </View>
-  );
-}
-
-/** Which mockup subject to generate. Product = flat garment (no model). */
-type ModelKind = 'product' | 'him' | 'her';
-
-/** Per-variant photos: two camera slots (front/back of the garment).
- *  Pass `target` for a single variant, or `onAddImages`/`onRemoveImage` to
- *  drive a whole colour (applies the same images to every size). Mockup
- *  generation is colour-only: pass `allowMockup` + a `mockupKey` (the colour id)
- *  so the generated preview persists in the draft across step navigation. */
-function VariantImages({
-  target,
-  imageUrls,
-  onAddImages,
-  onRemoveImage,
-  allowMockup = false,
-  mockupKey,
-}: {
-  target?: VariantTarget;
-  imageUrls: string[];
-  onAddImages?: (urls: string[]) => void;
-  onRemoveImage?: (i: number) => void;
-  allowMockup?: boolean;
-  mockupKey?: string;
-}) {
-  const d = useProductDraft();
-  const toast = useToast();
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const [shooting, setShooting] = useState(false);
-  const [generating, setGenerating] = useState(false);
-  const [modelKind, setModelKind] = useState<ModelKind>('product');
-  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
-
-  // Generated-but-unadopted mockups live in the draft (keyed by colour) so they
-  // survive a detour to Details and back - local state would be lost on remount.
-  const generated = allowMockup && mockupKey ? d.variantMockups[mockupKey] ?? [] : [];
-  const setGenerated = (urls: string[]) => {
-    if (mockupKey) d.setVariantMockups(mockupKey, urls);
-  };
-
-  const MAX_PHOTOS = 2;
-  const addImages = (urls: string[]) => {
-    const capped = urls.slice(0, Math.max(0, MAX_PHOTOS - imageUrls.length));
-    if (!capped.length) return;
-    if (onAddImages) onAddImages(capped);
-    else if (target) d.addVariantImages(target, capped);
-  };
-  const removeImage = (i: number) =>
-    onRemoveImage ? onRemoveImage(i) : target ? d.removeVariantImage(target, i) : undefined;
-  // Replace all photos with a new set (used to promote generated mockups).
-  const replaceImages = (urls: string[]) => {
-    for (let i = imageUrls.length - 1; i >= 0; i--) removeImage(i);
-    const next = urls.slice(0, MAX_PHOTOS);
-    if (onAddImages) onAddImages(next);
-    else if (target) d.addVariantImages(target, next);
-    // These are now the variant's photos - clear the preview so the card doesn't
-    // keep offering to re-adopt mockups it already applied.
-    setGenerated([]);
-  };
-
-  // Slots fill in order (front, then back). Capturing the front camera opens it
-  // labelled FRONT; the back slot opens it labelled BACK.
-  const shoot = (slotIndex: number) => {
-    if (shooting || slotIndex >= MAX_PHOTOS) return;
-    setCameraSink(async (uri) => {
-      setShooting(true); // spinner shows during upload only (camera cancel = no-op)
-      try {
-        const url = await uploadLocalImage(uri);
-        addImages([url]); // appends into slotIndex (the first empty)
-      } catch (e: any) {
-        toast.show(e?.message ?? 'Upload failed', 'error');
-      } finally {
-        setShooting(false);
-      }
-    });
-    navigation.navigate('Capture', { slot: slotIndex === 0 ? 'front' : 'back', sink: 'custom' });
-  };
-
-  // Generate mockups from the captured photo. Product = flat (no model); Him/Her
-  // = on a male/female model. Front views only - no back / hanger / flat-lay.
-  const generate = async () => {
-    const source = imageUrls[0];
-    if (generating || !source) return;
-    setGenerating(true);
-    try {
-      const useModel = modelKind !== 'product';
-      const images = await createMockupsFromUrl(
-        source,
-        useModel ? Mode.WithModel : Mode.WithoutModel,
-        useModel ? (modelKind as 'him' | 'her') : undefined,
-      );
-      const fronts = images.filter((im) => !/back|hanger|flat/i.test(im.name));
-      const urls = (fronts.length ? fronts : images).map((im) => im.url).slice(0, 2);
-      if (!urls.length) throw new Error('No mockups returned');
-      // Drop the source photo we generated from - the mockups take its place.
-      const srcIdx = imageUrls.indexOf(source);
-      if (srcIdx >= 0) removeImage(srcIdx);
-      setGenerated(urls);
-      toast.show('Mockup ready', 'success');
-    } catch (e: any) {
-      toast.show(e?.message ?? 'Could not generate mockups', 'error');
-    } finally {
-      setGenerating(false);
-    }
-  };
-
-  // Show the generate controls only for colours, with a source photo and room
-  // for the result. Once both slots are full the photos are final - hide it.
-  const canGenerate =
-    allowMockup && imageUrls.length > 0 && imageUrls.length < MAX_PHOTOS;
-
-  return (
-    <View style={styles.imgBlock}>
-      <AppText variant="sectionLabel" color={colors.meta}>
-        Photos · front & back (max 2)
-      </AppText>
-      {/* Two 3:4 slots; an empty slot opens the camera. */}
-      <View style={styles.photoSlotRow}>
-        {[0, 1].map((i) => {
-          const url = imageUrls[i];
-          if (url) {
-            return (
-              <View key={`${url}-${i}`} style={styles.photoSlot}>
-                <AppImage
-                  uri={url}
-                  radius={radii.sm}
-                  resizeMode="contain"
-                  containerStyle={styles.photoSlotFill}
-                />
-                <PressableScale
-                  onPress={() => removeImage(i)}
-                  style={styles.thumbRemove}
-                  toScale={0.9}
-                >
-                  <Icon name="close" size={12} color={colors.surface} />
-                </PressableScale>
-              </View>
-            );
-          }
-          // Only the first empty slot is active; fill front before back so a
-          // capture never lands in two slots and the label always matches.
-          const active = i === imageUrls.length;
-          return (
-            <PressableScale
-              key={`empty-${i}`}
-              onPress={() => shoot(i)}
-              haptic={false}
-              disabled={!active || shooting}
-              style={[
-                styles.photoSlot,
-                styles.photoSlotEmpty,
-                !active && styles.photoSlotMuted,
-              ]}
-            >
-              {shooting && active ? (
-                <ActivityIndicator size="small" color={colors.ink} />
-              ) : (
-                <>
-                  <Icon name="camera-outline" size={22} color={colors.inkMuted} />
-                  <AppText variant="meta" color={colors.meta}>
-                    {i === 0 ? 'Front' : 'Back'}
-                  </AppText>
-                </>
-              )}
-            </PressableScale>
-          );
-        })}
-      </View>
-
-      {/* Colour-only mockup generation: pick the subject, then the black CTA. */}
-      {canGenerate ? (
-        <>
-          <SegmentedControl<ModelKind>
-            compact
-            value={modelKind}
-            onChange={setModelKind}
-            options={[
-              { value: 'product', label: 'Product' },
-              { value: 'him', label: 'Him' },
-              { value: 'her', label: 'Her' },
-            ]}
-          />
-          <PressableScale onPress={generate} disabled={generating} style={styles.genCta}>
-            {generating ? (
-              <ActivityIndicator color={colors.accentInk} />
-            ) : (
-              <>
-                <Icon name="sparkles" size={18} color={colors.accentInk} />
-                <AppText variant="bodyMedium" color={colors.accentInk}>
-                  Generate mockup
-                </AppText>
-              </>
-            )}
-          </PressableScale>
-        </>
-      ) : null}
-
-      {/* Status copy while generating (mirrors the Generating screen). */}
-      {generating ? (
-        <StatusTicker
-          messages={GEN_STATUS}
-          color={colors.meta}
-          style={styles.genStatus}
-        />
-      ) : null}
-
-      {/* Generated mockups - tap to open full-screen; "Use these" sets them as
-          the variant photos. */}
-      {allowMockup && generated.length ? (
-        <View style={styles.genBlock}>
-          <View style={styles.genHead}>
-            <AppText variant="sectionLabel" color={colors.meta}>
-              Generated mockup{generated.length > 1 ? 's' : ''}
-            </AppText>
-            <PressableScale onPress={() => replaceImages(generated)} haptic={false}>
-              <AppText variant="meta" color={colors.ink}>
-                Use these
-              </AppText>
-            </PressableScale>
-          </View>
-          <View style={styles.photoSlotRow}>
-            {generated.map((url, i) => (
-              <PressableScale
-                key={`${url}-${i}`}
-                onPress={() => setViewerIndex(i)}
-                toScale={0.98}
-                style={styles.photoSlot}
-              >
-                <AppImage
-                  uri={url}
-                  radius={radii.sm}
-                  resizeMode="contain"
-                  containerStyle={styles.photoSlotFill}
-                />
-              </PressableScale>
-            ))}
-          </View>
-        </View>
-      ) : null}
-
-      <ImageViewer
-        visible={viewerIndex != null}
-        images={generated.map((url) => ({ url }))}
-        initialIndex={viewerIndex ?? 0}
-        onClose={() => setViewerIndex(null)}
+        generated={d.variantMockups[color.id] ?? []}
+        onGeneratedChange={(urls) => d.setVariantMockups(color.id, urls)}
       />
     </View>
   );

@@ -7,6 +7,7 @@ import {
   Banner,
   BackButton,
   BottomSheet,
+  SheetSurface,
   Icon,
   ImageViewer,
   PressableScale,
@@ -233,7 +234,7 @@ export function ProductDetailScreen({ navigation, route }: ScreenProps<'ProductD
       ) : null}
 
       <BottomSheet visible={moreOpen} onClose={() => setMoreOpen(false)}>
-        <View style={styles.sheet}>
+        <SheetSurface style={styles.sheet}>
           <AppText variant="cardTitle" color={colors.ink} style={styles.sheetTitle}>
             Manage product
           </AppText>
@@ -244,7 +245,7 @@ export function ProductDetailScreen({ navigation, route }: ScreenProps<'ProductD
             <SheetAction icon="trash-outline" label="Delete draft" danger onPress={onDelete} />
           ) : null}
           <PrimaryButton label="Cancel" tone="surface" onPress={() => setMoreOpen(false)} />
-        </View>
+        </SheetSurface>
       </BottomSheet>
 
       <ImageViewer
@@ -333,7 +334,10 @@ const styles = StyleSheet.create({
   content: { paddingTop: spacing.md, paddingBottom: spacing.xxl, gap: spacing.md },
   loader: { marginTop: spacing.xl },
   gallery: { marginTop: spacing.xs },
-  galleryImg: { width: 150, height: 190, marginRight: spacing.sm },
+  // Exactly 3:4 - the ratio the apparel photos and generated mockups come in.
+  // 150x190 was a near-miss (0.789), so `contain` letterboxed every image and
+  // left a grey strip down each side.
+  galleryImg: { width: 150, aspectRatio: 3 / 4, marginRight: spacing.sm },
   galleryFill: { width: '100%', height: '100%' },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   h1: { flex: 1, fontSize: 24, lineHeight: 28 },

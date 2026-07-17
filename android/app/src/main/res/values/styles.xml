@@ -1,7 +1,18 @@
 <resources>
 
-    <!-- Base application theme. -->
-    <style name="AppTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
+    <!--
+      Base application theme.
+
+      Light, NOT DayNight: the design has a single light palette (see
+      theme.ts - canvas/surface are light, there is no dark set), so the app
+      renders identically whatever the system is set to. Claiming DayNight only
+      made Android hand system chrome the wrong treatment on a dark-mode phone -
+      RN reads the theme's ui mode and scrims a Modal's navigation bar with 50%
+      #1b1b1b, which painted a grey strip over the bottom of every bottom sheet
+      and read as the sheet not reaching the screen edge. Light keeps the nav
+      bar scrim white (blending into the sheet) and its icons dark.
+    -->
+    <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
         <!-- Customize your theme here. -->
         <item name="android:editTextBackground">@drawable/rn_edit_text_material</item>
     </style>

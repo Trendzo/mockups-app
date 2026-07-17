@@ -5,9 +5,8 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LinearGradient from 'react-native-linear-gradient';
-import { AppText, BottomSheet, Field, PrimaryButton } from '../../components';
+import { AppText, BottomSheet, SheetSurface, Field, PrimaryButton } from '../../components';
 import { colors, radii, spacing } from '../../theme/theme';
 
 // ---- HSL <-> hex helpers ----
@@ -97,7 +96,6 @@ export function ColorPickerSheet({
   onClose: () => void;
   onPick: (hex: string) => void;
 }) {
-  const insets = useSafeAreaInsets();
   const [h, setH] = useState(0);
   const [s, setS] = useState(0.85);
   const [l, setL] = useState(0.5);
@@ -134,7 +132,7 @@ export function ColorPickerSheet({
 
   return (
     <BottomSheet visible={visible} onClose={onClose} avoidKeyboard>
-      <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.lg }]}>
+      <SheetSurface style={styles.sheet}>
         <View style={styles.headRow}>
           <AppText variant="cardTitle" color={colors.ink} style={styles.title}>
             Pick any color
@@ -170,7 +168,7 @@ export function ColorPickerSheet({
         />
 
         <PrimaryButton label="Use this color" tone="accent" onPress={() => onPick(hex)} />
-      </View>
+      </SheetSurface>
     </BottomSheet>
   );
 }

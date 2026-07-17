@@ -22,6 +22,7 @@ import {
   AppText,
   Banner,
   BottomSheet,
+  SheetSurface,
   Icon,
   PressableScale,
   PrimaryButton,
@@ -196,7 +197,7 @@ export function CatalogListScreen({ navigation }: ScreenProps<'Catalog'>) {
 
       {/* Filters */}
       <BottomSheet visible={filterOpen} onClose={() => setFilterOpen(false)}>
-        <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.lg }]}>
+        <SheetSurface style={styles.sheet}>
           <View style={styles.sheetHead}>
             <AppText variant="cardTitle" color={colors.ink} style={styles.sheetTitle}>
               Filters
@@ -242,7 +243,7 @@ export function CatalogListScreen({ navigation }: ScreenProps<'Catalog'>) {
           </View>
 
           <PrimaryButton label="Show results" tone="accent" onPress={() => setFilterOpen(false)} />
-        </View>
+        </SheetSurface>
       </BottomSheet>
 
       {canWrite ? (

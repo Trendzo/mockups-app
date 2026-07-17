@@ -1,16 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   AppImage,
   AppText,
   BackButton,
   BottomSheet,
+  SheetSurface,
   Field,
   Icon,
   KeyboardStickyView,
-  MockupGeneratorSheet,
+  VariantImages,
   PressableScale,
   PrimaryButton,
   Screen,
@@ -45,11 +45,19 @@ export function VariantFormScreen({ navigation, route }: ScreenProps<'VariantFor
   const [stock, setStock] = useState('0');
   const [active, setActive] = useState(true);
   const [imageUrls, setImageUrls] = useState<string[]>([]);
-  const [genSheet, setGenSheet] = useState(false);
+  // Generated-but-unadopted mockups. Local state is enough here: unlike the
+  // wizard, this screen isn't navigated away from mid-edit.
+  const [generated, setGenerated] = useState<string[]>([]);
   const [gallerySheet, setGallerySheet] = useState(false);
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [seeded, setSeeded] = useState(false);
+
+  // Memoised: a fresh [] each render would re-run the seed effect every time.
+  const gallery = React.useMemo(
+    () => listingQ.data?.galleryUrls ?? [],
+    [listingQ.data?.galleryUrls],
+  );
 
   useEffect(() => {
     if (!isEdit || seeded || !existing) return;
@@ -59,13 +67,15 @@ export function VariantFormScreen({ navigation, route }: ScreenProps<'VariantFor
     setCompareAt(paiseToRupeeInput(existing.compareAtPrice ?? null));
     setStock(String(existing.stock ?? 0));
     setActive(existing.isActive);
-    setImageUrls(existing.imageUrls ?? []);
+    // A single/default variant usually carries no photos of its own - they live
+    // on the listing. Seed the front slot from the gallery so there's something
+    // to see and to generate from; saving adopts it onto the variant. Only one,
+    // deliberately: filling both slots would read as "photos final" and hide
+    // the generator.
+    const own = existing.imageUrls ?? [];
+    setImageUrls(own.length ? own : gallery.slice(0, 1));
     setSeeded(true);
-  }, [isEdit, seeded, existing]);
-
-  // Mockups generate from a hosted apparel image - the listing's first gallery photo.
-  const gallery = listingQ.data?.galleryUrls ?? [];
-  const apparelSource = gallery[0] ?? null;
+  }, [isEdit, seeded, existing, gallery]);
 
   const addImages = (urls: string[]) =>
     setImageUrls((prev) => Array.from(new Set([...prev, ...urls])));
@@ -206,41 +216,18 @@ export function VariantFormScreen({ navigation, route }: ScreenProps<'VariantFor
         <Field label="Stock" required keyboardType="number-pad" value={stock} onChangeText={setStock} placeholder="0" error={errors.stock} />
         <Field label="SKU" value={sku} onChangeText={setSku} placeholder="Auto-generated if blank" autoCapitalize="characters" autoCorrect={false} />
 
+        {/* Same photos + generator as the wizard's Variants step. */}
         <View style={styles.block}>
-          <AppText variant="sectionLabel" color={colors.meta}>Variant images</AppText>
-          {imageUrls.length ? (
-            <View style={styles.thumbRow}>
-              {imageUrls.map((url, i) => (
-                <View key={`${url}-${i}`} style={styles.thumbCell}>
-                  <AppImage uri={url} radius={radii.sm} containerStyle={styles.thumb} />
-                  <PressableScale
-                    onPress={() => removeImage(i)}
-                    style={styles.thumbRemove}
-                    toScale={0.9}
-                  >
-                    <Icon name="close" size={12} color={colors.surface} />
-                  </PressableScale>
-                </View>
-              ))}
-            </View>
-          ) : (
-            <AppText variant="meta" color={colors.meta}>No images yet.</AppText>
-          )}
-          <View style={styles.imgActions}>
-            <PressableScale onPress={() => setGenSheet(true)} style={styles.imgBtn} haptic={false}>
-              <Icon name="sparkles-outline" size={15} color={colors.ink} />
-              <AppText variant="meta" color={colors.ink}>Generate with AI</AppText>
-            </PressableScale>
-            <PressableScale
-              onPress={() => setGallerySheet(true)}
-              style={styles.imgBtn}
-              haptic={false}
-              disabled={gallery.length === 0}
-            >
-              <Icon name="images-outline" size={15} color={colors.ink} />
-              <AppText variant="meta" color={colors.ink}>From gallery</AppText>
-            </PressableScale>
-          </View>
+          <VariantImages
+            imageUrls={imageUrls}
+            onAddImages={addImages}
+            onRemoveImage={removeImage}
+            allowMockup
+            generated={generated}
+            onGeneratedChange={setGenerated}
+            onPickFromGallery={() => setGallerySheet(true)}
+            galleryDisabled={gallery.length === 0}
+          />
         </View>
 
         {isEdit ? (
@@ -251,7 +238,7 @@ export function VariantFormScreen({ navigation, route }: ScreenProps<'VariantFor
               onChange={(v) => setActive(v === 'active')}
               options={[
                 { value: 'active', label: 'Active' },
-                { value: 'hidden', label: 'Hidden' },
+                { value: 'hidden', label: 'Draft' },
               ]}
             />
           </View>
@@ -270,19 +257,6 @@ export function VariantFormScreen({ navigation, route }: ScreenProps<'VariantFor
           onPress={onSubmit}
         />
       </KeyboardStickyView>
-
-      <BottomSheet visible={genSheet} onClose={() => setGenSheet(false)}>
-        <MockupGeneratorSheet
-          apparelImageUrl={apparelSource}
-          existing={imageUrls}
-          onAdd={(urls) => {
-            addImages(urls);
-            setGenSheet(false);
-            if (urls.length) toast.show(`Added ${urls.length} image${urls.length > 1 ? 's' : ''}`, 'success');
-          }}
-          onClose={() => setGenSheet(false)}
-        />
-      </BottomSheet>
 
       <BottomSheet visible={gallerySheet} onClose={() => setGallerySheet(false)}>
         <GalleryPick
@@ -311,13 +285,12 @@ function GalleryPick({
   onConfirm: (urls: string[]) => void;
   onClose: () => void;
 }) {
-  const insets = useSafeAreaInsets();
   const [picked, setPicked] = useState<string[]>([]);
   const toggle = (url: string) =>
     setPicked((p) => (p.includes(url) ? p.filter((u) => u !== url) : [...p, url]));
 
   return (
-    <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.lg }]}>
+    <SheetSurface style={styles.sheet}>
       <AppText variant="cardTitle" color={colors.ink} style={styles.sheetTitle}>
         Choose from gallery
       </AppText>
@@ -356,7 +329,7 @@ function GalleryPick({
           onPress={() => onConfirm(picked)}
         />
       </View>
-    </View>
+    </SheetSurface>
   );
 }
 
@@ -371,29 +344,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.hairline,
     backgroundColor: colors.canvas,
-  },
-  thumbRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  thumbCell: { position: 'relative' },
-  thumb: { width: 72, height: 72 },
-  thumbRemove: {
-    position: 'absolute',
-    top: -6,
-    right: -6,
-    backgroundColor: colors.ink,
-    borderRadius: radii.pill,
-    padding: 3,
-  },
-  imgActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
-  imgBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: radii.pill,
-    borderWidth: 1,
-    borderColor: colors.hairline,
-    backgroundColor: colors.surface,
   },
   sheet: {
     backgroundColor: colors.canvas,

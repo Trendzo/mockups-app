@@ -26,7 +26,8 @@ export function HeroHeadline({
   fontSize,
   align = 'left',
 }: HeroHeadlineProps) {
-  // Keep lineHeight >= fontSize so glyphs are never vertically clipped in RN.
+  // The iOS ratio. Inter needs 1.21 to keep descenders off the line-box floor,
+  // which AppText enforces on Android (where anything tighter gets clipped).
   const sizeOverride = fontSize
     ? { fontSize, lineHeight: Math.round(fontSize * 1.06) }
     : null;

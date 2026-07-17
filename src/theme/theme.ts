@@ -67,7 +67,9 @@ export const type = {
   display: {
     fontFamily: fonts.black,
     fontSize: 58,
-    // RN clips glyphs when lineHeight < fontSize, so keep it >= fontSize.
+    // iOS-designed value. Inter's line box actually needs 1.21 x fontSize or
+    // Android clips the descenders - AppText raises anything short of that on
+    // Android only, so what's set here is what iOS renders.
     lineHeight: 62,
     letterSpacing: -1.2,
   },

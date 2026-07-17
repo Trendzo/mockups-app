@@ -6,6 +6,7 @@ import {
   AppText,
   BackButton,
   BottomSheet,
+  SheetSurface,
   Icon,
   PressableScale,
   PrimaryButton,
@@ -133,7 +134,7 @@ export function SelectPhotosScreen({ navigation }: ScreenProps<'SelectPhotos'>) 
 
       {/* Source chooser */}
       <BottomSheet visible={chooser != null} onClose={() => setChooser(null)}>
-        <View style={styles.sheet}>
+        <SheetSurface style={styles.sheet}>
           <AppText variant="cardTitle" color={colors.ink} style={styles.sheetTitle}>
             Add {chooser ? SLOT_LABEL[chooser] : ''} photo
           </AppText>
@@ -152,7 +153,7 @@ export function SelectPhotosScreen({ navigation }: ScreenProps<'SelectPhotos'>) 
             tone="surface"
             onPress={() => setChooser(null)}
           />
-        </View>
+        </SheetSurface>
       </BottomSheet>
     </Screen>
   );

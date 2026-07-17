@@ -34,6 +34,22 @@ const comparePrice = (s: string): number | null => {
 };
 
 /**
+ * Save/publish is one user action but many calls, so a failure surfaces as a
+ * lone toast with no clue which leg died. Tag each leg: the client interceptor
+ * already logs the server's response body, this says what we were doing.
+ */
+async function step<T>(label: string, run: () => Promise<T>): Promise<T> {
+  try {
+    const result = await run();
+    console.log(`[commit] ${label} - ok`);
+    return result;
+  } catch (e: any) {
+    console.log(`[commit] ${label} - FAILED:`, e?.message ?? e);
+    throw e;
+  }
+}
+
+/**
  * Steps are freely navigable, so nothing is enforced until commit. Returns a
  * list of missing/invalid things (empty = ready to save/publish).
  */
@@ -98,6 +114,9 @@ async function resolveFirstGroup(listingId: string): Promise<string | undefined>
 
 export async function commitProductDraft({ publish }: { publish: boolean }): Promise<Listing> {
   const d = useProductDraft.getState();
+  console.log(
+    `[commit] start - mode=${d.mode} variantMode=${d.variantMode} publish=${publish} colors=${d.colors.length}`,
+  );
 
   const listingFields: CreateListingInput = {
     name: d.name.trim(),
@@ -118,11 +137,11 @@ export async function commitProductDraft({ publish }: { publish: boolean }): Pro
   let listingId: string;
   if (d.mode === 'edit') {
     listingId = d.editingListingId!;
-    await updateListing(listingId, listingFields);
+    await step(`update listing ${listingId}`, () => updateListing(listingId, listingFields));
   } else if (d.createdListingId) {
     listingId = d.createdListingId;
   } else {
-    const created = await createListing(listingFields);
+    const created = await step('create listing', () => createListing(listingFields));
     listingId = created.id;
     d.setCreatedListingId(listingId);
   }
@@ -139,24 +158,26 @@ export async function commitProductDraft({ publish }: { publish: boolean }): Pro
       imageUrls: d.single.imageUrls,
     };
     if (d.single.serverVariantId) {
-      await patchVariant(d.single.serverVariantId, {
-        sku: body.sku ?? null,
-        pricePaise: body.pricePaise,
-        compareAtPrice: body.compareAtPrice,
-        stock: body.stock,
-        imageUrls: body.imageUrls,
-        // Optional single-product size. Identity is system-managed on
-        // single/color_size listings: send `size` and the backend derives the
-        // attributes - raw attribute patches 422 there.
-        ...(size ? { size } : {}),
-      });
+      await step(`patch default variant ${d.single.serverVariantId} (size=${size || 'none'})`, () =>
+        patchVariant(d.single.serverVariantId!, {
+          sku: body.sku ?? null,
+          pricePaise: body.pricePaise,
+          compareAtPrice: body.compareAtPrice,
+          stock: body.stock,
+          imageUrls: body.imageUrls,
+          // Optional single-product size. Identity is system-managed on
+          // single/color_size listings: send `size` and the backend derives the
+          // attributes - raw attribute patches 422 there.
+          ...(size ? { size } : {}),
+        }),
+      );
     } else {
-      const v = await setDefaultVariant(listingId, body);
+      const v = await step('create default variant', () => setDefaultVariant(listingId, body));
       d.setSingleVariantId(v.id);
       // The default-variant endpoint takes no size; set it (if any) with a
       // follow-up system-path patch.
       if (size) {
-        await patchVariant(v.id, { size });
+        await step(`set size "${size}" on ${v.id}`, () => patchVariant(v.id, { size }));
       }
     }
   } else {
@@ -171,11 +192,10 @@ export async function commitProductDraft({ publish }: { publish: boolean }): Pro
           groupId = reusableGroupId;
           firstGroupConsumed = true;
         } else {
-          const g = await createGroup(listingId, {
-            name: color.name.trim() || `Color ${ci + 1}`,
-            colorHex: color.colorHex,
-            sortOrder: ci,
-          });
+          const name = color.name.trim() || `Color ${ci + 1}`;
+          const g = await step(`create group "${name}"`, () =>
+            createGroup(listingId, { name, colorHex: color.colorHex, sortOrder: ci }),
+          );
           groupId = g.id;
         }
         d.setColorGroupId(color.id, groupId);
@@ -192,18 +212,23 @@ export async function commitProductDraft({ publish }: { publish: boolean }): Pro
           stock: Number(row.stock) || 0,
           imageUrls: row.imageUrls,
         };
+        const who = `${color.name.trim() || `color ${ci + 1}`}/${size || 'no size'}`;
         if (row.serverVariantId) {
-          await patchVariant(row.serverVariantId, {
-            sku: body.sku ?? null,
-            pricePaise: body.pricePaise,
-            compareAtPrice: body.compareAtPrice,
-            stock: body.stock,
-            imageUrls: body.imageUrls,
-            // System-managed identity: `size` re-derives attributes/label.
-            ...(size ? { size } : {}),
-          });
+          await step(`patch variant ${who} (${row.serverVariantId})`, () =>
+            patchVariant(row.serverVariantId!, {
+              sku: body.sku ?? null,
+              pricePaise: body.pricePaise,
+              compareAtPrice: body.compareAtPrice,
+              stock: body.stock,
+              imageUrls: body.imageUrls,
+              // System-managed identity: `size` re-derives attributes/label.
+              ...(size ? { size } : {}),
+            }),
+          );
         } else {
-          const v = await createGroupVariant(listingId, groupId, body);
+          const v = await step(`create variant ${who}`, () =>
+            createGroupVariant(listingId, groupId!, body),
+          );
           d.setSizeVariantId(color.id, row.id, v.id);
         }
       }
@@ -228,13 +253,14 @@ export async function commitProductDraft({ publish }: { publish: boolean }): Pro
 
   // Edit deletions - variants the user removed from an existing product.
   for (const vid of new Set([...d.removedVariantIds, ...staleVariantIds])) {
-    await deleteVariant(vid);
+    await step(`delete variant ${vid}`, () => deleteVariant(vid));
   }
 
   // 3) STATUS
   if (publish) {
-    await updateListing(listingId, { status: 'active' });
+    await step('publish listing', () => updateListing(listingId, { status: 'active' }));
   }
 
+  console.log(`[commit] done - listing ${listingId}`);
   return getListing(listingId);
 }
