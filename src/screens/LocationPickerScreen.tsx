@@ -10,6 +10,28 @@ import {
 } from 'react-native';
 import { WebView, WebViewMessageEvent } from 'react-native-webview';
 import Geolocation from '@react-native-community/geolocation';
+
+// Prefer the Play-Services fused provider ('auto' falls back to LocationManager
+// only when Play Services is absent). Without this the library uses the legacy
+// Android LocationManager, which — with enableHighAccuracy — waits on a raw GPS
+// fix and times out indoors/on emulators, so the button just errors after 15s.
+// skipPermissionRequests: we request the Android runtime permission ourselves.
+Geolocation.setRNConfiguration({
+  skipPermissionRequests: true,
+  authorizationLevel: 'whenInUse',
+  locationProvider: 'auto',
+});
+
+/** One getCurrentPosition call wrapped in a promise. */
+function getPosition(enableHighAccuracy: boolean, timeout: number) {
+  return new Promise<{ latitude: number; longitude: number }>((resolve, reject) => {
+    Geolocation.getCurrentPosition(
+      (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+      (err) => reject(err),
+      { enableHighAccuracy, timeout, maximumAge: 10000 },
+    );
+  });
+}
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   AppText,
@@ -141,19 +163,19 @@ export function LocationPickerScreen({ navigation }: ScreenProps<'LocationPicker
       } else {
         Geolocation.requestAuthorization();
       }
-      Geolocation.getCurrentPosition(
-        (pos) => {
-          centerOn(pos.coords.latitude, pos.coords.longitude, 17);
-          setLocating(false);
-        },
-        () => {
-          toast.show('Could not get your location', 'error');
-          setLocating(false);
-        },
-        { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 },
-      );
+      // High accuracy first (GPS); if that times out — common indoors / on
+      // emulators — fall back to the coarse network provider, which resolves
+      // fast and is precise enough to drop the pin near the store.
+      let coords: { latitude: number; longitude: number };
+      try {
+        coords = await getPosition(true, 12000);
+      } catch {
+        coords = await getPosition(false, 12000);
+      }
+      centerOn(coords.latitude, coords.longitude, 17);
+      setLocating(false);
     } catch {
-      toast.show('Could not get your location', 'error');
+      toast.show('Could not get your location. Search for your area instead.', 'error');
       setLocating(false);
     }
   };
@@ -183,11 +205,19 @@ export function LocationPickerScreen({ navigation }: ScreenProps<'LocationPicker
       <View style={styles.flex}>
         <WebView
           ref={webRef}
-          source={{ html: MAP_HTML }}
+          // baseUrl gives the inline HTML an HTTPS origin. Without it, Android
+          // WebView treats the page as about:blank (insecure) and — because the
+          // default mixedContentMode is NEVER — silently BLOCKS the remote Leaflet
+          // CDN + OSM tiles, so the map is blank on Android while iOS (which ignores
+          // mixedContentMode) renders fine. mixedContentMode="always" is the belt.
+          source={{ html: MAP_HTML, baseUrl: 'https://tile.openstreetmap.org/' }}
           originWhitelist={['*']}
+          mixedContentMode="always"
           javaScriptEnabled
           domStorageEnabled
           onMessage={onMessage}
+          onError={(e) => toast.show(`Map failed to load: ${e.nativeEvent.description}`, 'error')}
+          onHttpError={(e) => toast.show(`Map resource error ${e.nativeEvent.statusCode}`, 'error')}
           style={styles.flex}
           renderLoading={() => (
             <View style={styles.mapLoading}>
