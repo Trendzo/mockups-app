@@ -22,13 +22,15 @@ Geolocation.setRNConfiguration({
   locationProvider: 'auto',
 });
 
-/** One getCurrentPosition call wrapped in a promise. */
+/** One getCurrentPosition call wrapped in a promise. maximumAge accepts a recent
+ *  cached fix so a warm provider returns near-instantly instead of waiting for a
+ *  fresh satellite/network lock. */
 function getPosition(enableHighAccuracy: boolean, timeout: number) {
   return new Promise<{ latitude: number; longitude: number }>((resolve, reject) => {
     Geolocation.getCurrentPosition(
       (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
       (err) => reject(err),
-      { enableHighAccuracy, timeout, maximumAge: 10000 },
+      { enableHighAccuracy, timeout, maximumAge: 60000 },
     );
   });
 }
@@ -163,14 +165,14 @@ export function LocationPickerScreen({ navigation }: ScreenProps<'LocationPicker
       } else {
         Geolocation.requestAuthorization();
       }
-      // High accuracy first (GPS); if that times out — common indoors / on
-      // emulators — fall back to the coarse network provider, which resolves
-      // fast and is precise enough to drop the pin near the store.
+      // Coarse/network FIRST — it returns in ~1-2s (or instantly from cache) and
+      // is precise enough to drop the pin near the store, which the user drags to
+      // fine-tune anyway. Only fall back to a slow GPS lock if coarse fails.
       let coords: { latitude: number; longitude: number };
       try {
-        coords = await getPosition(true, 12000);
+        coords = await getPosition(false, 8000);
       } catch {
-        coords = await getPosition(false, 12000);
+        coords = await getPosition(true, 10000);
       }
       centerOn(coords.latitude, coords.longitude, 17);
       setLocating(false);
