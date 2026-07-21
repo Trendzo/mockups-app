@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import {
   Camera,
   useCameraDevice,
@@ -47,6 +47,11 @@ export function CaptureScreen({ navigation, route }: ScreenProps<'Capture'>) {
   const toast = useToast();
   const camera = useRef<Camera>(null);
   const [cameraReady, setCameraReady] = useState(false);
+  // A tap that lands before the camera session finishes initializing was being
+  // silently dropped (just a toast), which felt like "the shutter needs several
+  // taps". Instead we queue that one tap and fire it the moment onInitialized
+  // flips cameraReady true. Reset on unmount/device-flip via the effect below.
+  const pendingShot = useRef(false);
   const { hasPermission } = useCameraPermission();
   const [permission, setPermission] = useState<'granted' | 'denied' | 'blocked'>(
     hasPermission ? 'granted' : 'denied',
@@ -140,12 +145,9 @@ export function CaptureScreen({ navigation, route }: ScreenProps<'Capture'>) {
     [navigation, setPhoto, slot, route.params.sink],
   );
 
-  const onShutter = useCallback(async () => {
-    if (!camera.current || busy) return;
-    if (!cameraReady) {
-      toast.show('Camera is still starting…', 'info');
-      return;
-    }
+  // The real capture. Assumes the camera exists and is ready; callers guard.
+  const capturePhoto = useCallback(async () => {
+    if (!camera.current) return;
     setBusy(true);
     Haptics.shutter();
     // Chain the flash in/out with withSequence - nesting a withTiming inside a
@@ -167,7 +169,27 @@ export function CaptureScreen({ navigation, route }: ScreenProps<'Capture'>) {
     } finally {
       setBusy(false);
     }
-  }, [busy, cameraReady, flash, flashOpacity, acceptPhoto, toast]);
+  }, [flash, flashOpacity, acceptPhoto, toast]);
+
+  const onShutter = useCallback(() => {
+    if (busy) return;
+    // Not ready yet → remember the tap and fire it as soon as the camera is
+    // initialized, instead of dropping it. Give the same haptic so it registers.
+    if (!cameraReady || !camera.current) {
+      pendingShot.current = true;
+      Haptics.shutter();
+      return;
+    }
+    void capturePhoto();
+  }, [busy, cameraReady, capturePhoto]);
+
+  // Flush a queued tap once the camera reports ready.
+  useEffect(() => {
+    if (cameraReady && pendingShot.current && !busy) {
+      pendingShot.current = false;
+      void capturePhoto();
+    }
+  }, [cameraReady, busy, capturePhoto]);
 
   const onPickLibrary = useCallback(async () => {
     const res = await launchImageLibrary({
@@ -298,7 +320,13 @@ export function CaptureScreen({ navigation, route }: ScreenProps<'Capture'>) {
 
         <PressableScale onPress={onShutter} haptic={false} disabled={!showCamera}>
           <View style={styles.shutterOuter}>
-            <View style={styles.shutterInner} />
+            {showCamera && (!cameraReady || busy) ? (
+              <View style={[styles.shutterInner, styles.shutterBusy]}>
+                <ActivityIndicator size="small" color={colors.accentInk} />
+              </View>
+            ) : (
+              <View style={styles.shutterInner} />
+            )}
           </View>
         </PressableScale>
 
@@ -388,6 +416,11 @@ const styles = StyleSheet.create({
     height: 64,
     borderRadius: 32,
     backgroundColor: colors.accent,
+  },
+  shutterBusy: {
+    opacity: 0.7,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   gridLine: { position: 'absolute', backgroundColor: 'rgba(255,255,255,0.35)' },
   gridV1: { left: '33.33%', top: 0, bottom: 0, width: 1 },

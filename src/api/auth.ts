@@ -26,7 +26,11 @@ export function normalizeAuthError(err: unknown): AuthError {
           error?: {
             code?: string;
             message?: string;
-            details?: { applicationId?: string; ownerEmail?: string };
+            details?: {
+              applicationId?: string;
+              ownerEmail?: string;
+              [k: string]: unknown;
+            };
           };
         }
       | undefined;
@@ -39,6 +43,7 @@ export function normalizeAuthError(err: unknown): AuthError {
         detail,
         applicationId: e.details?.applicationId,
         ownerEmail: e.details?.ownerEmail,
+        details: e.details,
       };
     }
     if (!err.response) {

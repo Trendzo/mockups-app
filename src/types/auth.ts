@@ -43,4 +43,7 @@ export interface AuthError {
   // Owner email of a matched pending/rejected application - supplied by phone-OTP
   // login (which has no email input) so the status/resubmit screens can key on it.
   ownerEmail?: string;
+  // Full structured `error.details` from the envelope (e.g. the per-field taken
+  // flags on a signup_identifier_taken collision). Untyped grab-bag by design.
+  details?: Record<string, unknown>;
 }

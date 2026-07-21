@@ -39,17 +39,21 @@ const formatPhone = (raw: string) => {
   return d.length > 5 ? `${d.slice(0, 5)} ${d.slice(5)}` : d;
 };
 
-export function LoginScreen({ navigation }: ScreenProps<'Login'>) {
+export function LoginScreen({ navigation, route }: ScreenProps<'Login'>) {
   const toast = useToast();
   const setAuth = useAuth(s => s.setAuth);
   const logoutReason = useAuth(s => s.logoutReason);
   const clearLogoutReason = useAuth(s => s.clearLogoutReason);
 
-  // OTP is the primary method; email/password is the secondary fallback.
-  const [method, setMethod] = useState<'phone' | 'email'>('phone');
+  const params = route.params;
+  // OTP is the primary method; email/password is the secondary fallback. A signup
+  // that collided with an existing account routes here with the method to use.
+  const [method, setMethod] = useState<'phone' | 'email'>(params?.method ?? 'phone');
 
-  // Phone-OTP state
-  const [phone, setPhone] = useState('');
+  // Phone-OTP state — prefill the national number when the signup handed us one.
+  const [phone, setPhone] = useState(
+    (params?.prefillPhone ?? '').replace(/\D/g, '').replace(/^91/, '').slice(-10),
+  );
   const recentPhones = useRecentPhones((s) => s.phones);
   const addRecentPhone = useRecentPhones((s) => s.add);
   const removeRecentPhone = useRecentPhones((s) => s.remove);
@@ -62,8 +66,8 @@ export function LoginScreen({ navigation }: ScreenProps<'Login'>) {
   const [otpErr, setOtpErr] = useState<string | undefined>();
   const [resendIn, setResendIn] = useState(0);
 
-  // Email state
-  const [email, setEmail] = useState('');
+  // Email state — prefilled from a colliding signup so the user just types the password.
+  const [email, setEmail] = useState(params?.prefillEmail ?? '');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>(

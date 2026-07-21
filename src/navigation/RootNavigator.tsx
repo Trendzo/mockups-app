@@ -9,7 +9,7 @@ import { ApplicationStatusScreen } from '../screens/ApplicationStatusScreen';
 import { ResubmitScreen } from '../screens/ResubmitScreen';
 import { LocationPickerScreen } from '../screens/LocationPickerScreen';
 import { PendingApprovalScreen } from '../screens/PendingApprovalScreen';
-import { LegalDocViewerScreen, PrivacyScreen, TermsScreen } from '../screens/TermsScreen';
+import { LegalDocViewerScreen, TermsScreen } from '../screens/TermsScreen';
 import { MainTabs } from './MainTabs';
 import { SelectPhotosScreen } from '../screens/SelectPhotosScreen';
 import { CaptureScreen } from '../screens/CaptureScreen';
@@ -160,19 +160,13 @@ export function RootNavigator() {
     retailerStatus: retailer?.status,
     storeStatus: store?.status,
   });
-  if (active && me.data?.termsAcceptanceRequired) {
-    console.log('[legal-gate] → showing Terms screen');
+  // One unified gate handles BOTH docs (with a switcher when both are due), so the
+  // retailer isn't bounced between two separate prompts.
+  if (active && (me.data?.termsAcceptanceRequired || me.data?.privacyAcceptanceRequired)) {
+    console.log('[legal-gate] → showing legal gate screen');
     return (
       <Stack.Navigator screenOptions={options}>
         <Stack.Screen name="Terms" component={TermsScreen} />
-      </Stack.Navigator>
-    );
-  }
-  if (active && me.data?.privacyAcceptanceRequired) {
-    console.log('[legal-gate] → showing Privacy screen');
-    return (
-      <Stack.Navigator screenOptions={options}>
-        <Stack.Screen name="Privacy" component={PrivacyScreen} />
       </Stack.Navigator>
     );
   }

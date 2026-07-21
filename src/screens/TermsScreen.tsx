@@ -14,6 +14,7 @@ import {
   getPublicLegal,
   getTerms,
 } from '../api/onboarding';
+import { useRetailerMe } from '../api/onboardingHooks';
 import { useAuth } from '../store/auth';
 import { colors, radii, spacing } from '../theme/theme';
 
@@ -43,17 +44,17 @@ const API: Record<
 };
 
 /**
- * Legal gate - a store cannot go live until the Retailer Terms are accepted.
- * Shown from RootNavigator when `me.termsAcceptanceRequired` is true. Accepting
- * records the version + IP server-side, then re-fetches `me` to release the gate.
+ * Legal gate - a store cannot go live until BOTH the Retailer Terms and the
+ * Privacy Policy (whichever are outstanding) are accepted. One screen shows every
+ * outstanding doc with a switcher so the retailer reads both without the gate
+ * bouncing them between two separate prompts. Kept as `TermsScreen`/`PrivacyScreen`
+ * exports for back-compat; both render the same unified gate.
  */
 export function TermsScreen() {
-  return <LegalDocScreen kind="terms" />;
+  return <LegalGateScreen />;
 }
-
-/** Same gate for the Privacy Policy — shown once the terms are in (`me.privacyAcceptanceRequired`). */
 export function PrivacyScreen() {
-  return <LegalDocScreen kind="privacy" />;
+  return <LegalGateScreen />;
 }
 
 // Public HTML fallbacks — served by the backend's public legal routes. Used
@@ -114,61 +115,85 @@ export function LegalDocViewerScreen({ navigation, route }: ScreenProps<'LegalDo
   );
 }
 
-function LegalDocScreen({ kind }: { kind: LegalKind }) {
-  const copy = COPY[kind];
-  const calls = API[kind];
+/**
+ * Unified legal gate. Reads `me` for which docs are still outstanding, shows them
+ * in ONE screen with a switcher (when both are due), a single agreement checkbox,
+ * and one Accept that records every outstanding doc. Declining any logs the user
+ * out (re-prompted next login).
+ */
+function LegalGateScreen() {
   const qc = useQueryClient();
   const toast = useToast();
   const logout = useAuth((s) => s.logout);
+  const me = useRetailerMe();
   const [agreed, setAgreed] = useState(false);
 
-  const { data: doc } = useQuery({ queryKey: ['retailer-legal', kind], queryFn: calls.get });
+  // Which docs are outstanding, in a stable order (terms first).
+  const required: LegalKind[] = [];
+  if (me.data?.termsAcceptanceRequired) required.push('terms');
+  if (me.data?.privacyAcceptanceRequired) required.push('privacy');
 
+  const [active, setActive] = useState<LegalKind>(required[0] ?? 'terms');
+  // Keep the active tab valid as docs get accepted (required shrinks).
   React.useEffect(() => {
-    console.log(`[legal:${kind}] doc loaded`, doc);
-  }, [kind, doc]);
+    if (required.length && !required.includes(active)) setActive(required[0]!);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [required.join(',')]);
 
+  const termsQ = useQuery({
+    queryKey: ['retailer-legal', 'terms'],
+    queryFn: getTerms,
+    enabled: required.includes('terms'),
+  });
+  const privacyQ = useQuery({
+    queryKey: ['retailer-legal', 'privacy'],
+    queryFn: getPrivacy,
+    enabled: required.includes('privacy'),
+  });
+  const docByKind: Record<LegalKind, { version: string; shortText: string } | undefined> = {
+    terms: termsQ.data,
+    privacy: privacyQ.data,
+  };
+  const activeDoc = docByKind[active];
+  const bothRequired = required.length > 1;
+  const allLoaded = required.every((k) => docByKind[k]?.version);
+
+  // Accept every outstanding doc in one go, then refetch `me` to release the gate.
   const accept = useMutation({
-    mutationFn: () => {
-      console.log(`[legal:${kind}] accept → POST /retailer/${kind}/accept`, { version: doc?.version });
-      return calls.accept(doc!.version);
+    mutationFn: async () => {
+      for (const k of required) {
+        const v = docByKind[k]?.version;
+        if (v) await API[k].accept(v);
+      }
     },
-    onSuccess: async (res) => {
-      console.log(`[legal:${kind}] accept succeeded`, res);
-      toast.show(`${copy.docName} accepted`, 'success');
-      // Explicit refetch (not just invalidate) so we can log the fresh gate
-      // values immediately, instead of trusting background invalidation timing.
-      const result = await qc.refetchQueries({ queryKey: ['retailer-me'] });
-      console.log(`[legal:${kind}] retailer-me refetched after accept`, result);
-      const me = qc.getQueryData<{
-        termsAcceptanceRequired?: boolean;
-        privacyAcceptanceRequired?: boolean;
-        currentTermsVersion?: string;
-        currentPrivacyVersion?: string;
-      }>(['retailer-me']);
-      console.log(`[legal:${kind}] gate state after refetch`, {
-        termsAcceptanceRequired: me?.termsAcceptanceRequired,
-        privacyAcceptanceRequired: me?.privacyAcceptanceRequired,
-        currentTermsVersion: me?.currentTermsVersion,
-        currentPrivacyVersion: me?.currentPrivacyVersion,
-        acceptedVersionSent: doc?.version,
-      });
+    onSuccess: async () => {
+      toast.show(
+        bothRequired ? 'Terms & Privacy Policy accepted' : `${COPY[active].docName} accepted`,
+        'success',
+      );
+      await qc.refetchQueries({ queryKey: ['retailer-me'] });
     },
-    onError: (e: unknown) => {
-      console.log(`[legal:${kind}] accept FAILED`, e);
-      toast.show((e as { message?: string })?.message ?? 'Could not record acceptance', 'error');
-    },
+    onError: (e: unknown) =>
+      toast.show((e as { message?: string })?.message ?? 'Could not record acceptance', 'error'),
   });
 
-  // Declining is recorded, then the user is logged out - re-prompted next login until accepted.
+  // Declining any outstanding doc is recorded, then the user is logged out.
   const decline = useMutation({
-    mutationFn: () => calls.decline(doc!.version),
+    mutationFn: async () => {
+      for (const k of required) {
+        const v = docByKind[k]?.version;
+        if (v) await API[k].decline(v);
+      }
+    },
     onSettled: () => logout(),
   });
   function onDecline() {
+    const what = bothRequired
+      ? 'the Terms & Conditions and Privacy Policy'
+      : COPY[active].docName;
     Alert.alert(
-      `Decline ${kind === 'terms' ? 'terms' : 'privacy policy'}?`,
-      `Declining the ${copy.docName} will log you out. You must accept it to use your store.`,
+      'Decline?',
+      `Declining ${what} will log you out. You must accept to use your store.`,
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Decline & log out', style: 'destructive', onPress: () => decline.mutate() },
@@ -176,34 +201,70 @@ function LegalDocScreen({ kind }: { kind: LegalKind }) {
     );
   }
 
+  const agreeLabel = bothRequired
+    ? 'I have read and accept the Retailer Terms & Conditions and Privacy Policy.'
+    : COPY[active].agree;
+
   return (
     <Screen>
-      <AppText variant="cardTitle">{copy.docName}</AppText>
+      <AppText variant="cardTitle">
+        {bothRequired ? 'Review & accept' : COPY[active].docName}
+      </AppText>
       <AppText variant="meta" color={colors.meta} style={styles.sub}>
         Accept to activate your store and start selling.
       </AppText>
 
-      <ScrollView style={styles.box} contentContainerStyle={styles.boxInner}>
-        <AppText variant="body">{doc?.shortText ?? 'Loading…'}</AppText>
+      {/* Doc switcher — only when more than one doc is outstanding. */}
+      {bothRequired ? (
+        <View style={styles.tabs}>
+          {required.map((k) => {
+            const on = k === active;
+            return (
+              <PressableScale
+                key={k}
+                onPress={() => setActive(k)}
+                haptic={false}
+                style={[styles.tab, on && styles.tabOn]}
+              >
+                <AppText variant="bodyMedium" color={on ? colors.accentInk : colors.ink}>
+                  {k === 'terms' ? 'Terms & Conditions' : 'Privacy Policy'}
+                </AppText>
+              </PressableScale>
+            );
+          })}
+        </View>
+      ) : null}
+
+      <ScrollView
+        style={styles.box}
+        contentContainerStyle={styles.boxInner}
+        showsVerticalScrollIndicator
+        nestedScrollEnabled
+      >
+        <AppText variant="body">{activeDoc?.shortText ?? 'Loading…'}</AppText>
       </ScrollView>
+
+      {/* Note above the buttons naming both docs (when both are due). */}
+      {bothRequired ? (
+        <AppText variant="meta" color={colors.meta} style={styles.note}>
+          You're accepting both documents. Tap a title above to read either one.
+        </AppText>
+      ) : null}
 
       <PressableScale onPress={() => setAgreed((a) => !a)} style={styles.row}>
         <View style={[styles.check, agreed && styles.checkOn]}>
           {agreed && <Icon name="checkmark" size={16} color={colors.accentInk} />}
         </View>
         <AppText variant="body" style={styles.rowText}>
-          {copy.agree}
+          {agreeLabel}
         </AppText>
       </PressableScale>
 
       <PrimaryButton
         label="Accept & continue"
-        disabled={!agreed || !doc}
+        disabled={!agreed || !allLoaded}
         loading={accept.isPending}
-        onPress={() => {
-          console.log(`[legal:${kind}] "Accept & continue" pressed`, { agreed, doc });
-          accept.mutate();
-        }}
+        onPress={() => accept.mutate()}
       />
       <PrimaryButton
         label="Decline & log out"
@@ -218,6 +279,22 @@ function LegalDocScreen({ kind }: { kind: LegalKind }) {
 
 const styles = StyleSheet.create({
   sub: { marginTop: spacing.xs, marginBottom: spacing.md },
+  tabs: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+    backgroundColor: colors.surface,
+    borderRadius: radii.pill,
+    padding: 4,
+    marginBottom: spacing.md,
+  },
+  tab: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+    borderRadius: radii.pill,
+  },
+  tabOn: { backgroundColor: colors.accent },
+  note: { marginBottom: spacing.sm },
   box: {
     flex: 1,
     borderWidth: 1,

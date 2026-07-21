@@ -80,6 +80,18 @@ export async function postJson<T>(
   return res.data;
 }
 
+export async function putJson<T>(
+  url: string,
+  body: unknown,
+  config?: AxiosRequestConfig,
+): Promise<T> {
+  const res = await http.put<T>(url, body, {
+    headers: { 'Content-Type': 'application/json' },
+    ...config,
+  });
+  return res.data;
+}
+
 export async function deleteJson<T>(
   url: string,
   body: unknown,

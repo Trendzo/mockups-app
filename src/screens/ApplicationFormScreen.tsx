@@ -4,6 +4,7 @@ import { OTPWidget } from '@msg91comm/sendotp-react-native';
 import {
   AppText,
   ApplicationWizard,
+  BottomSheet,
   Field,
   Icon,
   LegalConsentRow,
@@ -11,6 +12,7 @@ import {
   PressableScale,
   PrimaryButton,
   Screen,
+  SheetSurface,
   WizardStepCopy,
   useToast,
 } from '../components';
@@ -92,6 +94,9 @@ export function ApplicationFormScreen({ navigation, route }: ScreenProps<'Applic
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [legalAgreed, setLegalAgreed] = useState(false);
+  // Both email AND phone already belong to an existing account → offer both login
+  // methods in a modal. Holds the prefill values to carry into LoginScreen.
+  const [loginPrompt, setLoginPrompt] = useState<{ email: string; phone: string } | null>(null);
 
   // Phone-OTP verification - required before a signup can be submitted.
   const [phoneVerified, setPhoneVerified] = useState(false);
@@ -243,12 +248,38 @@ export function ApplicationFormScreen({ navigation, route }: ScreenProps<'Applic
       return;
     }
 
+    // An existing ACCOUNT owns one/both identifiers → route to the exact login
+    // method. Both taken → let the user pick (modal). Reused by the pre-check and
+    // the submit-race fallback.
+    const handleAccountCollision = (emailTaken: boolean, phoneTaken: boolean) => {
+      const email = f.ownerEmail.trim().toLowerCase();
+      const phoneE164 = toE164(f.ownerPhone);
+      if (emailTaken && phoneTaken) {
+        setErrors((p) => ({ ...p, ownerEmail: 'Already registered', ownerPhone: 'Already registered' }));
+        setLoginPrompt({ email, phone: phoneE164 });
+        toast.show('You already have an account — choose how to log in.', 'info');
+        return;
+      }
+      if (emailTaken) {
+        setErrors((p) => ({ ...p, ownerEmail: 'This email is already registered' }));
+        toast.show('This email is already registered — log in with your password.', 'info');
+        navigation.navigate('Login', { method: 'email', prefillEmail: email });
+        return;
+      }
+      setErrors((p) => ({ ...p, ownerPhone: 'This phone number is already registered' }));
+      toast.show('This phone number is already registered — log in with an OTP.', 'info');
+      navigation.navigate('Login', { method: 'phone', prefillPhone: phoneE164 });
+    };
+
     setBusy(true);
     try {
       const check = await checkIdentity(f.ownerEmail, toE164(f.ownerPhone));
       if (check.accountExists) {
-        toast.show('An account already exists - please log in.', 'info');
-        navigation.navigate('Login');
+        // Prefer the field-granular account flags; fall back to the union if a
+        // stale backend omits them (both-true keeps the safe "pick a method" modal).
+        const emailAcc = check.accountEmailTaken ?? check.emailTaken;
+        const phoneAcc = check.accountPhoneTaken ?? check.phoneTaken;
+        handleAccountCollision(emailAcc, phoneAcc);
         return;
       }
       if (check.applicationStatus && check.applicationId) {
@@ -295,7 +326,23 @@ export function ApplicationFormScreen({ navigation, route }: ScreenProps<'Applic
         email: f.ownerEmail.trim().toLowerCase(),
       });
     } catch (err: any) {
-      const detail: any[] = err?.details ?? [];
+      // Race: identifier got taken between the pre-check and submit. The backend
+      // names which field(s) — route to the matching login exactly as the
+      // pre-check would have.
+      if (err?.code === 'signup_identifier_taken') {
+        const d = (err.details ?? {}) as {
+          accountEmailTaken?: boolean;
+          accountPhoneTaken?: boolean;
+          emailTaken?: boolean;
+          phoneTaken?: boolean;
+        };
+        handleAccountCollision(
+          !!(d.accountEmailTaken ?? d.emailTaken),
+          !!(d.accountPhoneTaken ?? d.phoneTaken),
+        );
+        return;
+      }
+      const detail: any[] = Array.isArray(err?.details) ? err.details : [];
       if (Array.isArray(detail) && detail.length) {
         const e: Record<string, string> = {};
         detail.forEach((d) => {
@@ -417,7 +464,71 @@ export function ApplicationFormScreen({ navigation, route }: ScreenProps<'Applic
           />
         }
       />
+
+      {/* Both email AND phone already belong to an existing account → pick a method. */}
+      <BottomSheet visible={loginPrompt != null} onClose={() => setLoginPrompt(null)}>
+        <SheetSurface style={styles.sheet}>
+          <AppText variant="cardTitle" color={colors.ink} style={styles.sheetTitle}>
+            You already have an account
+          </AppText>
+          <AppText variant="meta" color={colors.meta}>
+            Your email and phone number are both registered. Log in to continue.
+          </AppText>
+          <LoginOption
+            icon="call-outline"
+            title="Log in with phone OTP"
+            subtitle={loginPrompt ? `+91 ${loginPrompt.phone.replace(/^\+?91/, '')}` : ''}
+            onPress={() => {
+              const p = loginPrompt;
+              setLoginPrompt(null);
+              if (p) navigation.navigate('Login', { method: 'phone', prefillPhone: p.phone });
+            }}
+          />
+          <LoginOption
+            icon="mail-outline"
+            title="Log in with email & password"
+            subtitle={loginPrompt?.email ?? ''}
+            onPress={() => {
+              const p = loginPrompt;
+              setLoginPrompt(null);
+              if (p) navigation.navigate('Login', { method: 'email', prefillEmail: p.email });
+            }}
+          />
+          <PrimaryButton label="Cancel" tone="surface" onPress={() => setLoginPrompt(null)} />
+        </SheetSurface>
+      </BottomSheet>
     </Screen>
+  );
+}
+
+function LoginOption({
+  icon,
+  title,
+  subtitle,
+  onPress,
+}: {
+  icon: string;
+  title: string;
+  subtitle: string;
+  onPress: () => void;
+}) {
+  return (
+    <PressableScale onPress={onPress} style={styles.optionRow} toScale={0.98}>
+      <View style={styles.optionIcon}>
+        <Icon name={icon} size={20} color={colors.ink} />
+      </View>
+      <View style={styles.flex}>
+        <AppText variant="bodyMedium" color={colors.ink}>
+          {title}
+        </AppText>
+        {subtitle ? (
+          <AppText variant="meta" color={colors.meta} numberOfLines={1}>
+            {subtitle}
+          </AppText>
+        ) : null}
+      </View>
+      <Icon name="chevron-forward" size={18} color={colors.meta} />
+    </PressableScale>
   );
 }
 
@@ -426,4 +537,22 @@ const styles = StyleSheet.create({
   verifiedRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   otpBlock: { gap: spacing.sm },
   otpActions: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  sheet: { padding: spacing.lg, gap: spacing.md },
+  sheetTitle: { fontSize: 20, lineHeight: 24 },
+  optionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.canvas,
+    borderRadius: 14,
+    padding: spacing.md,
+  },
+  optionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

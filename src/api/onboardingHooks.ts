@@ -1,5 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getKyc, getRetailerMe, listChangeRequests } from './onboarding';
+import { setOrderAcceptance } from './storeOps';
 
 /** GET /retailer/me - drives the post-login app gate. */
 export function useRetailerMe(enabled = true) {
@@ -43,5 +44,19 @@ export function useChangeRequests(enabled = true) {
     staleTime: 10_000,
     // Admin approves/rejects change requests - poll so the decision shows live.
     refetchInterval: 20_000,
+  });
+}
+
+/**
+ * Flip the store online/offline (accepting orders). Refreshes /retailer/me on
+ * success so the homepage toggle + gates reflect the new state immediately.
+ */
+export function useSetOrderAcceptance() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (accepting: boolean) => setOrderAcceptance(accepting),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['retailer-me'] });
+    },
   });
 }

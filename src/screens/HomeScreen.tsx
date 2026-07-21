@@ -1,5 +1,5 @@
 import React from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import {
   AppImage,
@@ -12,20 +12,55 @@ import {
   Screen,
   StatusChip,
   toneForStatus,
+  useToast,
 } from '../components';
 import { ScreenProps } from '../navigation/types';
 import { useCaptureDraft } from '../store/captureDraft';
-import { useKyc } from '../api/onboardingHooks';
+import { useKyc, useRetailerMe, useSetOrderAcceptance } from '../api/onboardingHooks';
 import { useListings } from '../api/catalogHooks';
 import { Listing } from '../types/catalog';
 import { formatPaise } from '../utils/money';
 import { colors, radii, spacing } from '../theme/theme';
 
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+/** "Mon, 9:00 AM" from an ISO instant, in the device's local time (IST). Avoids
+ *  Intl/toLocaleString, which is unreliable on Hermes without the Intl polyfill. */
+function formatReopen(iso: string): string {
+  const d = new Date(iso);
+  let h = d.getHours();
+  const m = d.getMinutes();
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  return `${WEEKDAYS[d.getDay()]}, ${h}:${String(m).padStart(2, '0')} ${ampm}`;
+}
+
 export function HomeScreen({ navigation }: ScreenProps<'Home'>) {
   const clearDraft = useCaptureDraft((s) => s.clear);
   const kyc = useKyc();
+  const meQ = useRetailerMe();
   const listingsQ = useListings();
   const listings = listingsQ.data ?? [];
+
+  const store = meQ.data?.store ?? null;
+  const online = !store?.orderPauseUntil;
+  const reopenAt = store?.orderPauseUntil ? formatReopen(store.orderPauseUntil) : null;
+  const setAccept = useSetOrderAcceptance();
+  const toast = useToast();
+
+  const toggleOnline = () => {
+    if (setAccept.isPending) return;
+    const nextAccepting = !online; // online now → go offline (accepting=false)
+    setAccept.mutate(nextAccepting, {
+      onSuccess: () =>
+        toast.show(
+          nextAccepting ? 'Store online — accepting orders' : 'Store offline — orders paused',
+          nextAccepting ? 'success' : 'info',
+        ),
+      onError: (e) =>
+        toast.show(e instanceof Error ? e.message : 'Could not update store status', 'error'),
+    });
+  };
 
   const kycNeedsAction =
     kyc.data != null &&
@@ -53,15 +88,44 @@ export function HomeScreen({ navigation }: ScreenProps<'Home'>) {
         <AppText variant="sectionLabel" color={colors.meta}>
           Trendzo Studio
         </AppText>
-        <HeroHeadline
-          align="left"
-          fontSize={40}
-          style={styles.headline}
-          lines={[{ text: 'Create Mockups' }, { text: 'Instantly', muted: true }]}
-        />
+
+        {/* Hero: headline on the left, online/offline toggle aligned to its right. */}
+        <View style={styles.heroRow}>
+          <View style={styles.heroText}>
+            <HeroHeadline
+              align="left"
+              fontSize={38}
+              style={styles.headline}
+              lines={[{ text: 'Create Mockups' }, { text: 'Instantly', muted: true }]}
+            />
+          </View>
+          {store ? (
+            <StoreToggle
+              online={online}
+              pending={setAccept.isPending}
+              reopenAt={reopenAt}
+              onToggle={toggleOnline}
+            />
+          ) : null}
+        </View>
+
         <AppText variant="body" color={colors.meta} style={styles.sub}>
           Turn a garment photo into studio-grade mockups, then manage them as products.
         </AppText>
+
+        {store && !online ? (
+          <Banner
+            tone="warning"
+            title="You're offline"
+            message={
+              reopenAt
+                ? `Not accepting new orders. Auto-reopens ${reopenAt} — or reopen now.`
+                : 'Not accepting new orders. Reopen whenever you are ready.'
+            }
+            actionLabel={setAccept.isPending ? 'Reopening…' : 'Go online now'}
+            onAction={toggleOnline}
+          />
+        ) : null}
 
         {kycNeedsAction ? (
           <Banner
@@ -165,6 +229,50 @@ export function HomeScreen({ navigation }: ScreenProps<'Home'>) {
   );
 }
 
+/**
+ * Compact online/offline switch that sits beside the hero headline. The whole
+ * card is tappable; the Switch mirrors state. Off = store paused for new orders
+ * until its next opening window (auto-reopen), with a manual "open early" tap.
+ */
+function StoreToggle({
+  online,
+  pending,
+  reopenAt,
+  onToggle,
+}: {
+  online: boolean;
+  pending: boolean;
+  reopenAt: string | null;
+  onToggle: () => void;
+}) {
+  const tint = online ? colors.success : colors.danger;
+  return (
+    <PressableScale onPress={onToggle} toScale={0.97} haptic={false} style={styles.toggleCard}>
+      <View style={styles.toggleHead}>
+        <View style={[styles.dot, { backgroundColor: tint }]} />
+        <AppText variant="sectionLabel" color={colors.ink}>
+          {online ? 'Online' : 'Offline'}
+        </AppText>
+      </View>
+      {pending ? (
+        <ActivityIndicator size="small" color={colors.ink} style={styles.toggleSwitch} />
+      ) : (
+        <Switch
+          value={online}
+          onValueChange={onToggle}
+          trackColor={{ false: colors.cardGray, true: colors.success }}
+          thumbColor={colors.surface}
+          ios_backgroundColor={colors.cardGray}
+          style={styles.toggleSwitch}
+        />
+      )}
+      <AppText variant="meta" color={colors.meta} style={styles.toggleHint} numberOfLines={2}>
+        {online ? 'Accepting orders' : reopenAt ? `Opens ${reopenAt}` : 'Orders paused'}
+      </AppText>
+    </PressableScale>
+  );
+}
+
 function StatTile({
   value,
   label,
@@ -223,8 +331,29 @@ function ProductMiniRow({ listing, onPress }: { listing: Listing; onPress: () =>
 
 const styles = StyleSheet.create({
   content: { paddingTop: spacing.lg, paddingBottom: 130, gap: spacing.md },
-  headline: { marginTop: spacing.xs },
+  heroRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    marginTop: spacing.xs,
+  },
+  heroText: { flex: 1 },
+  headline: {},
   sub: { marginBottom: spacing.sm },
+  toggleCard: {
+    width: 118,
+    backgroundColor: colors.surface,
+    borderRadius: radii.card,
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.sm + 2,
+    gap: spacing.xs,
+    alignItems: 'flex-start',
+  },
+  toggleHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  dot: { width: 8, height: 8, borderRadius: 4 },
+  toggleSwitch: { alignSelf: 'flex-start', marginTop: 2 },
+  toggleHint: { marginTop: 2 },
   flex: { flex: 1 },
   statsWrap: { gap: spacing.md },
   statRow: { flexDirection: 'row', gap: spacing.md },

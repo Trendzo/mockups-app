@@ -57,6 +57,10 @@ export interface IdentityCheck {
   emailTaken: boolean;
   phoneTaken: boolean;
   accountExists: boolean;
+  /** Field-granular: which identifier maps to an existing approved ACCOUNT. Lets
+   *  the UI offer the exact login method(s) — email/pass and/or phone OTP. */
+  accountEmailTaken: boolean;
+  accountPhoneTaken: boolean;
   applicationStatus: ApplicationStatus | null;
   applicationId: string | null;
 }
@@ -128,6 +132,9 @@ export interface Store {
   id: string;
   name?: string;
   status: StoreStatus;
+  /** Retailer self-serve online/offline toggle. Future ISO timestamp while
+   *  offline (store auto-reopens then); null/absent = online, accepting orders. */
+  orderPauseUntil?: string | null;
 }
 
 export interface RetailerProfile {

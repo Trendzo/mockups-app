@@ -13,7 +13,9 @@ export interface LocalPhoto {
 
 export type RootStackParamList = {
   // Auth + onboarding (application-first)
-  Login: undefined;
+  // Optional deep-link params: preselect login method + prefill the identifier so a
+  // signup that hit an existing account drops the user straight into the right flow.
+  Login: { method?: 'phone' | 'email'; prefillEmail?: string; prefillPhone?: string } | undefined;
   ApplicationForm: { verifiedPhone?: string } | undefined;
   ApplicationStatus: { applicationId: string; email: string };
   Resubmit: { applicationId: string; email: string };
