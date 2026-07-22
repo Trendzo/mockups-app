@@ -24,7 +24,7 @@ import { useKyc, useRetailerMe } from '../api/onboardingHooks';
 import { CatalogExportKind, downloadCatalogCsv } from '../api/catalogueExport';
 import { requestAccountClosure } from '../api/onboarding';
 import { colors, radii, spacing } from '../theme/theme';
-import { ACCOUNT_DELETION_URL, SUPPORT_URL } from '../config/legal';
+import { ACCOUNT_DELETION_URL, SUPPORT_URL, WEB_PORTAL_HOME_URL } from '../config/legal';
 
 /** Profile (§account): view your retailer details, request changes, log out. */
 export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
@@ -210,6 +210,24 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
 
         {/* Actions */}
         <View style={styles.actions}>
+          <ActionRow
+            icon="layers-outline"
+            label="Bulk Mockup"
+            hint="Beta · queue mockups for many products"
+            onPress={() => navigation.navigate('SelectPhotos', { bulk: true })}
+          />
+          <ActionRow
+            icon="wallet-outline"
+            label="Earnings & payouts"
+            hint="Beta · unsettled amount owed & next payout"
+            onPress={() => navigation.navigate('Earnings')}
+          />
+          <ActionRow
+            icon="open-outline"
+            label="Open web portal"
+            hint="Billing terminal, orders, payouts & full ops"
+            onPress={() => Linking.openURL(WEB_PORTAL_HOME_URL)}
+          />
           <ActionRow
             icon="create-outline"
             label="Request a change"

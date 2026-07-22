@@ -12,6 +12,8 @@ import { PendingApprovalScreen } from '../screens/PendingApprovalScreen';
 import { LegalDocViewerScreen, TermsScreen } from '../screens/TermsScreen';
 import { MainTabs } from './MainTabs';
 import { SelectPhotosScreen } from '../screens/SelectPhotosScreen';
+import { BulkJobsScreen } from '../screens/BulkJobsScreen';
+import { EarningsScreen } from '../screens/EarningsScreen';
 import { CaptureScreen } from '../screens/CaptureScreen';
 import { ConfigureScreen } from '../screens/ConfigureScreen';
 import { GeneratingScreen } from '../screens/GeneratingScreen';
@@ -178,6 +180,8 @@ export function RootNavigator() {
       <Stack.Navigator screenOptions={options}>
         <Stack.Screen name="Main" component={MainTabs} />
         <Stack.Screen name="SelectPhotos" component={SelectPhotosScreen} />
+        <Stack.Screen name="BulkJobs" component={BulkJobsScreen} />
+        <Stack.Screen name="Earnings" component={EarningsScreen} />
         <Stack.Screen
           name="Capture"
           component={CaptureScreen}

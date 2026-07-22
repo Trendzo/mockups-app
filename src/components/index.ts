@@ -37,6 +37,7 @@ export { Screen } from './Screen';
 export { Select } from './Select';
 export type { SelectOption } from './Select';
 export { SegmentedControl } from './SegmentedControl';
+export { ShootConfig } from './ShootConfig';
 export type { SegmentOption } from './SegmentedControl';
 export { Skeleton, SkeletonCard } from './SkeletonCard';
 export { StatusTicker } from './StatusTicker';

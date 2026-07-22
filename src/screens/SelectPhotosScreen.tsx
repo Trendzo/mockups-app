@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { launchImageLibrary } from 'react-native-image-picker';
 import {
   AppImage,
@@ -11,11 +12,17 @@ import {
   PressableScale,
   PrimaryButton,
   Screen,
+  ShootConfig,
   useToast,
 } from '../components';
 import { ScreenProps } from '../navigation/types';
 import { PhotoSlot, useCaptureDraft } from '../store/captureDraft';
+import { useBulkJobSummary, useEnqueueBulkMockup } from '../api/bulkMockupHooks';
+import { Mode, viewsForMode } from '../types/enums';
+import { prepareUpload } from '../utils/image';
 import { colors, radii, spacing } from '../theme/theme';
+
+const PHOTO_SLOTS: PhotoSlot[] = ['front', 'back', 'pattern', 'logo', 'tag'];
 
 const SLOT_LABEL: Record<PhotoSlot, string> = {
   front: 'Front',
@@ -29,11 +36,54 @@ const SLOT_LABEL: Record<PhotoSlot, string> = {
  * Garment photo upload (§New Mockup). Front required; back optional; plus three
  * optional close-up references (pattern, logo, tag) - same upload mechanism.
  */
-export function SelectPhotosScreen({ navigation }: ScreenProps<'SelectPhotos'>) {
+export function SelectPhotosScreen({ navigation, route }: ScreenProps<'SelectPhotos'>) {
   const toast = useToast();
+  const insets = useSafeAreaInsets();
   const draft = useCaptureDraft();
   const setPhoto = draft.setPhoto;
   const [chooser, setChooser] = useState<PhotoSlot | null>(null);
+
+  // Bulk Mockup mode (beta): same capture screen, but the "how we shoot" config
+  // lives here (accordion) and the CTA queues a job + clears the images so the
+  // retailer can immediately add the next product. Absent = the normal flow.
+  const bulk = route.params?.bulk === true;
+  const [configOpen, setConfigOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const summaryQ = useBulkJobSummary(bulk);
+  const enqueue = useEnqueueBulkMockup();
+  const pending = summaryQ.data?.pending ?? 0;
+
+  const clearImages = () => PHOTO_SLOTS.forEach((s) => setPhoto(s, null));
+
+  const onAddNext = async () => {
+    if (!draft.front || submitting) return;
+    setSubmitting(true);
+    try {
+      const apparel = await prepareUpload(draft.front.uri);
+      const apparelBack = draft.back ? await prepareUpload(draft.back.uri) : undefined;
+      const pattern = draft.pattern ? await prepareUpload(draft.pattern.uri) : undefined;
+      const logo = draft.logo ? await prepareUpload(draft.logo.uri) : undefined;
+      const tag = draft.tag ? await prepareUpload(draft.tag.uri) : undefined;
+      const { mode, modelGender, only } = draft.config;
+      const validOnly = only.filter((v) => (viewsForMode(mode) as readonly string[]).includes(v));
+      await enqueue.mutateAsync({
+        mode,
+        apparel,
+        apparelBack,
+        pattern,
+        logo,
+        tag,
+        modelGender: mode === Mode.WithModel ? modelGender ?? undefined : undefined,
+        only: validOnly.length ? validOnly : undefined,
+      });
+      clearImages(); // keep the config; just reset the photos for the next product
+      toast.show('Queued — add the next product', 'success');
+    } catch (e) {
+      toast.show((e as { message?: string })?.message ?? 'Could not queue mockups', 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const pickFromLibrary = async (slot: PhotoSlot) => {
     setChooser(null);
@@ -63,19 +113,37 @@ export function SelectPhotosScreen({ navigation }: ScreenProps<'SelectPhotos'>) 
     <Screen edges={['top', 'bottom']}>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, bulk && styles.contentBulk]}
       >
-        <BackButton onPress={() => navigation.goBack()} />
+        {/* Header row: back + (bulk) a queued-jobs badge that opens the queue. */}
+        <View style={styles.topRow}>
+          <BackButton onPress={() => navigation.goBack()} />
+          {bulk ? (
+            <PressableScale
+              onPress={() => navigation.navigate('BulkJobs')}
+              style={styles.badge}
+              haptic={false}
+            >
+              <Icon name="layers-outline" size={16} color={colors.ink} />
+              <AppText variant="meta" color={colors.ink}>
+                {pending > 0 ? `${pending} in queue` : 'Queue'}
+              </AppText>
+              {pending > 0 ? <View style={styles.badgeDot} /> : null}
+            </PressableScale>
+          ) : null}
+        </View>
 
         <View style={styles.header}>
           <AppText variant="sectionLabel" color={colors.meta}>
-            Step 1 · Garment photos
+            {bulk ? 'Bulk Mockup · Beta' : 'Step 1 · Garment photos'}
           </AppText>
           <AppText variant="cardTitle" color={colors.ink} style={styles.title}>
             Add product photos
           </AppText>
           <AppText variant="meta" color={colors.meta}>
-            Front is required. The rest are extra references that improve fidelity.
+            {bulk
+              ? 'Queue each product, then add the next. Mockups generate in the background.'
+              : 'Front is required. The rest are extra references that improve fidelity.'}
           </AppText>
         </View>
 
@@ -121,16 +189,67 @@ export function SelectPhotosScreen({ navigation }: ScreenProps<'SelectPhotos'>) 
             onRemove={() => setPhoto('tag', null)}
           />
         </View>
+
+        {/* Bulk mode: inline "how we shoot" config as a compact accordion. */}
+        {bulk ? (
+          <View style={styles.configCard}>
+            <PressableScale
+              onPress={() => setConfigOpen((o) => !o)}
+              haptic={false}
+              style={styles.configHead}
+            >
+              <View style={styles.flex}>
+                <AppText variant="sectionLabel" color={colors.meta}>
+                  Config
+                </AppText>
+                <AppText variant="meta" color={colors.meta}>
+                  {draft.config.mode === Mode.WithModel
+                    ? `On-model · ${draft.config.modelGender === 'her' ? 'female' : 'male'}`
+                    : 'Product shots'}
+                  {draft.config.only.length ? ` · ${draft.config.only.length} views` : ''}
+                </AppText>
+              </View>
+              <Icon
+                name={configOpen ? 'chevron-up' : 'chevron-down'}
+                size={20}
+                color={colors.meta}
+              />
+            </PressableScale>
+            {configOpen ? (
+              <View style={styles.configBody}>
+                <ShootConfig />
+              </View>
+            ) : null}
+          </View>
+        ) : null}
       </ScrollView>
 
-      <View style={styles.footer}>
-        <PrimaryButton
-          label="Continue"
-          tone="accent"
-          disabled={!canContinue}
-          onPress={() => navigation.navigate('Configure')}
-        />
-      </View>
+      {bulk ? (
+        // Floating CTA — queues the current product, then clears for the next.
+        <PressableScale
+          onPress={onAddNext}
+          disabled={!canContinue || submitting}
+          style={[
+            styles.fab,
+            { bottom: insets.bottom + spacing.md },
+            (!canContinue || submitting) && styles.fabDisabled,
+          ]}
+        >
+          <Icon name="add" size={20} color={colors.accentInk} />
+          <AppText variant="bodyMedium" color={colors.accentInk}>
+            {submitting ? 'Queuing…' : 'Add next product'}
+          </AppText>
+        </PressableScale>
+      ) : (
+        <View style={styles.footer}>
+          <PrimaryButton
+            label="Continue"
+            tone="accent"
+            disabled={!canContinue}
+            onPress={() => navigation.navigate('Configure')}
+          />
+        </View>
+      )}
 
       {/* Source chooser */}
       <BottomSheet visible={chooser != null} onClose={() => setChooser(null)}>
@@ -228,6 +347,45 @@ function SheetRow({
 
 const styles = StyleSheet.create({
   content: { paddingTop: spacing.md, paddingBottom: spacing.xl, gap: spacing.md },
+  contentBulk: { paddingBottom: 96 },
+  flex: { flex: 1 },
+  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.surface,
+    borderRadius: radii.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  badgeDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.accent },
+  configCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.card,
+    padding: spacing.md,
+    marginTop: spacing.sm,
+  },
+  configHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  configBody: { marginTop: spacing.md },
+  fab: {
+    position: 'absolute',
+    left: spacing.screenH,
+    right: spacing.screenH,
+    height: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.accent,
+    borderRadius: radii.pill,
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
+  },
+  fabDisabled: { opacity: 0.5 },
   header: { gap: spacing.xs, marginTop: spacing.sm },
   title: { fontSize: 24, lineHeight: 28 },
   row: { flexDirection: 'row', gap: spacing.cardGap },

@@ -35,8 +35,10 @@ import {
 import { ScreenProps } from '../navigation/types';
 import { useListings } from '../api/catalogHooks';
 import { useRetailerMe } from '../api/onboardingHooks';
+import { useBulkJobs, useDismissBulkJob } from '../api/bulkMockupHooks';
 import { deleteListing, updateListing } from '../api/catalogManagement';
 import { useProductDraft } from '../store/productDraft';
+import { BulkMockupJob } from '../types/bulkMockup';
 import { useAuth } from '../store/auth';
 import { canWriteCatalog, Listing, ListingStatus } from '../types/catalog';
 import { formatPaise } from '../utils/money';
@@ -118,6 +120,21 @@ export function CatalogListScreen({ navigation }: ScreenProps<'Catalog'>) {
   const listingsQ = useListings(status === 'all' ? undefined : status);
   const all = listingsQ.data ?? [];
 
+  // Ready bulk-mockup jobs surface here as draft rows to finish. Only under the
+  // All / Draft filters and when not searching (jobs have no product name yet).
+  const readyJobsQ = useBulkJobs('ready', canWrite);
+  const dismissJob = useDismissBulkJob();
+  const showJobs = canWrite && (status === 'all' || status === 'draft') && search.trim() === '';
+  const readyJobs = showJobs ? readyJobsQ.data ?? [] : [];
+
+  const finishJob = (job: BulkMockupJob) => {
+    const draft = useProductDraft.getState();
+    draft.startCreate();
+    draft.addGalleryUrls(job.outputUrls);
+    toast.show('Add product details to go live', 'success');
+    navigation.navigate('ProductWizardBasics');
+  };
+
   const q = search.trim().toLowerCase();
   const listings = all.filter((l) => {
     if (q && !l.name.toLowerCase().includes(q)) return false;
@@ -179,10 +196,33 @@ export function CatalogListScreen({ navigation }: ScreenProps<'Catalog'>) {
               tintColor={colors.ink}
             />
           }
+          ListHeaderComponent={
+            readyJobs.length ? (
+              <View style={styles.jobsHeader}>
+                <AppText variant="sectionLabel" color={colors.meta}>
+                  Generated mockups · finish setup
+                </AppText>
+                {readyJobs.map((job) => (
+                  <DraftMockupRow
+                    key={job.id}
+                    job={job}
+                    onPress={() => finishJob(job)}
+                    onDismiss={() =>
+                      dismissJob.mutate(job.id, {
+                        onError: (e) => toast.show((e as Error).message, 'error'),
+                      })
+                    }
+                  />
+                ))}
+              </View>
+            ) : null
+          }
           ListEmptyComponent={
-            <AppText variant="meta" color={colors.meta} style={styles.empty}>
-              {filtersActive ? 'No products match these filters.' : 'No products yet.'}
-            </AppText>
+            readyJobs.length ? null : (
+              <AppText variant="meta" color={colors.meta} style={styles.empty}>
+                {filtersActive ? 'No products match these filters.' : 'No products yet.'}
+              </AppText>
+            )
           }
           renderItem={({ item }) => (
             <ProductRow
@@ -261,6 +301,43 @@ export function CatalogListScreen({ navigation }: ScreenProps<'Catalog'>) {
         </PressableScale>
       ) : null}
     </Screen>
+  );
+}
+
+/** A ready bulk-mockup job shown in the catalog as a draft product to finish. */
+function DraftMockupRow({
+  job,
+  onPress,
+  onDismiss,
+}: {
+  job: BulkMockupJob;
+  onPress: () => void;
+  onDismiss: () => void;
+}) {
+  const thumb = job.outputUrls[0];
+  const n = job.outputUrls.length;
+  return (
+    <PressableScale onPress={onPress} toScale={0.98} style={styles.row}>
+      {thumb ? (
+        <AppImage uri={thumb} radius={radii.sm} containerStyle={styles.thumb} />
+      ) : (
+        <View style={[styles.thumb, styles.thumbEmpty]}>
+          <Icon name="image-outline" size={22} color={colors.inkMuted} />
+        </View>
+      )}
+      <View style={styles.rowBody}>
+        <AppText variant="bodyMedium" color={colors.ink} numberOfLines={1}>
+          Untitled draft
+        </AppText>
+        <AppText variant="meta" color={colors.meta} numberOfLines={1}>
+          Finish setup · {n} mockup{n === 1 ? '' : 's'}
+        </AppText>
+      </View>
+      <StatusChip label="draft" tone={toneForStatus('draft')} />
+      <PressableScale onPress={onDismiss} hitSlop={10} style={styles.dismissBtn} toScale={0.9}>
+        <Icon name="close" size={16} color={colors.meta} />
+      </PressableScale>
+    </PressableScale>
   );
 }
 
@@ -431,6 +508,15 @@ const styles = StyleSheet.create({
   loader: { marginTop: spacing.xl },
   pad: { marginTop: spacing.md },
   listContent: { paddingTop: spacing.md, paddingBottom: 160, gap: spacing.sm },
+  jobsHeader: { gap: spacing.sm, marginBottom: spacing.sm },
+  dismissBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.canvas,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   fab: {
     position: 'absolute',
     right: spacing.screenH,

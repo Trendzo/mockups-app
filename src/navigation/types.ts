@@ -42,7 +42,13 @@ export type RootStackParamList = {
   Scan: undefined;
 
   // Catalog flow: photo picker (front + optional back/close-ups) → configure
-  SelectPhotos: undefined;
+  // `bulk` opens the same capture screen in Bulk Mockup mode (config inline +
+  // floating "Add next product" that queues a job). Absent = the normal flow.
+  SelectPhotos: { bulk?: boolean } | undefined;
+  // Bulk-mockup job queue (beta): queued / processing / ready / failed.
+  BulkJobs: undefined;
+  // Earnings / payouts (beta): unsettled amount owed + breakdown + next payout.
+  Earnings: undefined;
   // sink 'custom' delivers the shot to a registered cameraSink handler (e.g.
   // variant photos) instead of the mockup capture draft.
   Capture: { slot: 'front' | 'back' | 'pattern' | 'logo' | 'tag'; sink?: 'custom' };
