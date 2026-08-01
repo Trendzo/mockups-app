@@ -5,9 +5,11 @@ import { useCaptureDraft } from '../store/captureDraft';
 export type MainTab = 'home' | 'catalog' | 'profile';
 
 /**
- * The app's persistent 4-item bottom nav (Home · Create · Catalog · Profile),
- * rendered on each main page with the active tab set. Only these three top-level
- * pages show it; pushed detail/form screens use their own back button.
+ * The app's persistent bottom nav (Home · Create · Catalog · Profile — Scan is
+ * currently hidden, see below), rendered on each main page with the active tab set.
+ * Only the three top-level pages (Home · Catalog · Profile) highlight an active tab;
+ * Create is an action that pushes its own screen. Pushed detail/form screens use
+ * their own back button.
  */
 export function MainBottomNav({
   navigation,
@@ -38,13 +40,16 @@ export function MainBottomNav({
           label: 'Create',
           onPress: startNewMockup,
         },
-        {
-          key: 'scan',
-          icon: 'barcode-scan',
-          set: 'mci',
-          label: 'Scan',
-          onPress: () => navigation.navigate('Scan'),
-        },
+        // Scan tab hidden for now — kept here (not deleted) so it can be restored
+        // in one step. The Scan screen + its route stay registered in
+        // RootNavigator; it's simply unreachable from the bottom nav.
+        // {
+        //   key: 'scan',
+        //   icon: 'barcode-scan',
+        //   set: 'mci',
+        //   label: 'Scan',
+        //   onPress: () => navigation.navigate('Scan'),
+        // },
         {
           key: 'catalog',
           icon: 'pricetags-outline',
