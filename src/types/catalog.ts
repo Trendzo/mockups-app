@@ -33,10 +33,13 @@ export interface CatalogCategory {
   id: string;
   slug: string;
   label: string;
+  /** Two-level taxonomy: null = a top-level category, otherwise its parent's id. */
   parentId?: string | null;
   gender?: CatalogGender;
   sortOrder?: number;
   isActive?: boolean;
+  /** Computed server-side. Listings must sit on a leaf, never on a parent. */
+  isLeaf?: boolean;
 }
 
 /** Category-aware size pick-list served by GET /catalog/size-scales (same
@@ -111,7 +114,8 @@ export interface Listing {
 
 export interface CreateListingInput {
   name: string;
-  brandId: string;
+  /** Optional — a draft can be saved before a brand is chosen. */
+  brandId?: string;
   categoryId: string;
   gender: CatalogGender;
   description?: string;

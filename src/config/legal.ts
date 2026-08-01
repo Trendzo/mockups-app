@@ -10,12 +10,11 @@ export const ACCOUNT_DELETION_URL = `${PUBLIC_SITE_URL}/account-deletion`;
  * earnings deep-link. Single source of truth.
  *
  * Per-environment: dev/staging builds point at the staging host, release builds
- * at prod. `__DEV__` is true in Metro/debug, false in a release bundle.
- *
- * ⚠ Both domains are placeholders — set them to the real deployed Vercel hosts.
+ * at prod. `__DEV__` is true in Metro/debug, false in a release bundle. Both
+ * currently resolve to the same deployed Vercel host (no separate staging yet).
  */
-export const WEB_PORTAL_URL_PROD = 'https://trendzo-dashboard.vercel.app';
-export const WEB_PORTAL_URL_STAGING = 'https://trendzo-dashboard-staging.vercel.app';
+export const WEB_PORTAL_URL_PROD = 'https://web-portal-one-wine.vercel.app';
+export const WEB_PORTAL_URL_STAGING = 'https://web-portal-one-wine.vercel.app';
 export const WEB_PORTAL_URL = __DEV__ ? WEB_PORTAL_URL_STAGING : WEB_PORTAL_URL_PROD;
 /** Retailer landing in the web portal (dashboard). */
 export const WEB_PORTAL_HOME_URL = `${WEB_PORTAL_URL}/retailer/dashboard`;

@@ -38,11 +38,18 @@ export function ReviewStep({ navigation }: ScreenProps<'ProductWizardReview'>) {
   const [error, setError] = useState<string | null>(null);
 
   const brandName = brandsQ.data?.find((b) => b.id === d.brandId)?.name ?? '-';
-  const categoryLabel = categoriesQ.data?.find((c) => c.id === d.categoryId)?.label ?? '-';
+  // Show the full path ("Tops › T-Shirts") — leaf labels repeat across the taxonomy,
+  // so the leaf alone doesn't tell the retailer what they actually picked.
+  const categoryLabel = (() => {
+    const cat = categoriesQ.data?.find((c) => c.id === d.categoryId);
+    if (!cat) return '-';
+    const parent = cat.parentId ? categoriesQ.data?.find((c) => c.id === cat.parentId) : undefined;
+    return parent ? `${parent.label} › ${cat.label}` : cat.label;
+  })();
   const gender = d.genders.length >= 2 ? 'unisex' : d.genders[0] ?? 'unisex';
 
   const commit = async (publish: boolean) => {
-    const problems = validateProductDraft();
+    const problems = validateProductDraft(publish);
     if (problems.length) {
       setError(`Complete these before saving: ${problems.join(', ')}.`);
       return;

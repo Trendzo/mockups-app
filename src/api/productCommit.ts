@@ -52,13 +52,27 @@ async function step<T>(label: string, run: () => Promise<T>): Promise<T> {
 /**
  * Steps are freely navigable, so nothing is enforced until commit. Returns a
  * list of missing/invalid things (empty = ready to save/publish).
+ *
+ * A DRAFT saves partial progress: it needs only the two things the backend
+ * cannot persist without — a product name and a category (category_id is
+ * NOT NULL in the DB). Everything else (brand, gender, a valid price, complete
+ * variants) is enforced only when `publish` is true. Publishing is additionally
+ * re-checked server-side (assertListingPublishable), so a loose draft can never
+ * go live incomplete.
  */
-export function validateProductDraft(): string[] {
+export function validateProductDraft(publish = true): string[] {
   const d = useProductDraft.getState();
   const problems: string[] = [];
   if (d.name.trim().length < 1) problems.push('Product name');
-  if (!d.brandId) problems.push('Brand');
   if (!d.categoryId) problems.push('Category');
+
+  // Lenient only when the saved listing will actually be a draft: a brand-new
+  // product, or editing one that is still a draft. Editing a LIVE product (or
+  // publishing) keeps full validation so a live listing can't be broken.
+  const savingDraft = !publish && (d.mode === 'create' || d.editingStatus === 'draft');
+  if (savingDraft) return Array.from(new Set(problems));
+
+  if (!d.brandId) problems.push('Brand');
   if (d.genders.length === 0) problems.push('Gender');
 
   const badMoney = (price: string, mrp: string): boolean => {
@@ -120,7 +134,8 @@ export async function commitProductDraft({ publish }: { publish: boolean }): Pro
 
   const listingFields: CreateListingInput = {
     name: d.name.trim(),
-    brandId: d.brandId!,
+    // Optional on a draft; omit when unset so the backend stores brand_id NULL.
+    ...(d.brandId ? { brandId: d.brandId } : {}),
     categoryId: d.categoryId!,
     gender: derivedGender(d.genders),
     description: d.description.trim() || undefined,

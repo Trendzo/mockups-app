@@ -391,10 +391,10 @@ export function ScanScreen({ navigation }: ScreenProps<'Scan'>) {
               {!connected && (
                 <View style={styles.banner}>
                   <AppText variant="bodyMedium" color={colors.ink} style={styles.center}>
-                    Register billing - coming soon
+                    No register connected
                   </AppText>
                   <AppText variant="meta" color={colors.meta} style={styles.center}>
-                    We're putting the finishing touches on in-app register &amp; billing. Hang tight!
+                    Open the POS Register on your web portal to start scanning.
                   </AppText>
                 </View>
               )}

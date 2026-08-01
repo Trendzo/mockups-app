@@ -9,6 +9,7 @@ import {
   PublishResult,
   Submission,
 } from '../types/api';
+import { SubmissionStatus } from '../types/enums';
 import { toFormFile, UploadFile } from '../utils/image';
 import {
   mockBrands,
@@ -53,6 +54,7 @@ export async function createSubmission(
     mode: input.mode,
     apparelImageUrls: [frontUrl],
   };
+  if (input.clientRequestId) body.clientRequestId = input.clientRequestId;
   if (backUrl) body.apparelBackImageUrl = backUrl;
   if (designUrl) body.designImageUrl = designUrl;
   if (patternUrl) body.patternCloseupUrl = patternUrl;
@@ -70,13 +72,44 @@ export async function createSubmission(
     body,
   );
   const d = unwrapEnvelope<any>(res);
+  return normalizeSubmission(d, {
+    mode: input.mode,
+    rawPhotos: [frontUrl, backUrl].filter((url): url is string => Boolean(url)),
+  });
+}
+
+function normalizeSubmission(
+  row: any,
+  fallback?: Pick<Submission, 'mode'> & Partial<Pick<Submission, 'rawPhotos'>>,
+): Submission {
   return {
-    id: d.id,
-    mode: d.mode ?? input.mode,
-    status: d.status ?? 'ready_for_review',
-    rawPhotos: d.rawPhotos ?? [frontUrl, backUrl].filter(Boolean),
-    outputUrls: d.outputUrls ?? [],
+    id: row.id,
+    mode: row.mode ?? fallback?.mode,
+    status: row.status ?? SubmissionStatus.ReadyForReview,
+    rawPhotos: row.rawPhotos ?? fallback?.rawPhotos ?? [],
+    outputUrls: row.outputUrls ?? [],
+    at: row.at,
+    errorMessage: row.errorMessage ?? null,
   };
+}
+
+export async function listSubmissions(input?: {
+  status?: SubmissionStatus;
+  limit?: number;
+}): Promise<Submission[]> {
+  if (isMock()) return [];
+  const res = await getJson<unknown>('/retailer/ai-catalog-beta/submissions', {
+    params: {
+      ...(input?.status ? { status: input.status } : {}),
+      ...(input?.limit ? { limit: input.limit } : {}),
+    },
+  });
+  return unwrapEnvelope<any[]>(res).map((row) => normalizeSubmission(row));
+}
+
+export async function getSubmission(id: string): Promise<Submission> {
+  const res = await getJson<unknown>(`/retailer/ai-catalog-beta/submissions/${id}`);
+  return normalizeSubmission(unwrapEnvelope<any>(res));
 }
 
 /** POST /retailer/ai-catalog-beta/submissions/:id/decision. */

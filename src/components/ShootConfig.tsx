@@ -76,5 +76,12 @@ export function ShootConfig() {
 const styles = StyleSheet.create({
   wrap: { gap: spacing.md },
   block: { gap: spacing.sm },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  // Explicit rowGap so wrapped chip rows have breathing room between them
+  // (a single `gap` can render tight vertically on some RN versions).
+  chips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    columnGap: spacing.sm,
+    rowGap: spacing.sm + 2,
+  },
 });

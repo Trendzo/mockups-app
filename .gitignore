@@ -88,3 +88,7 @@ yarn-error.log
 
 # macOS AppleDouble metadata (created on exFAT/network volumes)
 ._*
+
+# local dev logs
+metro.out.log
+metro.err.log

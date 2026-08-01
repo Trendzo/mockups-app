@@ -32,6 +32,7 @@ import { ChangeRequestScreen } from '../screens/ChangeRequestScreen';
 import { useAuth } from '../store/auth';
 import { useSettings } from '../store/settings';
 import { useOnboarding } from '../store/onboarding';
+import { useGenerationRecovery } from '../store/generationRecovery';
 import { useRetailerMe } from '../api/onboardingHooks';
 import { colors } from '../theme/theme';
 
@@ -92,7 +93,9 @@ export function RootNavigator() {
   const authHydrated = useAuth((s) => s.hydrated);
   const settingsHydrated = useSettings((s) => s.hydrated);
   const onbHydrated = useOnboarding((s) => s.hydrated);
-  const hydrated = authHydrated && settingsHydrated && onbHydrated;
+  const generationHydrated = useGenerationRecovery((s) => s.hydrated);
+  const activeGeneration = useGenerationRecovery((s) => s.active);
+  const hydrated = authHydrated && settingsHydrated && onbHydrated && generationHydrated;
 
   // Fetch /retailer/me only once logged in; drives the app gate.
   const me = useRetailerMe(!!token && hydrated);
@@ -177,7 +180,10 @@ export function RootNavigator() {
   // Active retailer with a usable store → full app.
   if (active) {
     return (
-      <Stack.Navigator screenOptions={options}>
+      <Stack.Navigator
+        screenOptions={options}
+        initialRouteName={activeGeneration ? 'Generating' : 'Main'}
+      >
         <Stack.Screen name="Main" component={MainTabs} />
         <Stack.Screen name="SelectPhotos" component={SelectPhotosScreen} />
         <Stack.Screen name="BulkJobs" component={BulkJobsScreen} />
@@ -191,6 +197,7 @@ export function RootNavigator() {
         <Stack.Screen
           name="Generating"
           component={GeneratingScreen}
+          initialParams={activeGeneration?.input}
           options={{ animation: 'fade', gestureEnabled: false }}
         />
         <Stack.Screen name="ReviewResults" component={ReviewResultsScreen} />

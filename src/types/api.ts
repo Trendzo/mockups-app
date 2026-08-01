@@ -17,6 +17,7 @@ export interface ApiError {
 // ---- Catalog: submissions ----
 
 export interface CreateSubmissionInput {
+  clientRequestId?: string;
   mode: Mode;
   apparel: UploadFile;
   apparelBack?: UploadFile; // optional real back-of-garment reference
@@ -36,6 +37,8 @@ export interface Submission {
   status: SubmissionStatus;
   rawPhotos: string[]; // absolute urls
   outputUrls: string[]; // absolute urls
+  at?: string;
+  errorMessage?: string | null;
 }
 
 export interface DecisionInput {

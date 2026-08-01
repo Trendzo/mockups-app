@@ -63,16 +63,36 @@ export function BasicsStep({ navigation }: ScreenProps<'ProductWizardBasics'>) {
   // picked yet = show everything so the user isn't blocked on field order.
   const gender: 'her' | 'him' | 'unisex' | null =
     d.genders.length >= 2 ? 'unisex' : d.genders[0] ?? null;
-  const visibleCategories = (categoriesQ.data ?? []).filter(
+
+  // The taxonomy is two levels, and a listing belongs on a LEAF — a product filed
+  // under "Tops" instead of "Tops › T-Shirts" never shows up in the app's browse
+  // tiles. So only leaves are offered, each qualified by its parent: leaf labels
+  // repeat across the tree ("Jeans" under both Bottoms and Denim, "Shorts" in four
+  // places) and would otherwise be indistinguishable rows in the sheet.
+  const allCategories = categoriesQ.data ?? [];
+  const parentById = new Map(allCategories.map((c) => [c.id, c]));
+  const visibleCategories = allCategories.filter(
     (c) => !gender || c.gender === gender || c.gender === 'unisex',
   );
-  const categoryOptions = visibleCategories.map((c) => ({ value: c.id, label: c.label }));
+  const leaves = visibleCategories.filter((c) => c.isLeaf ?? true);
+  const categoryOptions = leaves
+    .map((c) => {
+      const parent = c.parentId ? parentById.get(c.parentId) : undefined;
+      return {
+        value: c.id,
+        label: parent ? `${parent.label} › ${c.label}` : c.label,
+        sort: [parent?.sortOrder ?? 0, c.sortOrder ?? 0] as const,
+      };
+    })
+    .sort((a, b) => a.sort[0] - b.sort[0] || a.sort[1] - b.sort[1] || a.label.localeCompare(b.label))
+    .map(({ value, label }) => ({ value, label }));
 
   // A gender change can hide the chosen category - drop it so the draft never
-  // carries a category the picker no longer offers.
+  // carries a category the picker no longer offers. Checked against the leaves,
+  // since those are the only selectable rows.
   useEffect(() => {
     if (!categoriesQ.data || !d.categoryId) return;
-    if (!visibleCategories.some((c) => c.id === d.categoryId)) {
+    if (!leaves.some((c) => c.id === d.categoryId)) {
       d.setBasics({ categoryId: null });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

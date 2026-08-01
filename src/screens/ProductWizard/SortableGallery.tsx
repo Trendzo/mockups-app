@@ -8,7 +8,7 @@ import Animated, {
   useSharedValue,
   withSpring,
 } from 'react-native-reanimated';
-import { AppImage, AppText, Icon, PressableScale } from '../../components';
+import { AppImage, AppText, Icon, ImageViewer, PressableScale } from '../../components';
 import { colors, radii, spacing } from '../../theme/theme';
 import { Haptics } from '../../utils/haptics';
 
@@ -60,7 +60,15 @@ function moveIndex(
  */
 export function SortableGallery({ urls, onReorder, onRemove, onDragStart, onDragEnd }: Props) {
   const [width, setWidth] = useState(0);
+  // Index of the tapped tile shown full-screen; null = viewer closed.
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const cols = columnsFor(urls.length);
+
+  // Open the full-screen viewer at the tapped URL's current slot.
+  const openViewer = (url: string) => {
+    const i = urls.indexOf(url);
+    if (i >= 0) setViewerIndex(i);
+  };
 
   const positions = useSharedValue<Record<string, number>>(
     Object.fromEntries(urls.map((u, i) => [u, i])),
@@ -113,10 +121,17 @@ export function SortableGallery({ urls, onReorder, onRemove, onDragStart, onDrag
             startY={startY}
             commitOrder={commitOrder}
             onRemove={onRemove}
+            onOpen={openViewer}
             onDragStart={onDragStart}
             onDragEnd={onDragEnd}
           />
         ))}
+      <ImageViewer
+        visible={viewerIndex !== null}
+        images={urls.map((u) => ({ url: u }))}
+        initialIndex={viewerIndex ?? 0}
+        onClose={() => setViewerIndex(null)}
+      />
     </View>
   );
 }
@@ -138,6 +153,7 @@ interface CellProps {
   startY: SharedValue<number>;
   commitOrder: (pos: Record<string, number>) => void;
   onRemove: (url: string) => void;
+  onOpen: (url: string) => void;
   onDragStart?: () => void;
   onDragEnd?: () => void;
 }
@@ -159,6 +175,7 @@ function Cell({
   startY,
   commitOrder,
   onRemove,
+  onOpen,
   onDragStart,
   onDragEnd,
 }: CellProps) {
@@ -198,6 +215,17 @@ function Cell({
       if (onDragEnd) runOnJS(onDragEnd)();
     });
 
+  // Quick tap opens the full-screen viewer. Exclusive() gives the long-press
+  // drag priority: a held press activates `pan` (>200ms) and this tap loses;
+  // a short tap never activates pan, so it fires. No conflict with reorder.
+  const tap = Gesture.Tap()
+    .maxDuration(250)
+    .onEnd((_e, success) => {
+      if (success) runOnJS(onOpen)(url);
+    });
+
+  const gesture = Gesture.Exclusive(pan, tap);
+
   const animStyle = useAnimatedStyle(() => {
     const isActive = activeId.value === id;
     if (isActive) {
@@ -228,7 +256,7 @@ function Cell({
 
   return (
     <Animated.View style={[styles.cell, { width: colW, height: cellH }, animStyle]}>
-      <GestureDetector gesture={pan}>
+      <GestureDetector gesture={gesture}>
         <Animated.View style={StyleSheet.absoluteFill}>
           <AppImage
             uri={url}

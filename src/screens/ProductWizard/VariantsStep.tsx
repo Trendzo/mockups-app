@@ -10,7 +10,6 @@ import {
   PrimaryButton,
   Screen,
   SegmentedControl,
-  Select,
   VariantImages,
 } from '../../components';
 import { ScreenProps } from '../../navigation/types';
@@ -40,7 +39,16 @@ const COLOR_PALETTE: { name: string; hex: string }[] = [
   { name: 'Brown', hex: '#7B4B2A' },
   { name: 'Beige', hex: '#D9C6A5' },
 ];
-const CUSTOM_COLOR = 'custom';
+/** Check-mark colour for a swatch: dark tick on light fills, light on dark. */
+function tickColor(hex: string): string {
+  const h = hex.replace('#', '');
+  if (h.length !== 6) return colors.surface;
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return lum > 0.6 ? colors.ink : colors.surface;
+}
 
 // Carousel geometry: full-bleed track with gutters equal to the screen's
 // standard padding, so the centred card is EXACTLY as wide as every other
@@ -294,17 +302,6 @@ function ColorCard({
     d.setColorSizes(color.id, labels, { price, mrp: '' });
   };
 
-  const onColorChange = (v: string[]) => {
-    const val = v[0];
-    if (!val) return;
-    if (val === CUSTOM_COLOR) {
-      setPickerOpen(true);
-      return;
-    }
-    const c = COLOR_PALETTE.find((p) => p.hex === val);
-    d.updateColor(color.id, { name: c?.name ?? '', colorHex: val });
-  };
-
   // Colour images = the same set on every size of this colour.
   const imgs = first?.imageUrls ?? [];
   const addImgs = (urls: string[]) =>
@@ -326,39 +323,54 @@ function ColorCard({
         </PressableScale>
       </View>
 
-      {/* Left: colour dropdown · right: this colour's selling price
-          (MRP + default price live in Basics; empty here = use the default). */}
-      <View style={styles.priceRow}>
-        <View style={styles.flex}>
-          <Select
-            label="Color"
-            boxed
-            placeholder="Choose"
-            options={[
-              // Real swatches in the sheet + on the field itself.
-              ...COLOR_PALETTE.map((c) => ({ value: c.hex, label: c.name, swatch: c.hex })),
-              {
-                value: CUSTOM_COLOR,
-                label: 'Custom color…',
-                swatch: isCustom ? color.colorHex : undefined,
-              },
-            ]}
-            selected={color.colorHex ? [isCustom ? CUSTOM_COLOR : color.colorHex] : []}
-            onChange={onColorChange}
+      {/* Colour as an inline swatch grid — NOT a dropdown. A Select opens a
+          Modal, and a Modal opened from inside this horizontal carousel
+          mis-routes its row taps on some Android builds (the sheet shows but
+          selecting does nothing). Inline swatches have no Modal, so they always
+          respond; "Custom" still opens the full colour picker. */}
+      <AppText variant="sectionLabel" color={colors.meta}>Color</AppText>
+      <View style={styles.swatchGrid}>
+        {COLOR_PALETTE.map((c) => {
+          const on = color.colorHex?.toUpperCase() === c.hex.toUpperCase();
+          return (
+            <PressableScale
+              key={c.hex}
+              onPress={() => d.updateColor(color.id, { name: c.name, colorHex: c.hex })}
+              hitSlop={4}
+              style={[styles.swatch, { backgroundColor: c.hex }, on ? styles.swatchOn : null]}
+            >
+              {on ? <Icon name="checkmark" size={16} color={tickColor(c.hex)} /> : null}
+            </PressableScale>
+          );
+        })}
+        {/* Any colour beyond the presets → full picker. */}
+        <PressableScale
+          onPress={() => setPickerOpen(true)}
+          style={[
+            styles.swatch,
+            styles.swatchCustom,
+            isCustom ? styles.swatchOn : null,
+            isCustom && color.colorHex ? { backgroundColor: color.colorHex } : null,
+          ]}
+        >
+          <Icon
+            name={isCustom ? 'checkmark' : 'color-palette-outline'}
+            size={16}
+            color={isCustom && color.colorHex ? tickColor(color.colorHex) : colors.ink}
           />
-        </View>
-        <Field
-          containerStyle={styles.flex}
-          boxed
-          label="Selling price"
-          prefix="₹"
-          keyboardType="decimal-pad"
-          value={price}
-          onChangeText={(v) => d.setColorPricing(color.id, { price: v, mrp: '' })}
-          placeholder="Default"
-          error={errors[`${first?.id}.price`]}
-        />
+        </PressableScale>
       </View>
+
+      <Field
+        boxed
+        label="Selling price"
+        prefix="₹"
+        keyboardType="decimal-pad"
+        value={price}
+        onChangeText={(v) => d.setColorPricing(color.id, { price: v, mrp: '' })}
+        placeholder="Default"
+        error={errors[`${first?.id}.price`]}
+      />
 
       <ColorPickerSheet
         visible={pickerOpen}
@@ -372,13 +384,12 @@ function ColorCard({
 
       {/* Sizes as toggle chips - options follow the category's size scales. */}
       <AppText variant="sectionLabel" color={colors.meta}>Sizes</AppText>
+      {/* Chips WRAP instead of horizontal-scroll: this card sits inside the
+          horizontal colour carousel, so a nested horizontal ScrollView never
+          gets the pan gesture (parent intercepts) and sizes get clipped off the
+          right edge. Wrapping shows every size and dodges the conflict. */}
       {scales.length > 1 ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={styles.chipsRow}
-        >
+        <View style={styles.chipsWrap}>
           {scales.map((s) => (
             <Chip
               key={s.id}
@@ -387,19 +398,14 @@ function ColorCard({
               onPress={() => setScaleId(s.id)}
             />
           ))}
-        </ScrollView>
+        </View>
       ) : null}
       {activeScale && activeScale.values.length > 0 ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={styles.chipsRow}
-        >
+        <View style={styles.chipsWrap}>
           {activeScale.values.map((label) => (
             <Chip key={label} label={label} selected={isSel(label)} onPress={() => toggleSize(label)} />
           ))}
-        </ScrollView>
+        </View>
       ) : null}
       {/* Type a size and hit return - no extra "+" button. */}
       <Field
@@ -523,6 +529,19 @@ const styles = StyleSheet.create({
   },
   dotOn: { width: 16, backgroundColor: colors.ink },
   chipsRow: { flexDirection: 'row', gap: spacing.xs + 2, paddingRight: spacing.sm },
+  chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs + 2 },
+  swatchGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  swatch: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 1,
+    borderColor: colors.hairline,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  swatchOn: { borderWidth: 2.5, borderColor: colors.ink },
+  swatchCustom: { backgroundColor: colors.canvas },
   stockList: { gap: spacing.xs + 2 },
   stockRow: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm },
   sizePill: {
