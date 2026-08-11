@@ -11,7 +11,6 @@ import {
 } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import Animated, { SlideInDown } from 'react-native-reanimated';
 import { colors, spacing } from '../theme/theme';
 
 interface BottomSheetProps {
@@ -25,9 +24,10 @@ interface BottomSheetProps {
 }
 
 /**
- * Standard bottom sheet. The scrim **fades** in (Modal `fade`) while only the
- * sheet **slides up** (Reanimated) - so the black overlay never sweeps up from
- * the bottom the way `Modal animationType="slide"` does with a tinted backdrop.
+ * Standard bottom sheet. The whole thing **fades** in (Modal `fade`) — the
+ * sheet deliberately does NOT slide up: see the note at the render site for why
+ * a reanimated `entering` animation inside a Modal breaks presses on Fabric,
+ * and `Modal animationType="slide"` sweeps the tinted scrim up with it.
  *
  * Every bottom sheet in the app should use this; wrap your content in
  * `SheetSurface` so the panel gets the right bottom inset (see below).
@@ -49,7 +49,12 @@ export function BottomSheet({
     <>
       {/* Tap area above the sheet dismisses; taps on the sheet don't reach it. */}
       <Pressable style={styles.dismiss} onPress={dismissable ? onClose : undefined} />
-      <Animated.View entering={SlideInDown.duration(240)}>{children}</Animated.View>
+      {/* No reanimated `entering` slide here: on the New Architecture, a layout
+          animation on a view inside a Modal cancels in-flight presses — quick
+          taps land, but real finger presses (~100ms) die mid-gesture, making
+          every sheet's rows and close button feel dead (reproduced on a
+          foldable). The Modal's fade covers the reveal instead. */}
+      <View>{children}</View>
     </>
   );
 
@@ -106,11 +111,12 @@ export function SheetSurface({
   children: React.ReactNode;
 }) {
   const insets = useSafeAreaInsets();
-  // Clear the nav bar, but CAP the inset: tall 3-button nav bars (e.g. Samsung)
-  // report a large bottom inset, which turned into a big empty white block below
-  // the sheet content. Cap it so the panel hugs its content while still leaving
-  // enough room to tap above the nav bar.
-  const bottom = Math.min(insets.bottom, spacing.md) + spacing.sm;
+  // Pad by the REAL bottom inset. This used to be capped at spacing.md to avoid
+  // a tall white strip under the content on 3-button nav bars, but the cap made
+  // sheet content sit behind ~48dp gesture/nav bars (last option row was half
+  // hidden and untappable on Samsung foldables). Full clearance beats a hidden
+  // row; the strip is just the panel's own background.
+  const bottom = insets.bottom + spacing.sm;
   return <View style={[style, { paddingBottom: bottom }]}>{children}</View>;
 }
 
