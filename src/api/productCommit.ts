@@ -105,6 +105,86 @@ export function validateProductDraft(publish = true): string[] {
   return Array.from(new Set(problems));
 }
 
+/** A wizard step a publish blocker can send the retailer to. */
+export type PublishBlockerStep =
+  | 'ProductWizardBasics'
+  | 'ProductWizardVariants'
+  | 'ProductWizardDetails';
+
+export type PublishBlocker = {
+  /** Stable key for React lists. */
+  id: string;
+  /** What's missing, phrased for the retailer. */
+  label: string;
+  /** Where to go to fix it. */
+  step: PublishBlockerStep;
+};
+
+/**
+ * Everything the BACKEND demands before a listing may go live, mirrored here so
+ * the wizard can say what's missing instead of letting the retailer press Publish
+ * and eat a 409 from assertListingPublishable.
+ *
+ * Keep in sync with assertListingPublishable + isVariantComplete in
+ * backend/src/modules/retailer/listings/listings.controller.ts. This is a
+ * SUPERSET of validateProductDraft: that one guards saving, this one guards
+ * going live, and a listing that fails only these still saves fine as a draft.
+ */
+export function publishBlockers(): PublishBlocker[] {
+  const d = useProductDraft.getState();
+  const blockers: PublishBlocker[] = [];
+
+  if (!d.name.trim())
+    blockers.push({ id: 'name', label: 'A product name', step: 'ProductWizardBasics' });
+  if (!d.categoryId)
+    blockers.push({ id: 'category', label: 'A category', step: 'ProductWizardBasics' });
+  if (!d.brandId) blockers.push({ id: 'brand', label: 'A brand', step: 'ProductWizardBasics' });
+  if (d.genders.length === 0)
+    blockers.push({ id: 'gender', label: 'A gender', step: 'ProductWizardBasics' });
+  if (d.gallery.length < 1)
+    blockers.push({ id: 'gallery', label: 'At least one product image', step: 'ProductWizardBasics' });
+  if (!d.description.trim())
+    blockers.push({ id: 'description', label: 'A short description', step: 'ProductWizardDetails' });
+  if (!d.descriptionLong.trim())
+    blockers.push({
+      id: 'descriptionLong',
+      label: 'A full description',
+      step: 'ProductWizardDetails',
+    });
+  if (!d.listingPolicy)
+    blockers.push({ id: 'policy', label: 'A return policy', step: 'ProductWizardDetails' });
+
+  // A live listing needs at least ONE variant carrying price + SKU + stock + an
+  // image (its own, or inherited from the gallery).
+  //
+  // SKU is deliberately NOT checked here: the backend generates a store-unique one
+  // whenever the retailer leaves the field blank, so demanding it client-side would
+  // block a product the server would happily publish. Stock likewise defaults to 0,
+  // which satisfies the server's "has a stock figure" test.
+  const galleryCovers = d.gallery.length > 0;
+  const priceOk = (price: string): boolean => {
+    const p = parseRupeesToPaise(price.trim() || d.basePrice);
+    return p != null && p > 0;
+  };
+
+  const hasCompleteVariant =
+    d.variantMode === 'single'
+      ? priceOk('') && (galleryCovers || d.single.imageUrls.length > 0)
+      : d.colors.some((c) =>
+          c.sizes.some((r) => priceOk(r.price) && (galleryCovers || r.imageUrls.length > 0)),
+        );
+
+  if (!hasCompleteVariant) {
+    blockers.push({
+      id: 'variant',
+      label: 'One complete variant — needs a price and an image',
+      step: 'ProductWizardVariants',
+    });
+  }
+
+  return blockers;
+}
+
 /**
  * After creating a color_size listing, the backend may auto-create one empty
  * "Default" variant group. There is no delete/rename-group endpoint, so if that
@@ -175,7 +255,11 @@ export async function commitProductDraft({ publish }: { publish: boolean }): Pro
     if (d.single.serverVariantId) {
       await step(`patch default variant ${d.single.serverVariantId} (size=${size || 'none'})`, () =>
         patchVariant(d.single.serverVariantId!, {
-          sku: body.sku ?? null,
+          // OMIT sku when the retailer left the field blank. Sending null wipes the
+          // SKU the backend auto-generated at create time, and a variant with no SKU
+          // fails isVariantComplete — so a retry after any failed publish would
+          // permanently block the product from going live.
+          ...(body.sku ? { sku: body.sku } : {}),
           pricePaise: body.pricePaise,
           compareAtPrice: body.compareAtPrice,
           stock: body.stock,
@@ -231,7 +315,8 @@ export async function commitProductDraft({ publish }: { publish: boolean }): Pro
         if (row.serverVariantId) {
           await step(`patch variant ${who} (${row.serverVariantId})`, () =>
             patchVariant(row.serverVariantId!, {
-              sku: body.sku ?? null,
+              // Omit rather than null — see the single-variant patch above.
+              ...(body.sku ? { sku: body.sku } : {}),
               pricePaise: body.pricePaise,
               compareAtPrice: body.compareAtPrice,
               stock: body.stock,

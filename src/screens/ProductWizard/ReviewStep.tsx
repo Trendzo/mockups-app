@@ -13,7 +13,12 @@ import {
 } from '../../components';
 import { ScreenProps } from '../../navigation/types';
 import { useCatalogBrands, useCatalogCategories } from '../../api/catalogHooks';
-import { commitProductDraft, validateProductDraft } from '../../api/productCommit';
+import {
+  commitProductDraft,
+  publishBlockers,
+  validateProductDraft,
+  type PublishBlocker,
+} from '../../api/productCommit';
 import { ColorDraft, SingleVariantDraft, useProductDraft } from '../../store/productDraft';
 import { formatPaise, parseRupeesToPaise } from '../../utils/money';
 import { colors, radii, spacing } from '../../theme/theme';
@@ -36,6 +41,9 @@ export function ReviewStep({ navigation }: ScreenProps<'ProductWizardReview'>) {
 
   const [busy, setBusy] = useState<false | 'draft' | 'publish'>(false);
   const [error, setError] = useState<string | null>(null);
+  // Set when Publish was pressed on an incomplete product: the product IS saved
+  // as a draft, and these are the things standing between it and going live.
+  const [blockers, setBlockers] = useState<PublishBlocker[] | null>(null);
 
   const brandName = brandsQ.data?.find((b) => b.id === d.brandId)?.name ?? '-';
   // Show the full path ("Tops › T-Shirts") — leaf labels repeat across the taxonomy,
@@ -49,18 +57,37 @@ export function ReviewStep({ navigation }: ScreenProps<'ProductWizardReview'>) {
   const gender = d.genders.length >= 2 ? 'unisex' : d.genders[0] ?? 'unisex';
 
   const commit = async (publish: boolean) => {
-    const problems = validateProductDraft(publish);
+    // Publishing an incomplete product must never throw away the retailer's work:
+    // save it as a draft first, then show exactly what is blocking go-live. The
+    // commit is idempotent, so finishing the missing bits and pressing Publish
+    // again updates the same listing rather than creating a second one.
+    const blocking = publish ? publishBlockers() : [];
+    const savingOnly = blocking.length > 0;
+    const effectivePublish = publish && !savingOnly;
+
+    const problems = validateProductDraft(effectivePublish);
     if (problems.length) {
       setError(`Complete these before saving: ${problems.join(', ')}.`);
+      setBlockers(null);
       return;
     }
     setBusy(publish ? 'publish' : 'draft');
     setError(null);
+    setBlockers(null);
     try {
-      const listing = await commitProductDraft({ publish });
+      const listing = await commitProductDraft({ publish: effectivePublish });
       qc.invalidateQueries({ queryKey: ['listings'] });
       qc.invalidateQueries({ queryKey: ['inventory'] });
       qc.invalidateQueries({ queryKey: ['listing', listing.id] });
+
+      // Saved, but not live. Stay on Review with the checklist so each missing
+      // item can be tapped straight through to the step that owns it.
+      if (savingOnly) {
+        setBlockers(blocking);
+        setBusy(false);
+        return;
+      }
+
       const id = listing.id;
       navigation.reset({
         index: 1,
@@ -69,6 +96,26 @@ export function ReviewStep({ navigation }: ScreenProps<'ProductWizardReview'>) {
       // Clear the draft after navigating away so this screen doesn't re-render empty.
       d.startCreate();
     } catch (e: any) {
+      // The backend refused to flip the listing live (assertListingPublishable).
+      // Everything before that leg already persisted, so this is a saved draft,
+      // not a lost product — say so, and fall back to the server's own reason
+      // when our mirrored checks somehow found nothing.
+      if (publish && e?.code === 'cannot_publish_incomplete') {
+        const mirrored = publishBlockers();
+        setBlockers(
+          mirrored.length
+            ? mirrored
+            : [
+                {
+                  id: 'server',
+                  label: e?.message ?? 'This product is not ready to go live yet',
+                  step: 'ProductWizardDetails',
+                },
+              ],
+        );
+        setBusy(false);
+        return;
+      }
       setError(e?.message ?? 'Could not save the product');
       setBusy(false);
     }
@@ -84,6 +131,39 @@ export function ReviewStep({ navigation }: ScreenProps<'ProductWizardReview'>) {
         <WizardHeader step={4} onBack={exitHome} />
 
         {error ? <Banner tone="danger" title="Couldn't save" message={error} /> : null}
+
+        {/* Saved, but held back from going live. Each row jumps to the step that
+            owns the missing field, so the retailer never has to hunt for it. */}
+        {blockers?.length ? (
+          <View style={styles.blockCard}>
+            <View style={styles.blockHead}>
+              <Icon name="warning" size={22} color="#B8860B" style={styles.blockIcon} />
+              <View style={styles.blockHeadText}>
+                <AppText variant="bodyMedium" color={colors.ink}>
+                  Saved as a draft — not live yet
+                </AppText>
+                <AppText variant="meta" color={colors.meta}>
+                  {`Your product is safe. Add ${
+                    blockers.length === 1 ? 'this' : 'these'
+                  } to publish it, then press Publish again. Tap any item to go straight there.`}
+                </AppText>
+              </View>
+            </View>
+            {blockers.map((b) => (
+              <PressableScale
+                key={b.id}
+                onPress={() => navigation.navigate(b.step)}
+                style={styles.blockRow}
+                toScale={0.98}
+              >
+                <AppText variant="body" color={colors.ink} style={styles.flexText}>
+                  {b.label}
+                </AppText>
+                <Icon name="chevron-forward" size={18} color={colors.meta} />
+              </PressableScale>
+            ))}
+          </View>
+        ) : null}
 
         {/* Gallery */}
         {d.gallery.length ? (
@@ -271,6 +351,25 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   row: { gap: 2 },
+  blockCard: {
+    backgroundColor: 'rgba(200,140,0,0.12)',
+    borderRadius: radii.card,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  blockHead: { flexDirection: 'row', gap: spacing.md },
+  blockIcon: { marginTop: 1 },
+  blockHeadText: { flex: 1, gap: 2 },
+  blockRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.surface,
+    borderRadius: radii.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  flexText: { flex: 1 },
   galleryCell: { width: 96, height: 120, marginRight: spacing.sm },
   galleryImg: { width: 96, height: 120 },
   primaryBadge: {

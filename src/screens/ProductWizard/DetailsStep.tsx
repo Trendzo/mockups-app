@@ -35,8 +35,12 @@ export function DetailsStep({ navigation }: ScreenProps<'ProductWizardDetails'>)
       >
         <WizardHeader step={3} onBack={exitHome} />
 
+        {/* Both descriptions are required to PUBLISH (assertListingPublishable),
+            though a draft saves without them — hence required markers here rather
+            than a hard block on leaving the step. */}
         <Field
           label="Description"
+          required
           value={d.description}
           onChangeText={(v) => d.setDetails({ description: v })}
           placeholder="Short product description"
@@ -44,6 +48,7 @@ export function DetailsStep({ navigation }: ScreenProps<'ProductWizardDetails'>)
         />
         <Field
           label="Full description"
+          required
           value={d.descriptionLong}
           onChangeText={(v) => d.setDetails({ descriptionLong: v })}
           placeholder="Longer details, fabric, care…"
