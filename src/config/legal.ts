@@ -1,4 +1,5 @@
-export const PUBLIC_SITE_URL = 'https://backend-qpmx.onrender.com';
+// AWS-hosted backend (CloudFront → EC2). Rollback (old Render): 'https://backend-qpmx.onrender.com'
+export const PUBLIC_SITE_URL = 'https://d208iwmfjcjzy.cloudfront.net';
 export const PRIVACY_URL = `${PUBLIC_SITE_URL}/privacy`;
 export const TERMS_URL = `${PUBLIC_SITE_URL}/terms`;
 export const SUPPORT_URL = `${PUBLIC_SITE_URL}/support`;
