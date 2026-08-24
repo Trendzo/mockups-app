@@ -95,3 +95,9 @@ metro.err.log
 branch_structure.json
 temp_auto_push.bat
 temp_interactive_push.bat
+
+# build logs/artifacts
+*-build.out.log
+*-build.err.log
+*.aab
+*.apk
