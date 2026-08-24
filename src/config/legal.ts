@@ -1,5 +1,5 @@
 // AWS-hosted backend (CloudFront → EC2). Rollback (old Render): 'https://backend-qpmx.onrender.com'
-export const PUBLIC_SITE_URL = 'https://d208iwmfjcjzy.cloudfront.net';
+export const PUBLIC_SITE_URL = 'https://api.trendzonow.com';
 // Per-app privacy policy (retailer). The backend serves /privacy/<app> distinctly.
 export const PRIVACY_URL = `${PUBLIC_SITE_URL}/privacy/retailer`;
 export const TERMS_URL = `${PUBLIC_SITE_URL}/terms`;
