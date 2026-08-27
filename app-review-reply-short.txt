@@ -1,0 +1,37 @@
+1. RECORDING
+Attached: physical iPhone, latest iOS, from app launch, covering login, registration, mockup generation, catalog, KYC upload, account closure and all permission prompts.
+- Purchases/subscriptions: none. No IAP, no StoreKit, no payment SDK.
+- User-generated content: retailers upload photos of their own stock and business documents, private to that retailer's account and never visible to others. With no feed or public surface, no user can see another's content, so no in-app reporting/blocking exists. We moderate server-side (see 7).
+- Permissions: camera, photo library and location only. No App Tracking Transparency, no contacts, no tracking. NSPrivacyTracking = false.
+
+2. DEVICES TESTED
+iPhone 13 (iPhone14,5), iOS 26.6, physical device
+[FILL IN: other devices and iOS versions tested]
+
+3. FUNCTION AND AUDIENCE
+Trendzo Retailer is a B2B tool for registered apparel retail businesses in India. Not a consumer app: no public storefront, and every account is manually approved before features unlock.
+Small retailers cannot afford studio photography per garment, yet need quality imagery to sell online. The retailer photographs a garment on their phone; our backend generates studio-quality product and on-model images, published as catalog products with variants, pricing and inventory. Also: business KYC, store online/offline control, read-only earnings view.
+
+4. ACCESS
+Sign-in is required for all functionality; there is no guest mode.
+Demo account: phone 9179621765, OTP 1234 (fixed OTP, no live SMS). Use the default "Phone" method, enter the 10-digit number after the +91 prefix, continue, then the 4-digit OTP. The account is active with sample catalog data.
+Tabs: Home, Create, Catalog, Profile. "Create" is the core flow: photograph a garment, choose product/male/female output, review the results, then complete the product wizard to publish. No sample file needed; any clear garment photo on a plain background works.
+Account closure: Profile > Request account closure, in-app. Confirming closes the account and suspends the store: sign-in ends, catalog and media leave active access, personal details are anonymized. As every account is a GST-registered business, Indian tax law requires retaining invoices, orders and payout records for a statutory period; these are kept only that long. https://api.trendzonow.com/account-deletion
+
+5. EXTERNAL SERVICES
+- Trendzo backend (api.trendzonow.com): our own API for accounts, catalog, KYC, uploads, earnings.
+- [FILL IN: AI provider name]: generates the mockups; called server-side by our backend.
+- MSG91: phone OTP send and verify.
+- OpenStreetMap Nominatim and tile servers: geocoding and maps for the address picker.
+- unpkg CDN: serves the Leaflet map library.
+- Trendzo web portal (Vercel): opened in Safari for billing/payout statements; not embedded.
+No payment processor, analytics, advertising, attribution or crash-reporting SDK is present.
+
+6. REGIONAL DIFFERENCES
+India only, and identical for every user within that region. No region-gated features or locale-conditional content. Built for India: +91 only, GSTIN required, PAN and IFSC, 6-digit pincodes, INR pricing, TCS in payouts.
+
+7. REGULATED INDUSTRY / THIRD-PARTY MATERIAL
+We offer no financial, lending, healthcare or securities services. Business KYC and bank details are collected solely to verify merchants onboarding to Trendzo and remit their own sales proceeds: legal name, GSTIN, owner contact, address, optionally PAN and bank details. Documents: GST certificate, PAN, address proof, bank proof, storefront photo.
+[FILL IN: authorization or licence held, or state none is required]
+Moderation: listings can be taken down with a reason shown, and accounts paused or suspended; retailers can appeal in-app.
+Third-party material: only nine Unsplash free-licence example photos and three open-licensed typefaces. All other imagery is uploaded by or generated for the retailer.
