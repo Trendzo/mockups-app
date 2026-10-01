@@ -6,6 +6,7 @@ import {
   platformDefaultAuthBaseUrl,
   platformDefaultBaseUrl,
 } from '../config/env';
+import { replaceRetiredBaseUrls } from '../utils/baseUrl';
 
 interface SettingsState {
   baseUrl: string;
@@ -43,6 +44,15 @@ export const useSettings = create<SettingsState>()(
     {
       name: 'trendzo.settings.v4',
       storage: createJSONStorage(() => AsyncStorage),
+      // v1: installs that first ran with a since-retired default (CloudFront → the
+      // AWS standby, or Render) still had it persisted; move them to the current
+      // default. Custom Dev Settings URLs are left alone.
+      version: 1,
+      migrate: (persisted) =>
+        replaceRetiredBaseUrls((persisted ?? {}) as Record<string, unknown>, {
+          baseUrl: platformDefaultBaseUrl(),
+          authBaseUrl: platformDefaultAuthBaseUrl(),
+        }) as unknown as SettingsState,
       partialize: (s) => ({
         baseUrl: s.baseUrl,
         authBaseUrl: s.authBaseUrl,
