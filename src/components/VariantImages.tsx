@@ -229,7 +229,7 @@ export function VariantImages({
               <ActivityIndicator color={colors.accentInk} />
             ) : (
               <>
-                <Icon name="sparkles" size={18} color={colors.accentInk} />
+                <Icon name="image-outline" size={18} color={colors.accentInk} />
                 <AppText variant="bodyMedium" color={colors.accentInk}>
                   Generate mockup
                 </AppText>

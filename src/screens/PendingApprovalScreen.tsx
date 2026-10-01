@@ -205,8 +205,9 @@ export function PendingApprovalScreen({ navigation }: ScreenProps<'PendingApprov
                     </AppText>
                     <AppText variant="body" color={mine ? colors.accentInk : colors.ink}>{m.body}</AppText>
                     {m.attachments?.map((url, i) => (
-                      <PressableScale key={url} onPress={() => Linking.openURL(url).catch(() => {})}>
-                        <AppText variant="meta" color={mine ? colors.onDarkMuted : colors.ink} style={styles.attLink}>📎 Attachment {i + 1}</AppText>
+                      <PressableScale key={url} onPress={() => Linking.openURL(url).catch(() => {})} style={styles.attRow}>
+                        <Icon name="attach-outline" size={14} color={mine ? colors.onDarkMuted : colors.ink} />
+                        <AppText variant="meta" color={mine ? colors.onDarkMuted : colors.ink} style={styles.attLink}>Attachment {i + 1}</AppText>
                       </PressableScale>
                     ))}
                   </View>
@@ -382,5 +383,6 @@ const styles = StyleSheet.create({
     fontSize: typeScale.body.fontSize,
   },
   sendBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
+  attRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   attLink: { textDecorationLine: 'underline' },
 });

@@ -22,12 +22,12 @@ export function AiCopyHint({ field }: { field: AiCopyField }) {
     <View style={styles.wrap}>
       {filled ? (
         <AppText variant="meta" color={colors.meta} style={styles.caption}>
-          ✨ Drafted by AI - review before publishing
+          Drafted by AI - review before publishing
         </AppText>
       ) : null}
       {offer ? (
         <View style={styles.row}>
-          <Chip label={filled ? '✨ Use newer AI suggestion' : '✨ Use AI suggestion'} onPress={() => accept(field)} />
+          <Chip label={filled ? 'Use newer AI suggestion' : 'Use AI suggestion'} onPress={() => accept(field)} />
         </View>
       ) : null}
     </View>
