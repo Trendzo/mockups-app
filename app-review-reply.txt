@@ -1,0 +1,90 @@
+Hello,
+
+Thank you for the review. Please find the requested information below.
+
+1. SCREEN RECORDING
+
+A screen recording captured on a physical iPhone running the latest iOS is attached. It begins with launching the app from the home screen and follows the typical user flow: signing in, the registration flow, the AI mockup generation core feature, catalog management, KYC document upload, the account closure flow, and the system permission prompts.
+
+Regarding the specific items listed:
+
+- Account registration, login and account deletion: all three are shown. Account closure is described in section 4 below.
+
+- Paid content, purchases or subscriptions: the app contains none. There is no in-app purchase, no subscription, and no payment processing of any kind. Please see section 5.
+
+- User-generated content: retailers upload photographs of their own stock and their own business documents. All of this content is private to the uploading retailer's authenticated account and is never visible to any other user. The app has no social feed and no public posting surface, so there is no in-app reporting or blocking mechanism, because no user can see another user's content. Content moderation is performed by our team server-side, as described in section 7.
+
+- Permission prompts: the recording shows the camera, photo library and location prompts as a new user encounters them. The app requests no other permissions. It does not use App Tracking Transparency, does not access contacts, and performs no tracking. Our privacy manifest declares NSPrivacyTracking = false.
+
+2. DEVICES AND OPERATING SYSTEMS TESTED
+
+- iPhone 13 (iPhone14,5), iOS 26.6, physical device
+- [FILL IN: any other physical devices and iOS versions you tested]
+
+3. APP FUNCTIONS AND TARGET AUDIENCE
+
+Trendzo Retailer is a business-to-business tool for registered apparel retail businesses in India. It is not a consumer shopping app. There is no public storefront, and members of the general public cannot use it: every account is manually reviewed and approved by our team before any core feature becomes available.
+
+The problem it solves: a small or mid-size clothing retailer cannot afford professional studio photography for every item they stock, yet needs studio-quality imagery to list and sell those goods online. Commissioning a photoshoot is slow and expensive per garment, which puts good product imagery out of reach for most independent retailers.
+
+How the app solves it: the retailer photographs a garment in their own shop using their phone, capturing the front and optionally the back, pattern, logo and label. The app uploads these to the Trendzo backend, which generates studio-quality product images and on-model renders from them. The retailer reviews the results and turns the accepted images into a catalog product with variants, pricing and inventory.
+
+Supporting functions: business registration with administrator approval, business KYC document verification, a product catalog with variants, pricing, inventory and HSN codes, a store online/offline control for order acceptance, and a read-only view of earnings and payout schedule.
+
+Value provided: it replaces a paid photoshoot with a phone photograph, allowing an independent retailer to produce professional listing imagery in minutes at a fraction of the cost.
+
+4. SETUP AND ACCESS INSTRUCTIONS
+
+Sign-in is required for all functionality. There is no guest or browse-only mode; the login screen is the only screen available when signed out.
+
+Demo account:
+  Phone number: 9179621765
+  OTP: 1234
+
+This number is configured with a fixed OTP, so no live SMS is required. On the login screen, keep the default "Phone" method, enter the 10-digit number after the +91 prefix, tap continue, then enter the 4-digit OTP. This account is approved and active with sample catalog data, so all core features are immediately reachable.
+
+Reaching the main features: the bottom bar contains Home, Create, Catalog and Profile.
+
+- Create starts the AI mockup flow, which is the core feature. Select or photograph a garment, choose an output type (product shot, male model, or female model), wait for generation, review the results, then complete a short product wizard to publish it to the catalog.
+- Catalog lists published products with their variants and inventory.
+- Profile contains KYC, change requests, account closure, and links to our Privacy Policy, Terms and Support.
+
+Sample files: no special sample file is required. Any clear photograph of a garment against a plain background works in the mockup flow.
+
+Account closure: account closure is initiated inside the app at Profile > Request account closure, without contacting support. We would like to be transparent about how this works. Confirming the request closes the account and suspends the store, after which the user can no longer sign in, their catalog and media are removed from active access, and personal account details are anonymized. Because every account belongs to a GST-registered business, Indian tax law requires us to retain invoices, orders, payout records and related accounting data for a statutory period. Those records are preserved for exactly as long as the law requires and for no other purpose. The retention notice is shown in the app before the user confirms, and is documented at https://api.trendzonow.com/account-deletion
+
+5. EXTERNAL SERVICES, TOOLS AND PLATFORMS
+
+- Trendzo backend (api.trendzonow.com): our own first-party API, handling accounts, applications, catalog, KYC, uploads and earnings.
+- [FILL IN: AI provider name]: generates the product images and on-model mockups. It is called server-side by our backend; the app itself only communicates with our own API.
+- MSG91: sends and verifies the one-time password used for phone sign-in and registration.
+- OpenStreetMap Nominatim: geocoding for the store address picker, restricted to India.
+- OpenStreetMap tile servers: map tiles displayed in the address picker.
+- unpkg CDN: serves the Leaflet map library used by the address picker.
+- Trendzo web portal (hosted on Vercel): opened in Safari for full billing, order and payout statements. It is not embedded in the app.
+
+No payment processor is integrated in the app. The app contains no StoreKit, no in-app purchase, no subscription and no third-party payment SDK. The earnings screen is read-only and informational, and the "request early payout" control submits a request that our staff review. No money moves within the app. Merchant settlements are handled entirely outside the app.
+
+No tracking or analytics SDKs are present. The app contains no advertising, analytics, attribution or crash-reporting SDK.
+
+6. REGIONAL DIFFERENCES
+
+The app is offered in India only, and it behaves identically for every user within that single region. There are no region-gated features, no locale-conditional content, and no country-based variation of any kind.
+
+The app is built specifically for the Indian market. Phone entry is fixed to the +91 dial code with no country selector. A GSTIN is required to register. PAN and IFSC are collected for tax identity and bank settlement. Addresses use 6-digit Indian pincodes and address search is restricted to India. Prices are shown in Indian rupees with Indian digit grouping, and TCS appears in the payout breakdown. These are fixed characteristics of the product rather than regional switches.
+
+7. REGULATED INDUSTRY AND PROTECTED THIRD-PARTY MATERIAL
+
+Regulated activity: the app does not offer financial, lending, healthcare or securities services. It collects business KYC and bank settlement details for a single purpose, which is to verify a merchant's identity when onboarding them onto the Trendzo platform and to remit that merchant their own sales proceeds.
+
+At registration we collect the legal business name, GSTIN, owner name, email and phone, business address and pincode, and optionally PAN and bank account details. Supporting documents are the GST certificate, PAN, address proof, bank proof and a storefront photograph. A recurring verification cycle re-checks these. Each document is reviewed individually and may be rejected with a written reason shown to the retailer. Sensitive fields such as GSTIN, bank account, legal name and address cannot be edited freely after approval; changes go through an administrator-reviewed request.
+
+[FILL IN: if Trendzo holds any licence, registration or written authorization relevant to handling merchant KYC or payouts, name and attach it here. If none is required for this activity, state that instead.]
+
+Content moderation: although retailer content is private to each account, we moderate it server-side. A listing can be taken down by an administrator with a reason shown to the retailer, and an account can be paused, suspended or terminated. The app provides an in-app appeal channel with attachments so a retailer can contest any such action.
+
+Protected third-party material: the app bundles no licensed third-party media beyond nine example photographs used as visual guidance on the configuration screen, which are sourced from Unsplash under its free-use licence, and three open-licensed typefaces (Inter, Ionicons, and Material Community Icons). All other imagery in the app is either uploaded by the retailer or generated for that retailer. Retailers grant us the right to process the photographs they upload under our Terms of Service, and are responsible for holding the rights to the goods they photograph.
+
+We have also added this information to the Notes field of the App Review Information section for future submissions.
+
+Thank you for your time.

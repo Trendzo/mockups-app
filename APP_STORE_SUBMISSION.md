@@ -1,11 +1,11 @@
 # Trendzo Retailer — App Store & Google Play submission
 
-Store name: **Trendzo Retailer**. iOS bundle ID is `com.trendzo.retailer`; Android package name is `com.trendzomockup`. The public URLs below become live after the nested `backend/backend` repository is deployed to Render.
+Store name: **Trendzo Retailer**. Bundle ID (iOS) is `com.trendzo.retailer`; the Android package name is `com.trendzomockup`. The public URLs below are served from the live API host.
 
 ## App identity
 
 - Store / display name: `Trendzo Retailer`
-- iOS bundle identifier: `com.trendzo.retailer` (team `3LCA4AA483`)
+- iOS bundle identifier: `com.trendzo.retailer`
 - Android package name: `com.trendzomockup`
 - Internal RN module name: `TrendzoMockup` (registration key — do not change)
 - Subtitle / short tagline: `AI Catalog for Retailers`
@@ -78,6 +78,76 @@ AI generation can take up to two minutes depending on provider load. The app doe
 - App Store Connect: add a real review contact first name, last name, phone number and monitored email address.
 - Google Play: enter the same credentials under **App access → All functionality restricted**, with these step-by-step instructions.
 
+### Guideline 2.1 "Information Needed" — Notes field template
+
+Apple's generic 2.1 request asks for 7 specific items. Reply in the **Resolution Center** thread (attachments allowed there — attach the screen recording directly) and also paste an updated version of this block into **App Review Information → Notes** so future submissions don't get flagged for the same reason.
+
+```
+1. Screen recording (record on a physical iPhone, latest iOS, screen only — no
+   external camera capture):
+   - Launch the app cold.
+   - Sign in with the phone-OTP flow below (shows the only login flow the app has).
+   - Home → start a new AI garment mockup: trigger the camera-permission prompt,
+     photograph/upload a garment, run generation, review the result.
+   - Photo library prompt: save a generated mockup, or upload from library.
+   - Catalog: browse/organize generated mockups into the product catalog.
+   - Product/Inventory: create or edit a product, variant, price, stock count.
+   - POS: scan a product (barcode/QR) to show the point-of-sale flow.
+   - Location prompt: Profile/store-address screen ("detect store address on map").
+   - Profile → KYC: open the KYC screen and show a document upload.
+   - Profile → Delete account: show the full account-deletion flow end to end.
+   The app has no in-app purchases, subscriptions, or public user-generated
+   content (catalog content is private to the retailer's own account, not
+   shared/visible to other users), so those sections don't apply.
+
+2. Devices/OS tested before submission:
+   [FILL IN — e.g. "iPhone 14 Pro, iOS 17.x; iPhone SE (3rd gen), iOS 17.x;
+   iPad 10th gen, iPadOS 17.x" — list what was actually tested via TestFlight]
+
+3. App function & target audience:
+   Trendzo Retailer is a B2B catalog and retail-operations tool for approved
+   fashion retailers (not a consumer app). It solves the problem of retailers
+   needing professional product photography without a studio: retailers
+   photograph garments and the app generates AI-assisted catalog mockups,
+   which they review before publishing. Beyond catalog generation, it unifies
+   product/variant/inventory management, POS scanning, and retailer
+   onboarding/KYC in one app. Target audience: verified fashion retail
+   businesses and their staff, 18+.
+
+4. Setup / access instructions:
+   Sign-in is required for all functionality. Use the demo account below —
+   country fixed to India (+91), phone 9179621765, tap Send OTP, enter fixed
+   OTP 1234, tap Verify & log in. This is a real MSG91 phone-OTP flow with a
+   fixed OTP configured on the number, so no live SMS is needed. The demo
+   account is pre-loaded with sample catalog, inventory, AI mockup and KYC
+   data. Main areas: Home, Catalog, Profile.
+
+5. External services used:
+   - MSG91 — phone number OTP delivery/verification for login
+   - [FILL IN — name of the AI image-generation provider used for catalog
+     mockups, e.g. OpenAI / Google Gemini / Stability / other]
+   - AWS (EC2 + CloudFront) — backend API hosting
+   - Vercel — retailer web portal (billing/payouts/orders, linked from Profile)
+   - [FILL IN — name of the payment/payout processor if retailer payouts are
+     settled through a third party, e.g. Razorpay / other]
+
+6. Regional differences:
+   The app currently operates in India only. The phone-OTP login defaults to
+   +91, and retailer KYC/payout onboarding is configured for Indian banking
+   and compliance requirements. There are no other active regions; App Store
+   availability is limited to India accordingly.
+
+7. Regulated industry / authorization documentation:
+   The app collects KYC documents and financial/payout information as part of
+   verifying fashion retailer businesses before they can transact through the
+   platform. [FILL IN — attach in the Resolution Center reply, not this text
+   field: (a) Trendzo's business registration/incorporation document, and
+   (b) proof of the payment/payout processor relationship named in item 5 —
+   e.g. a signed partner/merchant agreement or dashboard confirmation.]
+```
+
+The bracketed `[FILL IN]` items need real values before this is sent — the AI provider and payout processor are configured in the backend, not this client repo, so confirm the exact names there.
+
 ## Data collection
 
 The app collects the following, all **linked to the user**, used for **app functionality only**, and **not used for tracking / advertising**:
@@ -104,10 +174,10 @@ Do not select advertising, third-party advertising, developer advertising, or cr
 
 ## App Store Connect specifics
 
-- Screenshots: upload for every device class App Store Connect requests (currently iPhone and iPad). Show Home, AI catalog setup/results, Catalog, Product/Inventory and Profile/POS where possible.
+- Screenshots: iPhone only (iPad support was dropped in build 7, `TARGETED_DEVICE_FAMILY = 1`). Show Home, AI catalog setup/results, Catalog, Product/Inventory and Profile/POS where possible.
 - Encryption / export compliance: select **No** for non-exempt encryption. The app uses standard HTTPS only; `ITSAppUsesNonExemptEncryption` is already set to false in Info.plist.
 - Age rating: answer the questionnaire accurately. Expected result with the current retailer-only feature set is `4+`.
-- Signing: the iOS bundle ID is `com.trendzo.retailer` on team `3LCA4AA483` (automatic signing). It replaced the earlier `com.tiffsy.trenzomockup` / `com.trendzomockup` IDs on team `F8D9J7XW82`; an App Store Connect record created under any other bundle ID cannot be reused.
+- Signing: the iOS bundle ID is `com.trendzo.retailer` (the leftover `com.tiffsy.*` prefix was removed). Register/confirm the App ID and provisioning profile for it (team `3LCA4AA483`); a record created under any other bundle ID cannot be reused.
 
 ## Google Play Console specifics
 

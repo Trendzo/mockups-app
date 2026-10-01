@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Switch, View } from 'react-native';
+import { ScrollView, StyleSheet, Switch, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import {
   AppImage,
@@ -16,7 +16,12 @@ import {
 } from '../components';
 import { ScreenProps } from '../navigation/types';
 import { useCaptureDraft } from '../store/captureDraft';
-import { useKyc, useRetailerMe, useSetOrderAcceptance } from '../api/onboardingHooks';
+import {
+  PENDING_PAUSE,
+  useKyc,
+  useRetailerMe,
+  useSetOrderAcceptance,
+} from '../api/onboardingHooks';
 import { useListings } from '../api/catalogHooks';
 import { Listing } from '../types/catalog';
 import { formatPaise } from '../utils/money';
@@ -44,7 +49,10 @@ export function HomeScreen({ navigation }: ScreenProps<'Home'>) {
 
   const store = meQ.data?.store ?? null;
   const online = !store?.orderPauseUntil;
-  const reopenAt = store?.orderPauseUntil ? formatReopen(store.orderPauseUntil) : null;
+  const reopenAt =
+    store?.orderPauseUntil && store.orderPauseUntil !== PENDING_PAUSE
+      ? formatReopen(store.orderPauseUntil)
+      : null;
   const setAccept = useSetOrderAcceptance();
   const toast = useToast();
 
@@ -89,41 +97,23 @@ export function HomeScreen({ navigation }: ScreenProps<'Home'>) {
           Trendzo Studio
         </AppText>
 
-        {/* Hero: headline on the left, online/offline toggle aligned to its right. */}
-        <View style={styles.heroRow}>
-          <View style={styles.heroText}>
-            <HeroHeadline
-              align="left"
-              fontSize={38}
-              style={styles.headline}
-              lines={[{ text: 'Create Mockups' }, { text: 'Instantly', muted: true }]}
-            />
-          </View>
-          {store ? (
-            <StoreToggle
-              online={online}
-              pending={setAccept.isPending}
-              reopenAt={reopenAt}
-              onToggle={toggleOnline}
-            />
-          ) : null}
-        </View>
+        <HeroHeadline
+          align="left"
+          fontSize={38}
+          style={styles.headline}
+          lines={[{ text: 'Create Mockups' }, { text: 'Instantly', muted: true }]}
+        />
 
         <AppText variant="body" color={colors.meta} style={styles.sub}>
           Turn a garment photo into studio-grade mockups, then manage them as products.
         </AppText>
 
-        {store && !online ? (
-          <Banner
-            tone="warning"
-            title="You're offline"
-            message={
-              reopenAt
-                ? `Not accepting new orders. Auto-reopens ${reopenAt} — or reopen now.`
-                : 'Not accepting new orders. Reopen whenever you are ready.'
-            }
-            actionLabel={setAccept.isPending ? 'Reopening…' : 'Go online now'}
-            onAction={toggleOnline}
+        {store ? (
+          <StoreStatusCard
+            online={online}
+            pending={setAccept.isPending}
+            reopenAt={reopenAt}
+            onToggle={toggleOnline}
           />
         ) : null}
 
@@ -230,11 +220,21 @@ export function HomeScreen({ navigation }: ScreenProps<'Home'>) {
 }
 
 /**
- * Compact online/offline switch that sits beside the hero headline. The whole
- * card is tappable; the Switch mirrors state. Off = store paused for new orders
- * until its next opening window (auto-reopen), with a manual "open early" tap.
+ * Full-width store online/offline card. Off = store paused for new orders until
+ * its next opening window (auto-reopen), with a manual "open early" tap.
+ *
+ * Deliberately layout-stable: a fixed height and a single-line subtitle mean
+ * none of the four states (online / offline / offline-with-reopen / updating)
+ * resize the card, so toggling never reflows the page below it. It also carries
+ * the offline warning itself — a separate banner appearing and disappearing on
+ * each toggle was the biggest source of that shift.
+ *
+ * The Switch is display-only (`pointerEvents="none"`): the card's press handler
+ * is the single source of toggles. Letting the Switch handle its own
+ * `onValueChange` too made one tap fire the mutation twice — on, then straight
+ * back off.
  */
-function StoreToggle({
+function StoreStatusCard({
   online,
   pending,
   reopenAt,
@@ -246,29 +246,43 @@ function StoreToggle({
   onToggle: () => void;
 }) {
   const tint = online ? colors.success : colors.danger;
+  const subtitle = pending
+    ? 'Updating…'
+    : online
+      ? 'Accepting new orders'
+      : reopenAt
+        ? `Paused · opens ${reopenAt}`
+        : 'Paused · tap to reopen';
+
   return (
-    <PressableScale onPress={onToggle} toScale={0.97} haptic={false} style={styles.toggleCard}>
-      <View style={styles.toggleHead}>
-        <View style={[styles.dot, { backgroundColor: tint }]} />
-        <AppText variant="sectionLabel" color={colors.ink}>
-          {online ? 'Online' : 'Offline'}
+    <PressableScale
+      onPress={onToggle}
+      toScale={0.99}
+      haptic={false}
+      style={[styles.statusCard, online ? null : styles.statusCardOffline]}
+    >
+      <View style={[styles.statusIcon, { backgroundColor: tint }]}>
+        <Icon name={online ? 'storefront' : 'pause'} size={18} color={colors.accentInk} />
+      </View>
+      <View style={styles.flex}>
+        <View style={styles.statusTitleRow}>
+          <View style={[styles.dot, { backgroundColor: tint }]} />
+          <AppText variant="bodyMedium" color={colors.ink}>
+            {online ? 'Store online' : 'Store offline'}
+          </AppText>
+        </View>
+        <AppText variant="meta" color={colors.meta} numberOfLines={1}>
+          {subtitle}
         </AppText>
       </View>
-      {pending ? (
-        <ActivityIndicator size="small" color={colors.ink} style={styles.toggleSwitch} />
-      ) : (
+      <View pointerEvents="none">
         <Switch
           value={online}
-          onValueChange={onToggle}
           trackColor={{ false: colors.cardGray, true: colors.success }}
           thumbColor={colors.surface}
           ios_backgroundColor={colors.cardGray}
-          style={styles.toggleSwitch}
         />
-      )}
-      <AppText variant="meta" color={colors.meta} style={styles.toggleHint} numberOfLines={2}>
-        {online ? 'Accepting orders' : reopenAt ? `Opens ${reopenAt}` : 'Orders paused'}
-      </AppText>
+      </View>
     </PressableScale>
   );
 }
@@ -331,29 +345,29 @@ function ProductMiniRow({ listing, onPress }: { listing: Listing; onPress: () =>
 
 const styles = StyleSheet.create({
   content: { paddingTop: spacing.lg, paddingBottom: 130, gap: spacing.md },
-  heroRow: {
+  headline: { marginTop: spacing.xs },
+  sub: { marginBottom: spacing.sm },
+  // Fixed height + single-line subtitle: every state renders at exactly this
+  // size, so toggling never shifts the content below.
+  statusCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     gap: spacing.md,
-    marginTop: spacing.xs,
-  },
-  heroText: { flex: 1 },
-  headline: {},
-  sub: { marginBottom: spacing.sm },
-  toggleCard: {
-    width: 118,
+    height: 72,
+    paddingHorizontal: spacing.md,
     backgroundColor: colors.surface,
     borderRadius: radii.card,
-    paddingVertical: spacing.sm + 2,
-    paddingHorizontal: spacing.sm + 2,
-    gap: spacing.xs,
-    alignItems: 'flex-start',
   },
-  toggleHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  statusCardOffline: { backgroundColor: 'rgba(200,140,0,0.12)' },
+  statusIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   dot: { width: 8, height: 8, borderRadius: 4 },
-  toggleSwitch: { alignSelf: 'flex-start', marginTop: 2 },
-  toggleHint: { marginTop: 2 },
   flex: { flex: 1 },
   statsWrap: { gap: spacing.md },
   statRow: { flexDirection: 'row', gap: spacing.md },

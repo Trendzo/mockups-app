@@ -42,7 +42,9 @@ export const useSettings = create<SettingsState>()(
       _setHydrated: () => set({ hydrated: true }),
     }),
     {
-      name: 'trendzo.settings.v4',
+      // Bumped on a base-URL change: the persisted value would otherwise keep
+      // pinning existing installs to the previous host.
+      name: 'trendzo.settings.v5',
       storage: createJSONStorage(() => AsyncStorage),
       // v1: installs that first ran with a since-retired default (CloudFront → the
       // AWS standby, or Render) still had it persisted; move them to the current

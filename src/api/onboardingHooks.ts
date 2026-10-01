@@ -1,6 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getKyc, getRetailerMe, listChangeRequests } from './onboarding';
 import { setOrderAcceptance } from './storeOps';
+import { RetailerMe } from '../types/onboarding';
+
+/** Stands in for `orderPauseUntil` while a go-offline request is in flight — we
+ *  know the store is paused but not yet the server's auto-reopen instant, so
+ *  callers must not format this as a date. */
+export const PENDING_PAUSE = 'pending';
 
 /** GET /retailer/me - drives the post-login app gate. */
 export function useRetailerMe(enabled = true) {
@@ -48,14 +54,44 @@ export function useChangeRequests(enabled = true) {
 }
 
 /**
- * Flip the store online/offline (accepting orders). Refreshes /retailer/me on
- * success so the homepage toggle + gates reflect the new state immediately.
+ * Flip the store online/offline (accepting orders). Updates the cached
+ * /retailer/me optimistically so the toggle holds its new position instead of
+ * snapping back while the request is in flight, then reconciles with the
+ * server's real pause window.
  */
 export function useSetOrderAcceptance() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (accepting: boolean) => setOrderAcceptance(accepting),
-    onSuccess: () => {
+    onMutate: async (accepting) => {
+      // Stop the 20s /retailer/me poll from landing mid-flight and clobbering
+      // the optimistic value with the pre-toggle one.
+      await qc.cancelQueries({ queryKey: ['retailer-me'] });
+      const previous = qc.getQueryData<RetailerMe>(['retailer-me']);
+      if (previous?.store) {
+        qc.setQueryData<RetailerMe>(['retailer-me'], {
+          ...previous,
+          store: {
+            ...previous.store,
+            orderPauseUntil: accepting
+              ? null
+              : (previous.store.orderPauseUntil ?? PENDING_PAUSE),
+          },
+        });
+      }
+      return { previous };
+    },
+    onError: (_err, _accepting, ctx) => {
+      if (ctx?.previous) qc.setQueryData(['retailer-me'], ctx.previous);
+    },
+    onSuccess: (data) => {
+      qc.setQueryData<RetailerMe>(['retailer-me'], (cur) =>
+        cur?.store
+          ? { ...cur, store: { ...cur.store, orderPauseUntil: data.orderPauseUntil } }
+          : cur,
+      );
+    },
+    onSettled: () => {
       void qc.invalidateQueries({ queryKey: ['retailer-me'] });
     },
   });
