@@ -43,6 +43,8 @@
 	<string>Trendzo saves generated mockups to your photo library.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Trendzo needs your photo library to upload garment and person photos.</string>
+	<key>RCTNewArchEnabled</key>
+	<true/>
 	<key>UIAppFonts</key>
 	<array>
 		<string>Inter-Medium.ttf</string>

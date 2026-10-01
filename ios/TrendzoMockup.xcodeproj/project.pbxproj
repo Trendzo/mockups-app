@@ -299,8 +299,8 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
-				CURRENT_PROJECT_VERSION = 4;
-				DEVELOPMENT_TEAM = F8D9J7XW82;
+				CURRENT_PROJECT_VERSION = 13;
+				DEVELOPMENT_TEAM = 3LCA4AA483;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = TrendzoMockup/Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.business";
@@ -309,13 +309,13 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.7.2;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.tiffsy.trenzomockup;
+				PRODUCT_BUNDLE_IDENTIFIER = com.trendzo.retailer;
 				PRODUCT_NAME = TrendzoMockup;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -331,8 +331,8 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
-				CURRENT_PROJECT_VERSION = 4;
-				DEVELOPMENT_TEAM = F8D9J7XW82;
+				CURRENT_PROJECT_VERSION = 13;
+				DEVELOPMENT_TEAM = 3LCA4AA483;
 				INFOPLIST_FILE = TrendzoMockup/Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.business";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
@@ -340,13 +340,13 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.7.2;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.tiffsy.trenzomockup;
+				PRODUCT_BUNDLE_IDENTIFIER = com.trendzo.retailer;
 				PRODUCT_NAME = TrendzoMockup;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_VERSION = 5.0;

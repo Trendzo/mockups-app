@@ -1,11 +1,11 @@
 # Trendzo Retailer — App Store & Google Play submission
 
-Store name: **Trendzo Retailer**. Bundle ID (iOS) and package name (Android) are both `com.trendzomockup`. The public URLs below become live after the nested `backend/backend` repository is deployed to Render.
+Store name: **Trendzo Retailer**. iOS bundle ID is `com.trendzo.retailer`; Android package name is `com.trendzomockup`. The public URLs below become live after the nested `backend/backend` repository is deployed to Render.
 
 ## App identity
 
 - Store / display name: `Trendzo Retailer`
-- iOS bundle identifier: `com.trendzomockup`
+- iOS bundle identifier: `com.trendzo.retailer` (team `3LCA4AA483`)
 - Android package name: `com.trendzomockup`
 - Internal RN module name: `TrendzoMockup` (registration key — do not change)
 - Subtitle / short tagline: `AI Catalog for Retailers`
@@ -107,7 +107,7 @@ Do not select advertising, third-party advertising, developer advertising, or cr
 - Screenshots: upload for every device class App Store Connect requests (currently iPhone and iPad). Show Home, AI catalog setup/results, Catalog, Product/Inventory and Profile/POS where possible.
 - Encryption / export compliance: select **No** for non-exempt encryption. The app uses standard HTTPS only; `ITSAppUsesNonExemptEncryption` is already set to false in Info.plist.
 - Age rating: answer the questionnaire accurately. Expected result with the current retailer-only feature set is `4+`.
-- Signing: the bundle ID is `com.trendzomockup` (the leftover `com.tiffsy.*` prefix was removed). Register/confirm the App ID and provisioning profile for it (team `F8D9J7XW82`); a record created under any other bundle ID cannot be reused.
+- Signing: the iOS bundle ID is `com.trendzo.retailer` on team `3LCA4AA483` (automatic signing). It replaced the earlier `com.tiffsy.trenzomockup` / `com.trendzomockup` IDs on team `F8D9J7XW82`; an App Store Connect record created under any other bundle ID cannot be reused.
 
 ## Google Play Console specifics
 
