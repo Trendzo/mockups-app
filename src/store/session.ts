@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Submission } from '../types/api';
+import { ProductCopy, Submission } from '../types/api';
 import { SubmissionStatus } from '../types/enums';
 
 export interface RecentSubmission {
@@ -12,6 +12,8 @@ export interface RecentSubmission {
   rawPhotos: string[];
   createdAt: number;
   name?: string; // set once published
+  /** AI-drafted listing copy, kept so reopening from Creations still prefills. */
+  copy?: ProductCopy | null;
 }
 
 interface SessionState {
@@ -44,6 +46,8 @@ export const useSession = create<SessionState>()(
             rawPhotos: s.rawPhotos ?? [],
             createdAt: existing?.createdAt ?? createdAt,
             name: existing?.name,
+            // A later partial update (no copy on the object) must not erase it.
+            copy: s.copy ?? existing?.copy ?? null,
           };
           const rest = state.recent.filter((r) => r.id !== s.id);
           return { recent: [entry, ...rest].slice(0, MAX_RECENT) };

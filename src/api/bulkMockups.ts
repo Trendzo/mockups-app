@@ -2,6 +2,10 @@ import { getJson, postJson, unwrapEnvelope } from './client';
 import { uploadImage } from './catalog';
 import { CreateSubmissionInput } from '../types/api';
 import { BulkJobSummary, BulkJobStatus, BulkMockupJob } from '../types/bulkMockup';
+import { toProductCopy } from '../utils/aiCopy';
+
+/** Guard the server's `copy` field at the API boundary (see toProductCopy). */
+const normalizeJob = (job: BulkMockupJob): BulkMockupJob => ({ ...job, copy: toProductCopy(job.copy) });
 
 /**
  * Enqueue a bulk-mockup job. Uploads the garment photos (same path as the
@@ -30,14 +34,14 @@ export async function enqueueBulkMockup(input: CreateSubmissionInput): Promise<B
   if (input.only?.length) body.only = input.only;
 
   const res = await postJson<unknown>('/retailer/bulk-mockups', body);
-  return unwrapEnvelope<BulkMockupJob>(res);
+  return normalizeJob(unwrapEnvelope<BulkMockupJob>(res));
 }
 
 export async function listBulkJobs(status?: BulkJobStatus): Promise<BulkMockupJob[]> {
   const res = await getJson<{ data: BulkMockupJob[] }>('/retailer/bulk-mockups', {
     params: status ? { status } : undefined,
   });
-  return unwrapEnvelope<BulkMockupJob[]>(res);
+  return unwrapEnvelope<BulkMockupJob[]>(res).map(normalizeJob);
 }
 
 export async function bulkJobSummary(): Promise<BulkJobSummary> {

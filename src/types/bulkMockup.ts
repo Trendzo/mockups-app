@@ -1,3 +1,5 @@
+import { ProductCopy } from './api';
+
 export type BulkJobStatus =
   | 'queued'
   | 'processing'
@@ -13,6 +15,8 @@ export interface BulkMockupJob {
   outputUrls: string[];
   referenceImageUrls: string[];
   errorMessage: string | null;
+  /** AI-drafted name + descriptions, generated with the mockups. */
+  copy?: ProductCopy | null;
   createdAt: string;
   finishedAt: string | null;
 }

@@ -38,6 +38,7 @@ import { useRetailerMe } from '../api/onboardingHooks';
 import { useBulkJobs, useDismissBulkJob } from '../api/bulkMockupHooks';
 import { deleteListing, updateListing } from '../api/catalogManagement';
 import { useProductDraft } from '../store/productDraft';
+import { aiCopyToast } from '../utils/aiCopy';
 import { BulkMockupJob } from '../types/bulkMockup';
 import { useAuth } from '../store/auth';
 import { canWriteCatalog, Listing, ListingStatus } from '../types/catalog';
@@ -131,7 +132,8 @@ export function CatalogListScreen({ navigation }: ScreenProps<'Catalog'>) {
     const draft = useProductDraft.getState();
     draft.startCreate();
     draft.addGalleryUrls(job.outputUrls);
-    toast.show('Add product details to go live', 'success');
+    const filled = draft.applyAiCopy(job.copy);
+    toast.show(aiCopyToast('Images added', filled), 'success');
     navigation.navigate('ProductWizardBasics');
   };
 

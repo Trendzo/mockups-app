@@ -4,6 +4,14 @@ import { Mode, ModelGender } from '../types/enums';
 import { uploadImage } from './catalog';
 import { mockMockups } from './mock';
 
+/*
+ * Every call here sends `withCopy: false`. The server can draft listing copy
+ * (name + descriptions) on /mockups, but these mockups are generated from a
+ * photo of an EXISTING product/variant (often one colour of it) - the listing's
+ * copy comes from the submission / bulk flows instead, so asking for it here
+ * would only spend a text-model call.
+ */
+
 /**
  * Same POST /retailer/ai-catalog-beta/mockups, but from an already-hosted
  * apparel URL (e.g. a listing gallery photo) - no re-upload. Used by the
@@ -21,6 +29,7 @@ export async function createMockupsFromUrl(
   const body: Record<string, unknown> = {
     mode,
     apparelImageUrls: [apparelUrl],
+    withCopy: false,
   };
   if (mode === Mode.WithModel && modelGender) body.modelGender = modelGender;
   const res = await postJson<unknown>('/retailer/ai-catalog-beta/mockups', body);
@@ -47,6 +56,7 @@ export async function createMockups(
     const body: Record<string, unknown> = {
       mode,
       apparelImageUrls: [apparelUrl],
+      withCopy: false,
     };
     if (designUrl) body.designImageUrl = designUrl;
     if (patternUrl) body.patternCloseupUrl = patternUrl;
@@ -98,6 +108,7 @@ export async function generateMockupsFromUrl(input: {
   const body: Record<string, unknown> = {
     mode: input.mode,
     apparelImageUrls: [input.apparelImageUrl],
+    withCopy: false,
   };
   if (input.mode === Mode.WithModel && input.modelGender) {
     body.modelGender = input.modelGender;

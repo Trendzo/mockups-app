@@ -129,7 +129,9 @@ export interface CreateListingInput {
   variantMode?: VariantMode;
 }
 
-export type UpdateListingInput = Partial<CreateListingInput> & {
+export type UpdateListingInput = Omit<Partial<CreateListingInput>, 'descriptionLong'> & {
+  /** null clears it; omit to leave the stored (HTML) value untouched. */
+  descriptionLong?: string | null;
   status?: 'draft' | 'active' | 'retired';
 };
 

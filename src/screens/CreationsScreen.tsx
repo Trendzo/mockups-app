@@ -36,6 +36,7 @@ export function CreationsScreen({ navigation }: ScreenProps<'Creations'>) {
         status: item.status,
         rawPhotos: item.rawPhotos,
         outputUrls: item.outputUrls,
+        copy: item.copy ?? null,
       },
     });
   };

@@ -26,6 +26,7 @@ import { useCaptureDraft } from '../../store/captureDraft';
 import { colors, radii, spacing } from '../../theme/theme';
 import { pickAndUploadImages } from './pickImages';
 import { SortableGallery } from './SortableGallery';
+import { AiCopyHint } from './AiCopyHint';
 import { WizardHeader } from './WizardHeader';
 import { useExitWizardToHome } from './useExitToHome';
 
@@ -160,6 +161,7 @@ export function BasicsStep({ navigation }: ScreenProps<'ProductWizardBasics'>) {
           onChangeText={(v) => d.setBasics({ name: v })}
           placeholder="e.g. Oversized Cotton Tee"
         />
+        <AiCopyHint field="name" />
 
         <View style={styles.block}>
           <Select

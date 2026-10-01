@@ -30,6 +30,17 @@ const img = (seed: string) => `https://picsum.photos/seed/${seed}/900/1200`;
 const delay = <T>(value: T, ms = 1400): Promise<T> =>
   new Promise((resolve) => setTimeout(() => resolve(value), ms));
 
+const MOCK_COPY = {
+  name: 'Olive Cotton Mandarin-Collar Kurta',
+  description: 'A relaxed olive kurta with a mandarin collar, cut for easy everyday wear.',
+  descriptionLong:
+    'An easy, breathable kurta for daily wear and casual outings.\n\n' +
+    '• Soft woven cotton-feel fabric\n' +
+    '• Straight fit, hip length\n' +
+    '• Mandarin collar with a half placket\n' +
+    '• Pair with white churidar or denims',
+};
+
 let counter = 1000;
 const nextId = (prefix: string) => `${prefix}${(counter += 1)}`;
 
@@ -48,6 +59,7 @@ export async function mockCreateSubmission(
       status: SubmissionStatus.ReadyForReview,
       rawPhotos: [img(`${id}-apparel`)],
       outputUrls,
+      copy: MOCK_COPY,
     },
     2600,
   );

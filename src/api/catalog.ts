@@ -10,6 +10,7 @@ import {
   Submission,
 } from '../types/api';
 import { SubmissionStatus } from '../types/enums';
+import { toProductCopy } from '../utils/aiCopy';
 import { toFormFile, UploadFile } from '../utils/image';
 import {
   mockBrands,
@@ -90,6 +91,8 @@ function normalizeSubmission(
     outputUrls: row.outputUrls ?? [],
     at: row.at,
     errorMessage: row.errorMessage ?? null,
+    // AI-drafted listing copy generated on the same call (null when absent/failed).
+    copy: toProductCopy(row.copy),
   };
 }
 

@@ -15,6 +15,7 @@ import {
 import { ScreenProps } from '../navigation/types';
 import { useBulkJobs, useCancelBulkJob, useDismissBulkJob } from '../api/bulkMockupHooks';
 import { useProductDraft } from '../store/productDraft';
+import { aiCopyToast } from '../utils/aiCopy';
 import { BulkJobStatus, BulkMockupJob } from '../types/bulkMockup';
 import type { StatusTone } from '../components';
 import { colors, radii, spacing } from '../theme/theme';
@@ -43,7 +44,8 @@ export function BulkJobsScreen({ navigation }: ScreenProps<'BulkJobs'>) {
     const draft = useProductDraft.getState();
     draft.startCreate();
     draft.addGalleryUrls(job.outputUrls);
-    toast.show('Add product details to go live', 'success');
+    const filled = draft.applyAiCopy(job.copy);
+    toast.show(aiCopyToast('Images added', filled), 'success');
     navigation.navigate('ProductWizardBasics');
   };
 

@@ -9,7 +9,8 @@ import {
   updateListing,
 } from './catalogManagement';
 import { useProductDraft } from '../store/productDraft';
-import { CatalogGender, CreateListingInput, Listing } from '../types/catalog';
+import { Listing } from '../types/catalog';
+import { listingCreateBody, listingUpdateBody } from './listingPayload';
 import { parseRupeesToPaise } from '../utils/money';
 
 /**
@@ -21,11 +22,6 @@ import { parseRupeesToPaise } from '../utils/money';
  * from the Review step without duplicating the listing, any group, or any
  * already-created variant.
  */
-
-function derivedGender(genders: Array<'her' | 'him'>): CatalogGender {
-  if (genders.length >= 2) return 'unisex';
-  return (genders[0] as CatalogGender) ?? 'unisex';
-}
 
 const paise = (s: string): number => parseRupeesToPaise(s) ?? 0;
 const comparePrice = (s: string): number | null => {
@@ -212,31 +208,15 @@ export async function commitProductDraft({ publish }: { publish: boolean }): Pro
     `[commit] start - mode=${d.mode} variantMode=${d.variantMode} publish=${publish} colors=${d.colors.length}`,
   );
 
-  const listingFields: CreateListingInput = {
-    name: d.name.trim(),
-    // Optional on a draft; omit when unset so the backend stores brand_id NULL.
-    ...(d.brandId ? { brandId: d.brandId } : {}),
-    categoryId: d.categoryId!,
-    gender: derivedGender(d.genders),
-    description: d.description.trim() || undefined,
-    descriptionLong: d.descriptionLong.trim() || undefined,
-    listingPolicy: d.listingPolicy,
-    occasion: d.occasion,
-    ageGroups: d.ageGroups,
-    hsn: d.hsn.trim() || undefined,
-    galleryUrls: d.gallery,
-    variantMode: d.variantMode,
-  };
-
   // 1) LISTING
   let listingId: string;
   if (d.mode === 'edit') {
     listingId = d.editingListingId!;
-    await step(`update listing ${listingId}`, () => updateListing(listingId, listingFields));
+    await step(`update listing ${listingId}`, () => updateListing(listingId, listingUpdateBody(d)));
   } else if (d.createdListingId) {
     listingId = d.createdListingId;
   } else {
-    const created = await step('create listing', () => createListing(listingFields));
+    const created = await step('create listing', () => createListing(listingCreateBody(d)));
     listingId = created.id;
     d.setCreatedListingId(listingId);
   }

@@ -31,6 +31,14 @@ export interface CreateSubmissionInput {
   only?: string[]; // limit generated views
 }
 
+/** AI-drafted listing copy returned alongside generated mockups (plain text;
+ *  descriptionLong uses newlines + "• " bullets). Null when generation failed. */
+export interface ProductCopy {
+  name: string;
+  description: string;
+  descriptionLong: string;
+}
+
 export interface Submission {
   id: string; // aics_...
   mode: Mode;
@@ -39,6 +47,7 @@ export interface Submission {
   outputUrls: string[]; // absolute urls
   at?: string;
   errorMessage?: string | null;
+  copy?: ProductCopy | null;
 }
 
 export interface DecisionInput {

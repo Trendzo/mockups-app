@@ -48,11 +48,11 @@ An approved Trendzo retailer account is required. AI output should always be rev
 
 Verified against `src/config/legal.ts`. Confirm all five return HTTP 200 before submitting.
 
-- Support URL: `https://backend-qpmx.onrender.com/support`
-- Marketing URL: `https://backend-qpmx.onrender.com/`
-- Privacy Policy URL: `https://backend-qpmx.onrender.com/privacy`
-- Account deletion information: `https://backend-qpmx.onrender.com/account-deletion`
-- Terms of Service: `https://backend-qpmx.onrender.com/terms`
+- Support URL: `https://api.trendzonow.com/support`
+- Marketing URL: `https://api.trendzonow.com/`
+- Privacy Policy URL: `https://api.trendzonow.com/privacy/retailer`
+- Account deletion information: `https://api.trendzonow.com/account-deletion`
+- Terms of Service: `https://api.trendzonow.com/terms`
 
 ## App Review / demo access (both stores)
 
@@ -123,7 +123,7 @@ Do not select advertising, third-party advertising, developer advertising, or cr
 ### Required before publishing
 
 - Store listing: app name, short description (above), full description, app icon (512×512), feature graphic (1024×500), and at least 2 phone screenshots.
-- Privacy Policy URL (must be live): `https://backend-qpmx.onrender.com/privacy`
+- Privacy Policy URL (must be live): `https://api.trendzonow.com/privacy/retailer`
 - App access: **All functionality restricted** + the demo login and instructions above.
 - Ads: **No**.
 - Content rating: complete the IARC questionnaire (expected *Everyone*).

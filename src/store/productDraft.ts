@@ -1,6 +1,8 @@
 import { create } from 'zustand';
+import { ProductCopy } from '../types/api';
 import { Listing, ListingPolicy, VariantGroup } from '../types/catalog';
 import { paiseToRupeeInput } from '../utils/money';
+import { htmlToEditableText } from '../utils/richText';
 
 /**
  * In-progress product draft for the unified creation/edit wizard. Session-only
@@ -17,6 +19,22 @@ export type WizardVariantMode = 'single' | 'color_size';
 
 /** Which variant a per-variant image action targets. */
 export type VariantTarget = 'single' | { colorId: string; rowId: string };
+
+/** Draft fields the AI copy can fill. */
+export type AiCopyField = 'name' | 'description' | 'descriptionLong';
+const AI_COPY_FIELDS: AiCopyField[] = ['name', 'description', 'descriptionLong'];
+
+/** Drop the AI marker for any copy field present in an edit patch. */
+function clearAiFlags(
+  aiFilled: Partial<Record<AiCopyField, boolean>>,
+  patch: object,
+): Partial<Record<AiCopyField, boolean>> {
+  const touched = AI_COPY_FIELDS.filter((f) => f in patch && aiFilled[f]);
+  if (!touched.length) return aiFilled;
+  const next = { ...aiFilled };
+  touched.forEach((f) => delete next[f]);
+  return next;
+}
 
 export interface SingleVariantDraft {
   sku: string;
@@ -86,6 +104,19 @@ interface ProductDraftState {
   ageGroups: string[];
   hsn: string;
 
+  // AI-drafted copy (from the mockup generation call). `aiCopy` is the latest
+  // suggestion; `aiFilled` marks fields whose CURRENT value came from it (cleared
+  // as soon as the retailer edits that field).
+  aiCopy: ProductCopy | null;
+  aiFilled: Partial<Record<AiCopyField, boolean>>;
+
+  // The stored long description is HTML; this app edits it as plain text
+  // (utils/richText). Rich web-authored HTML can't round-trip, so it is shown
+  // read-only. `descriptionLongDirty` = changed in this session; an edit only
+  // sends the field when dirty, so an untouched description is never rewritten.
+  descriptionLongEditable: boolean;
+  descriptionLongDirty: boolean;
+
   // Commit progress / edit tracking
   createdListingId?: string;
   removedVariantIds: string[];
@@ -94,6 +125,12 @@ interface ProductDraftState {
   startCreate: () => void;
   startEdit: (listing: Listing) => void;
   setPendingMockup: (b: boolean) => void;
+  /** Prefill name/description/descriptionLong from AI copy - blank (and
+   *  editable) fields only; never overwrites existing text. Returns the fields
+   *  it filled. */
+  applyAiCopy: (copy?: ProductCopy | null) => AiCopyField[];
+  /** Replace one field with the AI suggestion (explicit "Use AI suggestion" tap). */
+  acceptAiSuggestion: (field: AiCopyField) => void;
 
   // ---- step 1 ----
   setBasics: (
@@ -202,6 +239,10 @@ const emptyState = () => ({
   occasion: [] as string[],
   ageGroups: [] as string[],
   hsn: '',
+  aiCopy: null as ProductCopy | null,
+  aiFilled: {} as Partial<Record<AiCopyField, boolean>>,
+  descriptionLongEditable: true,
+  descriptionLongDirty: false,
   createdListingId: undefined,
   removedVariantIds: [] as string[],
 });
@@ -261,6 +302,7 @@ function seedFromListing(listing: Listing): Partial<ProductDraftState> {
 
   // Product-level pricing seeds from the first variant (MRP always lives there).
   const v0 = variants[0];
+  const longDesc = htmlToEditableText(listing.descriptionLong);
 
   return {
     mode: 'edit',
@@ -279,25 +321,67 @@ function seedFromListing(listing: Listing): Partial<ProductDraftState> {
     single,
     colors,
     description: listing.description ?? '',
-    descriptionLong: listing.descriptionLong ?? '',
+    descriptionLong: longDesc.text,
+    descriptionLongEditable: longDesc.editable,
+    descriptionLongDirty: false,
     listingPolicy: listing.listingPolicy,
     occasion: listing.occasion ?? [],
     ageGroups: listing.ageGroups ?? [],
     hsn: listing.hsn ?? '',
+    aiCopy: null,
+    aiFilled: {},
     createdListingId: undefined,
     removedVariantIds: [],
     variantMockups: {},
   };
 }
 
-export const useProductDraft = create<ProductDraftState>((set) => ({
+export const useProductDraft = create<ProductDraftState>((set, get) => ({
   ...emptyState(),
 
   startCreate: () => set(emptyState()),
   startEdit: (listing) => set(seedFromListing(listing)),
   setPendingMockup: (b) => set({ pendingMockup: b }),
+  applyAiCopy: (copy) => {
+    if (!copy) return [];
+    const s = get();
+    const patch: Partial<Record<AiCopyField, string>> = {};
+    const filled: AiCopyField[] = [];
+    for (const f of AI_COPY_FIELDS) {
+      const suggestion = copy[f]?.trim();
+      const blank = !s[f].trim();
+      const locked = f === 'descriptionLong' && !s.descriptionLongEditable;
+      // Blank fields only. Existing text - the retailer's OR an earlier AI fill
+      // (which may describe a different photo) - is kept; the newer suggestion
+      // stays one tap away via acceptAiSuggestion.
+      if (suggestion && blank && !locked) {
+        patch[f] = suggestion;
+        filled.push(f);
+      }
+    }
+    const aiFilled = { ...s.aiFilled };
+    filled.forEach((f) => (aiFilled[f] = true));
+    set({
+      ...patch,
+      aiCopy: copy,
+      aiFilled,
+      ...(patch.descriptionLong !== undefined && { descriptionLongDirty: true }),
+    });
+    return filled;
+  },
+  acceptAiSuggestion: (field) =>
+    set((s) => {
+      const suggestion = s.aiCopy?.[field]?.trim();
+      if (!suggestion) return {};
+      if (field === 'descriptionLong' && !s.descriptionLongEditable) return {};
+      return {
+        [field]: suggestion,
+        aiFilled: { ...s.aiFilled, [field]: true },
+        ...(field === 'descriptionLong' && { descriptionLongDirty: true }),
+      };
+    }),
 
-  setBasics: (patch) => set(patch),
+  setBasics: (patch) => set((s) => ({ ...patch, aiFilled: clearAiFlags(s.aiFilled, patch) })),
   toggleGender: (g) =>
     set((s) => ({
       genders: s.genders.includes(g) ? s.genders.filter((x) => x !== g) : [...s.genders, g],
@@ -449,7 +533,20 @@ export const useProductDraft = create<ProductDraftState>((set) => ({
       return { variantMockups: next };
     }),
 
-  setDetails: (patch) => set(patch),
+  setDetails: (patch) =>
+    set((s) => {
+      // A read-only (rich, web-authored) long description can't be edited here.
+      if ('descriptionLong' in patch && !s.descriptionLongEditable) {
+        const rest = { ...patch };
+        delete rest.descriptionLong;
+        return { ...rest, aiFilled: clearAiFlags(s.aiFilled, rest) };
+      }
+      return {
+        ...patch,
+        aiFilled: clearAiFlags(s.aiFilled, patch),
+        ...('descriptionLong' in patch && { descriptionLongDirty: true }),
+      };
+    }),
 
   setCreatedListingId: (id) => set({ createdListingId: id }),
   setColorGroupId: (colorId, groupId) =>

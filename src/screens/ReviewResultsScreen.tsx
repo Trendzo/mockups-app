@@ -16,6 +16,7 @@ import { useDecideSubmission } from '../api/hooks';
 import { useSession } from '../store/session';
 import { useCaptureDraft } from '../store/captureDraft';
 import { useProductDraft } from '../store/productDraft';
+import { aiCopyToast } from '../utils/aiCopy';
 import { SubmissionStatus } from '../types/enums';
 import { colors, spacing } from '../theme/theme';
 import { shareRemoteImage } from '../utils/gallery';
@@ -134,7 +135,11 @@ export function ReviewResultsScreen({
             draft.startCreate();
             draft.addGalleryUrls(urls);
           }
-          toast.show(`${urls.length} image${urls.length === 1 ? '' : 's'} added - add product details`, 'success');
+          // AI-drafted name/descriptions from the same generation call - fills
+          // blank fields only, so an in-progress draft's text is never clobbered.
+          const filled = draft.applyAiCopy(submission.copy);
+          const imgs = `${urls.length} image${urls.length === 1 ? '' : 's'} added`;
+          toast.show(aiCopyToast(imgs, filled), 'success');
           leavingRef.current = true;
           navigation.navigate('ProductWizardBasics');
         },

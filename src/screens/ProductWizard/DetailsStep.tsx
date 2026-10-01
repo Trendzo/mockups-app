@@ -1,6 +1,7 @@
 import React from 'react';
 import { ScrollView, StyleSheet } from 'react-native';
 import {
+  AppText,
   Field,
   KeyboardStickyView,
   PrimaryButton,
@@ -11,6 +12,7 @@ import { ScreenProps } from '../../navigation/types';
 import { useProductDraft } from '../../store/productDraft';
 import { AGE_GROUP_VALUES, ListingPolicy } from '../../types/catalog';
 import { colors, spacing } from '../../theme/theme';
+import { AiCopyHint } from './AiCopyHint';
 import { WizardHeader } from './WizardHeader';
 import { useExitWizardToHome } from './useExitToHome';
 
@@ -46,6 +48,7 @@ export function DetailsStep({ navigation }: ScreenProps<'ProductWizardDetails'>)
           placeholder="Short product description"
           multiline
         />
+        <AiCopyHint field="description" />
         <Field
           label="Full description"
           required
@@ -53,7 +56,17 @@ export function DetailsStep({ navigation }: ScreenProps<'ProductWizardDetails'>)
           onChangeText={(v) => d.setDetails({ descriptionLong: v })}
           placeholder="Longer details, fabric, care…"
           multiline
+          editable={d.descriptionLongEditable}
         />
+        {d.descriptionLongEditable ? (
+          <AiCopyHint field="descriptionLong" />
+        ) : (
+          // Rich formatting (bold, headings, links, tables...) from the web editor
+          // can't round-trip through a plain text box without being lost.
+          <AppText variant="meta" color={colors.meta} style={styles.caption}>
+            Formatted on the web portal - edit it there to keep the formatting.
+          </AppText>
+        )}
         <Select
           label="Return policy"
           options={POLICIES}
@@ -99,6 +112,7 @@ export function DetailsStep({ navigation }: ScreenProps<'ProductWizardDetails'>)
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   content: { paddingTop: spacing.md, paddingBottom: spacing.lg, gap: spacing.lg },
+  caption: { marginTop: -spacing.xs, marginLeft: 2 },
   footer: {
     paddingTop: spacing.md,
     borderTopWidth: 1,
