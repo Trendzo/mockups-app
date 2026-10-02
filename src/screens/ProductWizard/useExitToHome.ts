@@ -43,7 +43,8 @@ export function useExitWizardToHome() {
       });
 
     if (newDraftHasContent()) {
-      if (validateProductDraft(false).length === 0) {
+      const problems = validateProductDraft(false);
+      if (problems.length === 0) {
         try {
           await commitProductDraft({ publish: false });
           qc.invalidateQueries({ queryKey: ['listings'] });
@@ -55,7 +56,7 @@ export function useExitWizardToHome() {
         }
       } else {
         // Not enough to persist a draft - let them know before leaving.
-        toast.show('Add a name and category to save this as a draft', 'info');
+        toast.show(`Not saved - to keep this as a draft: ${problems.join(', ')}`, 'info');
       }
     }
     goHome();
