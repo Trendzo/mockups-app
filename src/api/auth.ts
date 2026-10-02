@@ -2,6 +2,7 @@ import axios from 'axios';
 import { useSettings } from '../store/settings';
 import { useAuth } from '../store/auth';
 import { AuthError, AuthResult, LoginInput, SignupInput } from '../types/auth';
+import type { OtpConfig, OtpProvider } from '../services/otp';
 
 /**
  * Auth client for the closetx retailer backend. Separate base URL from the
@@ -109,21 +110,28 @@ export async function loginRetailer(input: LoginInput): Promise<AuthResult> {
 }
 
 /**
- * Retailer phone-OTP login. The client verifies the OTP with MSG91, then posts
- * the resulting access token here; the backend re-verifies it with MSG91's
- * secret key, matches the phone to a retailer account, and mints a JWT. Same
+ * Retailer phone-OTP login. The client verifies the OTP with the active provider
+ * (MSG91 or Slide, see services/otp), then posts the resulting access token and
+ * the provider tag here; the backend re-verifies it with the provider's secret
+ * key, matches the phone to a retailer account, and mints a JWT. Same
  * envelope/shape and error codes as loginRetailer (never creates an account).
  */
 export async function loginRetailerOtp(
   accessToken: string,
+  provider: OtpProvider,
 ): Promise<AuthResult> {
   try {
     return await unwrap<AuthResult>(
-      authHttp.post('/auth/retailer/otp/msg91', { accessToken }),
+      authHttp.post('/auth/retailer/otp/login', { accessToken, provider }),
     );
   } catch (e) {
     throw normalizeAuthError(e);
   }
+}
+
+/** Which OTP provider to use (and Slide's public client config). Public, no auth. */
+export async function fetchOtpConfig(): Promise<OtpConfig> {
+  return unwrap<OtpConfig>(authHttp.get('/auth/otp-config'));
 }
 
 export async function signupRetailer(input: SignupInput): Promise<AuthResult> {
