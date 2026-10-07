@@ -16,7 +16,7 @@ import {
 import { ScreenProps } from '../navigation/types';
 import { useNotificationPrefs, useSaveNotificationPrefs } from '../api/notifications';
 import { errorMessage } from '../api/request';
-import { usePushPermission } from '../services/push';
+import { pushManager, usePushPermission } from '../services/push';
 import {
   DASHBOARD_TILES,
   DashboardTile,
@@ -71,8 +71,14 @@ export function NotificationSettingsScreen({ navigation }: ScreenProps<'Notifica
 
   const onSave = () => {
     if (!draft || noChannel || noTiles) return;
+    const pushChanged = prefsQ.data?.pushEnabled !== draft.pushEnabled;
     save.mutate(draft, {
-      onSuccess: () => toast.show('Notification settings saved', 'success'),
+      onSuccess: () => {
+        toast.show('Notification settings saved', 'success');
+        // The switch is real for this phone: off revokes the device token, on registers it (and asks
+        // the OS for permission if it still can). Never blocks or fails the save.
+        if (pushChanged) void pushManager.ensureRegistered({ force: true });
+      },
       onError: (e) => toast.show(errorMessage(e, 'Could not save settings'), 'error'),
     });
   };

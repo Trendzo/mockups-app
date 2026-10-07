@@ -5,6 +5,7 @@
  */
 import { AppState, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getNotificationPrefs } from '../../api/notifications';
 import { registerPushToken, revokePushToken } from '../../api/push';
 import { queryClient } from '../../api/queryClient';
 import { useAuth } from '../../store/auth';
@@ -45,6 +46,17 @@ export const pushManager: PushManager = createPushManager({
     void queryClient.invalidateQueries({ queryKey: ['orders'] });
   },
   alerts: orderAlerts,
+  // Shares the ['notification-prefs'] cache with the Settings screen and the alert hook, so launch costs
+  // at most one GET. Fails open (the manager treats a throw as "on").
+  isPushEnabled: async () => {
+    const prefs = await queryClient.fetchQuery({
+      queryKey: ['notification-prefs'],
+      queryFn: getNotificationPrefs,
+      staleTime: 5 * 60_000,
+      retry: false,
+    });
+    return prefs.pushEnabled !== false;
+  },
 });
 
 /** Call once from the app root. Safe to call repeatedly; never throws. */
@@ -54,6 +66,7 @@ const announce = createOrderAlerter({
   alerts: orderAlerts,
   show: (n) => pushManager.showLocal(n),
   formatTotal: formatPaise,
+  isPushActive: () => pushManager.isRegistered(),
 });
 
 /** Ring (Notifee, orders channel) for freshly routed orders seen by the poll. Never throws. */

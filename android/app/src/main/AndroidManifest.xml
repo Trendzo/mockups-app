@@ -20,6 +20,12 @@
     <!-- Phone push (FCM + Notifee): Android 13+ needs a runtime grant before ANY notification shows.
          The app asks via Notifee's requestPermission (services/push/pushManager). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Notifee's library manifest also declares permissions for features this app does not use
+         (scheduled/trigger notifications, foreground services). Strip them from the merged manifest,
+         as with READ_MEDIA_* above, so the Play listing does not carry exact-alarm / foreground-service
+         permissions that would need justification. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" tools:node="remove" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" tools:node="remove" />
 
     <application
       android:name=".MainApplication"

@@ -102,6 +102,7 @@ function harness(opts: {
   token?: string | null;
   session?: string | null;
   firebase?: boolean;
+  pushEnabled?: () => Promise<boolean>;
   apiRegister?: jest.Mock;
   apiRevoke?: jest.Mock;
 } = {}): Harness {
@@ -153,6 +154,7 @@ function harness(opts: {
       return () => undefined;
     },
     onForegroundPush,
+    ...(opts.pushEnabled ? { isPushEnabled: opts.pushEnabled } : {}),
     alerts: createAlertRegistry(),
     log: (m) => logs.push(m),
   };
@@ -264,6 +266,38 @@ describe('registration', () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+});
+
+describe('the "Push notifications" switch in Alert settings', () => {
+  it('off: no prompt, no registration, nothing sent', async () => {
+    const h = harness({ permission: 'denied', pushEnabled: async () => false });
+    await expect(createPushManager(h.deps).ensureRegistered()).resolves.toEqual({
+      status: 'skipped',
+      reason: 'push switched off in settings',
+    });
+    expect(h.notifee.client.requestPermission).not.toHaveBeenCalled();
+    expect(h.api.register).not.toHaveBeenCalled();
+  });
+
+  it('switching off after registering revokes this device; switching back on registers it again', async () => {
+    let on = true;
+    const h = harness({ pushEnabled: async () => on });
+    const m = createPushManager(h.deps);
+    await m.ensureRegistered();
+    expect(m.isRegistered()).toBe(true);
+    on = false;
+    await m.ensureRegistered({ force: true });
+    expect(h.api.revoke).toHaveBeenCalledWith('fcm-1', 'jwt-A');
+    expect(m.isRegistered()).toBe(false);
+    on = true;
+    await expect(m.ensureRegistered({ force: true })).resolves.toEqual({ status: 'registered' });
+    expect(m.isRegistered()).toBe(true);
+  });
+
+  it('fails OPEN: an unreadable preference never silences order alerts', async () => {
+    const h = harness({ pushEnabled: async () => Promise.reject(new Error('offline')) });
+    await expect(createPushManager(h.deps).ensureRegistered()).resolves.toEqual({ status: 'registered' });
   });
 });
 

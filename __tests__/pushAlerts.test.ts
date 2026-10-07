@@ -111,6 +111,52 @@ describe('poll alert composer (useNewOrderAlerts -> Notifee)', () => {
   });
 });
 
+describe('poll alert while phone push is active', () => {
+  const NOW = Date.parse('2026-10-07T10:00:00Z');
+  const make = (pushActive: boolean) => {
+    const alerts = createAlertRegistry(120_000, 100, () => NOW);
+    const show = jest.fn(async () => true);
+    const alertNewOrders = createOrderAlerter({
+      alerts,
+      show,
+      formatTotal: (p) => `₹${p / 100}`,
+      isPushActive: () => pushActive,
+      now: () => NOW,
+    });
+    return { alerts, show, alertNewOrders };
+  };
+  const order = (id: string, ageMs: number) => ({
+    id,
+    itemCount: 1,
+    grandTotalPaise: 100,
+    placedAt: new Date(NOW - ageMs).toISOString(),
+  });
+
+  it('does not ring again for an order that arrived while the app was closed (the OS tray already did)', async () => {
+    const { alerts, show, alertNewOrders } = make(true);
+    await expect(alertNewOrders([order('old', 10 * 60_000)])).resolves.toBe(false);
+    expect(show).not.toHaveBeenCalled();
+    expect(alerts.has('old')).toBe(true);
+  });
+
+  it('still rings for an order placed moments ago, and for old orders when push is NOT registered', async () => {
+    const live = make(true);
+    await live.alertNewOrders([order('fresh', 5_000)]);
+    expect(live.show).toHaveBeenCalledTimes(1);
+
+    const noPush = make(false);
+    await noPush.alertNewOrders([order('old', 10 * 60_000)]);
+    expect(noPush.show).toHaveBeenCalledTimes(1);
+  });
+
+  it('a mixed batch rings only for the live order', async () => {
+    const { show, alertNewOrders } = make(true);
+    await alertNewOrders([order('old', 10 * 60_000), order('fresh', 3_000)]);
+    expect(show).toHaveBeenCalledTimes(1);
+    expect(show).toHaveBeenCalledWith(expect.objectContaining({ id: 'order-new-fresh' }));
+  });
+});
+
 describe('Android channels', () => {
   it('orders is HIGH importance with sound + vibration; general is DEFAULT', () => {
     const orders = CHANNELS.find((c) => c.id === 'orders')!;

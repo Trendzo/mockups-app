@@ -117,6 +117,16 @@ export function useNotificationPrefs() {
   });
 }
 
+/**
+ * Which home-dashboard tiles the retailer chose (Alert settings -> Home dashboard). Until the prefs
+ * load (or if they cannot) the server default set applies, so the home screen never flashes empty.
+ * HomeScreen: wrap each section in `if (tiles.has('top_products'))`.
+ */
+export function useDashboardTiles() {
+  const tiles = useNotificationPrefs().data?.dashboardTiles ?? DEFAULT_NOTIFICATION_PREFS.dashboardTiles;
+  return { tiles, has: (t: DashboardTile) => tiles.includes(t) };
+}
+
 export function useSaveNotificationPrefs() {
   const qc = useQueryClient();
   return useMutation({

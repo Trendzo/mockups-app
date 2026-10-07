@@ -73,6 +73,12 @@ export interface PushManagerDeps {
   onForeground(cb: () => void): () => void;
   /** A push arrived while the app is open (refresh inbox/orders). */
   onForegroundPush?(push: ParsedPush): void;
+  /**
+   * The "Push notifications" switch in Alert settings. Off = this device is not registered (and any
+   * registration is revoked), whatever the server does with the preference. Must fail OPEN: when the
+   * preference cannot be read, push stays on.
+   */
+  isPushEnabled?(): Promise<boolean>;
   alerts: AlertRegistry;
   ledger?: RegistrationLedger;
   now?: () => number;
@@ -92,6 +98,8 @@ export interface PushManager {
   openSystemSettings(): Promise<void>;
   /** Why phone push is unavailable in this build (null = Firebase configured). */
   unavailableReason(): string | null;
+  /** This session has a device token registered with the server (so the OS tray already alerts while the app is closed). */
+  isRegistered(): boolean;
   /** Show a notification through Notifee (sound + tray). False when it could not be shown. */
   showLocal(n: LocalNotification): Promise<boolean>;
   dispose(): void;
@@ -154,12 +162,27 @@ export function createPushManager(deps: PushManagerDeps): PushManager {
     return state;
   }
 
+  async function readPushEnabled(): Promise<boolean> {
+    try {
+      return (await deps.isPushEnabled?.()) !== false;
+    } catch {
+      return true; // fail open: an unreadable preference never silences order alerts
+    }
+  }
+
   async function register(opts: { force?: boolean; prompt?: boolean } = {}): Promise<RegisterOutcome> {
     const authToken = deps.auth.getToken();
     if (!authToken) return { status: 'skipped', reason: 'not signed in' };
     if (!deps.platform) return { status: 'skipped', reason: 'unsupported platform' };
 
     try {
+      // The in-app switch wins over everything: off means no prompt, no registration, and drop what we had.
+      if (deps.isPushEnabled && !(await readPushEnabled())) {
+        const known = ledger.current();
+        if (known) await revokeKnown(known.authKey, known.token);
+        return { status: 'skipped', reason: 'push switched off in settings' };
+      }
+
       // Permission first and independent of Firebase: Notifee's local alerts (the in-app / polling
       // fallback) need it on Android 13+ even in a build with no google-services.json.
       const permission = await resolvePermission(opts.prompt !== false);
@@ -371,6 +394,8 @@ export function createPushManager(deps: PushManagerDeps): PushManager {
     },
 
     unavailableReason: () => deps.getMessaging().reason,
+
+    isRegistered: () => ledger.current() !== null,
 
     showLocal,
 
