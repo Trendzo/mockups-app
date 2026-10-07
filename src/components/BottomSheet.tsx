@@ -2,7 +2,6 @@ import React from 'react';
 import {
   KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   StyleProp,
   StyleSheet,
@@ -11,6 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { useKeyboardHeight } from '../utils/useKeyboardHeight';
 import { colors, spacing } from '../theme/theme';
 
 interface BottomSheetProps {
@@ -45,16 +45,24 @@ export function BottomSheet({
   avoidKeyboard = false,
   dismissable = true,
 }: BottomSheetProps) {
+  // App-level top inset: a tall sheet (e.g. a form with the keyboard up) stops
+  // below the status bar instead of sliding under the notch.
+  const topInset = useSafeAreaInsets().top;
   const body = (
     <>
       {/* Tap area above the sheet dismisses; taps on the sheet don't reach it. */}
-      <Pressable style={styles.dismiss} onPress={dismissable ? onClose : undefined} />
+      <Pressable
+        style={[styles.dismiss, { minHeight: topInset + spacing.sm }]}
+        onPress={dismissable ? onClose : undefined}
+      />
       {/* No reanimated `entering` slide here: on the New Architecture, a layout
           animation on a view inside a Modal cancels in-flight presses — quick
           taps land, but real finger presses (~100ms) die mid-gesture, making
           every sheet's rows and close button feel dead (reproduced on a
           foldable). The Modal's fade covers the reveal instead. */}
-      <View>{children}</View>
+      {/* May shrink when the content is taller than the space left — sheets
+          with long forms put a ScrollView inside so they scroll instead. */}
+      <View style={styles.sheetWrap}>{children}</View>
     </>
   );
 
@@ -77,10 +85,11 @@ export function BottomSheet({
       <GestureHandlerRootView style={styles.root}>
         <SafeAreaProvider>
           {avoidKeyboard ? (
-            <KeyboardAvoidingView
-              style={styles.scrim}
-              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            >
+            // 'padding' on Android too: KeyboardAvoidingView pads by the measured
+            // overlap with the keyboard, which is 0 when adjustResize already
+            // shrank the window and the full keyboard height when an
+            // edge-to-edge dialog window isn't resized (Android 15+).
+            <KeyboardAvoidingView style={styles.scrim} behavior="padding">
               {body}
             </KeyboardAvoidingView>
           ) : (
@@ -111,17 +120,23 @@ export function SheetSurface({
   children: React.ReactNode;
 }) {
   const insets = useSafeAreaInsets();
+  const keyboard = useKeyboardHeight();
   // Pad by the REAL bottom inset. This used to be capped at spacing.md to avoid
   // a tall white strip under the content on 3-button nav bars, but the cap made
   // sheet content sit behind ~48dp gesture/nav bars (last option row was half
   // hidden and untappable on Samsung foldables). Full clearance beats a hidden
-  // row; the strip is just the panel's own background.
-  const bottom = insets.bottom + spacing.sm;
-  return <View style={[style, { paddingBottom: bottom }]}>{children}</View>;
+  // row; the strip is just the panel's own background. While the keyboard is
+  // up it covers that area anyway, so the inset is dropped to keep the form in view.
+  const bottom = (keyboard > 0 ? 0 : insets.bottom) + spacing.sm;
+  return (
+    <View style={[styles.surface, style, { paddingBottom: bottom }]}>{children}</View>
+  );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
   scrim: { flex: 1, backgroundColor: colors.scrim, justifyContent: 'flex-end' },
   dismiss: { flex: 1 },
+  sheetWrap: { flexShrink: 1 },
+  surface: { flexShrink: 1 },
 });

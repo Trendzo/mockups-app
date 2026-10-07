@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import { AppText } from './AppText';
 import { colors, radii, spacing } from '../theme/theme';
 
@@ -13,18 +13,25 @@ const TONE: Record<StatusTone, { bg: string; fg: string }> = {
   warning: { bg: 'rgba(200,140,0,0.14)', fg: '#B8860B' },
 };
 
-/** Small status pill (doc/application/kyc statuses). */
+/**
+ * Small status pill (doc/application/kyc statuses). One line always — it sits
+ * beside other content, and a wrapped label made rows taller and ragged. Pass
+ * `style={{ alignSelf: 'center' }}` when it's in a centered row (the default
+ * flex-start keeps it from stretching in a column).
+ */
 export function StatusChip({
   label,
   tone = 'neutral',
+  style,
 }: {
   label: string;
   tone?: StatusTone;
+  style?: StyleProp<ViewStyle>;
 }) {
   const t = TONE[tone];
   return (
-    <View style={[styles.chip, { backgroundColor: t.bg }]}>
-      <AppText variant="meta" color={t.fg} style={styles.label}>
+    <View style={[styles.chip, { backgroundColor: t.bg }, style]}>
+      <AppText variant="meta" color={t.fg} style={styles.label} numberOfLines={1}>
         {label}
       </AppText>
     </View>

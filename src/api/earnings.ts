@@ -1,6 +1,13 @@
 import { getJson, postJson, unwrapEnvelope } from './client';
 import { normalizeAuthError } from './auth';
-import { EarlyDisbursementRequest, UpcomingPayout } from '../types/earnings';
+import { http, req } from './request';
+import {
+  EarlyDisbursementRequest,
+  PayoutDeductions,
+  PayoutRow,
+  StoreFees,
+  UpcomingPayout,
+} from '../types/earnings';
 
 /** GET /retailer/payouts/upcoming — unsettled amount owed + breakdown + next payout. */
 export async function getUpcomingPayout(): Promise<UpcomingPayout> {
@@ -37,3 +44,21 @@ export async function createEarlyDisbursement(input: {
     throw normalizeAuthError(e);
   }
 }
+
+/** GET /retailer/payouts — every settlement cycle, newest first. */
+export async function listPayouts(): Promise<PayoutRow[]> {
+  const data = await req<unknown>(() => http.get('/retailer/payouts'));
+  if (Array.isArray(data)) return data as PayoutRow[];
+  const d = data as { rows?: PayoutRow[]; items?: PayoutRow[] } | null;
+  return d?.rows ?? d?.items ?? [];
+}
+
+export const getPayout = (id: string) =>
+  req<PayoutRow>(() => http.get(`/retailer/payouts/${encodeURIComponent(id)}`));
+
+export const getPayoutDeductions = (id: string) =>
+  req<PayoutDeductions>(() =>
+    http.get(`/retailer/payouts/${encodeURIComponent(id)}/deductions`),
+  );
+
+export const getFees = () => req<StoreFees>(() => http.get('/retailer/fees'));

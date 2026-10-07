@@ -286,7 +286,7 @@ export function BasicsStep({ navigation }: ScreenProps<'ProductWizardBasics'>) {
             </>
           ) : (
             <AppText variant="meta" color={colors.meta}>
-              Add images or generate an AI mockup to build the gallery.
+              Add images or create AI photos to build the gallery.
             </AppText>
           )}
           <View style={styles.galleryActions}>
@@ -305,7 +305,7 @@ export function BasicsStep({ navigation }: ScreenProps<'ProductWizardBasics'>) {
             <PressableScale onPress={generateMockup} style={styles.mockupBtn}>
               <Icon name="sparkles" size={18} color={colors.accentInk} />
               <AppText variant="bodyMedium" color={colors.accentInk}>
-                Generate mockup
+                Create AI photos
               </AppText>
             </PressableScale>
           </View>

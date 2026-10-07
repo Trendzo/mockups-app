@@ -1,15 +1,20 @@
 import React, { useState } from 'react';
-import { Linking, ScrollView, StyleSheet, View } from 'react-native';
+import { Linking, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import {
   AppText,
-  BackButton,
   Banner,
   BottomSheet,
+  DetailRow,
+  Divider,
   Field,
   Icon,
+  ListRow,
+  Panel,
   PressableScale,
   PrimaryButton,
   Screen,
+  ScreenHeader,
+  SectionHeader,
   SheetSurface,
   StatusChip,
   useToast,
@@ -19,22 +24,16 @@ import { ScreenProps } from '../navigation/types';
 import {
   useCreateEarlyDisbursement,
   useEarlyDisbursements,
+  useFees,
+  usePayouts,
   useUpcomingPayout,
 } from '../api/earningsHooks';
-import { EarlyDisbursementRequest, EarlyDisbursementStatus } from '../types/earnings';
+import { errorMessage } from '../api/request';
+import { EarlyDisbursementStatus, StoreFees, UpcomingPayout } from '../types/earnings';
 import { formatPaise, parseRupeesToPaise } from '../utils/money';
+import { formatDayDate, plural, shortRef } from '../utils/format';
 import { WEB_PORTAL_PAYOUTS_URL } from '../config/legal';
 import { colors, radii, spacing } from '../theme/theme';
-
-const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-/** "Mon, 12 Aug" from an ISO date, local time. Avoids Intl (unreliable on Hermes). */
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
-  return `${WEEKDAYS[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]}`;
-}
 
 const EARLY_STATUS: Record<EarlyDisbursementStatus, { label: string; tone: StatusTone }> = {
   pending: { label: 'Pending', tone: 'warning' },
@@ -42,15 +41,33 @@ const EARLY_STATUS: Record<EarlyDisbursementStatus, { label: string; tone: Statu
   rejected: { label: 'Rejected', tone: 'danger' },
 };
 
+/** Orders listed before the "Show all" toggle. */
+const ORDERS_PREVIEW = 10;
+
+type OrderLine = UpcomingPayout['orderBreakdown'][number];
+
+const minus = (paise: number) => `− ${formatPaise(Math.abs(paise))}`;
+const signed = (paise: number) => `${paise > 0 ? '+' : '−'} ${formatPaise(Math.abs(paise))}`;
+/** Payout cadence after "every": "day" / "7 days". */
+const cadence = (n: number) => (n === 1 ? 'day' : `${n} days`);
+
+/** Basis points → "12.5%" (100 bp = 1%, at most 2 decimals). */
+function formatBp(bp: number): string {
+  if (!Number.isFinite(bp)) return '—';
+  return `${Number((bp / 100).toFixed(2))}%`;
+}
+
 /**
- * Earnings / Payouts (beta). Shows the retailer's unsettled amount owed, the
- * sales-vs-fees breakdown, the next expected payout, an early-disbursement entry
- * point, and a deep-link to the full statement in the web portal.
+ * Earnings & payouts: what the store is owed right now and when it lands, how
+ * sales became that amount (overall and per order), early payout requests, the
+ * store's fee rates, and links to payout history and the web-portal statement.
  */
 export function EarningsScreen({ navigation }: ScreenProps<'Earnings'>) {
   const toast = useToast();
   const upcomingQ = useUpcomingPayout();
   const earlyQ = useEarlyDisbursements();
+  const payoutsQ = usePayouts();
+  const feesQ = useFees();
   const createEarly = useCreateEarlyDisbursement();
   const up = upcomingQ.data;
 
@@ -58,9 +75,35 @@ export function EarningsScreen({ navigation }: ScreenProps<'Earnings'>) {
   const [amount, setAmount] = useState('');
   const [reason, setReason] = useState('');
   const [amountErr, setAmountErr] = useState<string | undefined>();
+  const [showAllOrders, setShowAllOrders] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const owed = up?.outstandingPayable ?? 0;
   const pendingEarly = (earlyQ.data ?? []).find((r) => r.status === 'pending');
+  const orders = up?.orderBreakdown ?? [];
+  const visibleOrders = showAllOrders ? orders : orders.slice(0, ORDERS_PREVIEW);
+  const failedPayouts = (payoutsQ.data ?? []).filter((p) => p.status === 'failed').length;
+
+  // Local flag so the spinner shows only for a pull, not the background poll.
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        upcomingQ.refetch(),
+        earlyQ.refetch(),
+        payoutsQ.refetch(),
+        feesQ.refetch(),
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const openStatement = () => {
+    Linking.openURL(WEB_PORTAL_PAYOUTS_URL).catch(() =>
+      toast.show("Couldn't open the web portal", 'error'),
+    );
+  };
 
   const submitEarly = () => {
     setAmountErr(undefined);
@@ -86,29 +129,32 @@ export function EarningsScreen({ navigation }: ScreenProps<'Earnings'>) {
           setAmount('');
           setReason('');
         },
-        onError: (e) => toast.show((e as { message?: string })?.message ?? 'Could not request', 'error'),
+        onError: (e) => toast.show(errorMessage(e, 'Could not request'), 'error'),
       },
     );
   };
 
   return (
     <Screen edges={['top']}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-        <View style={styles.headerRow}>
-          <BackButton onPress={() => navigation.goBack()} />
-        </View>
-        <AppText variant="sectionLabel" color={colors.meta}>
-          Earnings · Beta
-        </AppText>
-        <AppText variant="cardTitle" color={colors.ink} style={styles.h1}>
-          Payouts
-        </AppText>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.ink} />
+        }
+      >
+        <ScreenHeader
+          overline="Payments"
+          title="Earnings & payouts"
+          onBack={() => navigation.goBack()}
+        />
 
-        {upcomingQ.isError ? (
+        {/* A failed background poll keeps the last good numbers on screen. */}
+        {upcomingQ.isError && !up ? (
           <Banner
             tone="danger"
             title="Couldn't load earnings"
-            message={(upcomingQ.error as { message?: string })?.message}
+            message={errorMessage(upcomingQ.error)}
             actionLabel="Retry"
             onAction={() => upcomingQ.refetch()}
           />
@@ -120,24 +166,23 @@ export function EarningsScreen({ navigation }: ScreenProps<'Earnings'>) {
             Unsettled — owed to you
           </AppText>
           <AppText variant="cardTitle" color={colors.accentInk} style={styles.heroAmt}>
-            {upcomingQ.isLoading ? '…' : formatPaise(owed)}
+            {up ? formatPaise(owed) : upcomingQ.isLoading ? '…' : '—'}
           </AppText>
-          {up ? (
-            <AppText variant="meta" color={colors.accentSub}>
-              From {up.orderCount} order{up.orderCount === 1 ? '' : 's'} since the last payout
-            </AppText>
-          ) : null}
+          {/* Always rendered (blank until loaded) so the page doesn't jump. */}
+          <AppText variant="meta" color={colors.accentSub}>
+            {up ? `From ${plural(up.orderCount, 'order')} since the last payout` : ' '}
+          </AppText>
         </View>
 
         {/* Next payout */}
-        <View style={styles.card}>
+        <Panel>
           <View style={styles.rowBetween}>
             <View style={styles.flex}>
               <AppText variant="sectionLabel" color={colors.meta}>
                 Next payout
               </AppText>
               <AppText variant="bodyMedium" color={colors.ink}>
-                {up ? formatDate(up.nextCycleDate) : '—'}
+                {up ? formatDayDate(up.nextCycleDate) : '—'}
               </AppText>
             </View>
             <View style={styles.alignEnd}>
@@ -145,52 +190,93 @@ export function EarningsScreen({ navigation }: ScreenProps<'Earnings'>) {
                 Expected
               </AppText>
               <AppText variant="bodyMedium" color={colors.ink}>
-                {formatPaise(owed)}
+                {up ? formatPaise(owed) : '—'}
               </AppText>
             </View>
           </View>
-          {up ? (
-            <AppText variant="meta" color={colors.meta} style={styles.cadence}>
-              Paid every {up.payoutCadenceDays} days
-            </AppText>
-          ) : null}
-        </View>
+          <AppText variant="meta" color={colors.meta} style={styles.cadence}>
+            {up ? `Paid every ${cadence(up.payoutCadenceDays)}` : ' '}
+          </AppText>
+        </Panel>
+
+        <ListRow
+          icon="time-outline"
+          label="Payout history"
+          hint={
+            failedPayouts > 0
+              ? `${plural(failedPayouts, 'payout')} failed — tap to check`
+              : 'Every settlement to your bank'
+          }
+          tone={failedPayouts > 0 ? 'warning' : undefined}
+          // pop: return to an open history screen instead of stacking another.
+          onPress={() => navigation.navigate('Payouts', undefined, { pop: true })}
+        />
 
         {/* Breakdown: sales vs fees/adjustments */}
-        <View style={styles.card}>
-          <AppText variant="sectionLabel" color={colors.meta} style={styles.blockLabel}>
-            Breakdown
-          </AppText>
-          <BreakRow label="Sales" value={up ? formatPaise(up.grossPaise) : '—'} />
-          <BreakRow
+        <Panel title="Breakdown">
+          <DetailRow label="Sales" value={up ? formatPaise(up.grossPaise) : '—'} />
+          <DetailRow
             label="Platform fee"
-            value={up ? `− ${formatPaise(up.commissionPaise)}` : '—'}
-            negative
+            value={up ? minus(up.commissionPaise) : '—'}
+            tone="negative"
           />
-          <BreakRow label="TCS" value={up ? `− ${formatPaise(up.tcsPaise)}` : '—'} negative />
-          <BreakRow
-            label="Held back (disputes)"
-            value={up ? `− ${formatPaise(up.heldPaise)}` : '—'}
-            negative
-          />
+          <DetailRow label="TCS" value={up ? minus(up.tcsPaise) : '—'} tone="negative" />
+          {up && up.heldPaise > 0 ? (
+            <DetailRow label="Held back (disputes)" value={minus(up.heldPaise)} tone="negative" />
+          ) : null}
           {up && up.pendingAdjustmentsPaise !== 0 ? (
-            <BreakRow
+            <DetailRow
               label="Adjustments"
-              value={`${up.pendingAdjustmentsPaise > 0 ? '+ ' : '− '}${formatPaise(
-                Math.abs(up.pendingAdjustmentsPaise),
-              )}`}
-              negative={up.pendingAdjustmentsPaise < 0}
+              value={signed(up.pendingAdjustmentsPaise)}
+              tone={up.pendingAdjustmentsPaise > 0 ? 'positive' : 'negative'}
             />
           ) : null}
-          <View style={styles.divider} />
-          <BreakRow label="Net payable" value={formatPaise(owed)} strong />
-        </View>
+          <Divider />
+          <DetailRow label="Net payable" value={up ? formatPaise(owed) : '—'} strong />
+        </Panel>
+
+        {/* Per-order contribution to the next payout */}
+        {up ? (
+          <View style={styles.section}>
+            <SectionHeader label="Orders in this payout" />
+            {orders.length === 0 ? (
+              <Panel>
+                <AppText variant="meta" color={colors.meta}>
+                  No orders in the next payout yet. Delivered orders show up here.
+                </AppText>
+              </Panel>
+            ) : (
+              <>
+                {visibleOrders.map((line) => (
+                  <OrderLineRow
+                    key={line.orderId}
+                    line={line}
+                    onPress={() => navigation.navigate('OrderDetail', { id: line.orderId })}
+                  />
+                ))}
+                {orders.length > ORDERS_PREVIEW ? (
+                  <PressableScale
+                    onPress={() => setShowAllOrders((v) => !v)}
+                    haptic={false}
+                    style={styles.toggle}
+                  >
+                    <AppText variant="meta" color={colors.ink}>
+                      {showAllOrders ? 'Show less' : `Show all ${orders.length}`}
+                    </AppText>
+                    <Icon
+                      name={showAllOrders ? 'chevron-up' : 'chevron-down'}
+                      size={16}
+                      color={colors.ink}
+                    />
+                  </PressableScale>
+                ) : null}
+              </>
+            )}
+          </View>
+        ) : null}
 
         {/* Early disbursement */}
-        <View style={styles.card}>
-          <AppText variant="sectionLabel" color={colors.meta} style={styles.blockLabel}>
-            Early payout
-          </AppText>
+        <Panel title="Early payout">
           {pendingEarly ? (
             <View style={styles.rowBetween}>
               <View style={styles.flex}>
@@ -201,7 +287,11 @@ export function EarningsScreen({ navigation }: ScreenProps<'Earnings'>) {
                   {pendingEarly.reason}
                 </AppText>
               </View>
-              <StatusChip label={EARLY_STATUS[pendingEarly.status].label} tone={EARLY_STATUS[pendingEarly.status].tone} />
+              <StatusChip
+                label={EARLY_STATUS[pendingEarly.status].label}
+                tone={EARLY_STATUS[pendingEarly.status].tone}
+                style={styles.chipCenter}
+              />
             </View>
           ) : (
             <>
@@ -211,37 +301,28 @@ export function EarningsScreen({ navigation }: ScreenProps<'Earnings'>) {
               </AppText>
               <PrimaryButton
                 label="Request early payout"
-                tone="surface"
+                tone="ghost"
                 disabled={owed <= 0}
                 onPress={() => setSheetOpen(true)}
               />
             </>
           )}
-        </View>
+        </Panel>
 
-        {/* Deep-link to full statement */}
-        <PressableScale
-          onPress={() => Linking.openURL(WEB_PORTAL_PAYOUTS_URL)}
-          style={styles.linkRow}
-          toScale={0.98}
-        >
-          <View style={styles.linkIcon}>
-            <Icon name="document-text-outline" size={20} color={colors.accentInk} />
-          </View>
-          <View style={styles.flex}>
-            <AppText variant="bodyMedium" color={colors.ink}>
-              Full statement
-            </AppText>
-            <AppText variant="meta" color={colors.meta}>
-              Open payout history & invoices in the web portal
-            </AppText>
-          </View>
-          <Icon name="open-outline" size={18} color={colors.meta} />
-        </PressableScale>
+        {/* Permission-gated: simply absent when the rates can't be read. */}
+        {feesQ.data ? <FeesPanel fees={feesQ.data} /> : null}
+
+        <ListRow
+          icon="document-text-outline"
+          label="Full statement"
+          hint="Payouts & invoices on the web portal"
+          right={<Icon name="open-outline" size={18} color={colors.meta} />}
+          onPress={openStatement}
+        />
       </ScrollView>
 
       {/* Early-payout request sheet */}
-      <BottomSheet visible={sheetOpen} onClose={() => setSheetOpen(false)}>
+      <BottomSheet visible={sheetOpen} onClose={() => setSheetOpen(false)} avoidKeyboard>
         <SheetSurface style={styles.sheet}>
           <AppText variant="cardTitle" color={colors.ink} style={styles.sheetTitle}>
             Request early payout
@@ -253,16 +334,21 @@ export function EarningsScreen({ navigation }: ScreenProps<'Earnings'>) {
             label="Amount"
             prefix="₹"
             value={amount}
-            onChangeText={setAmount}
+            onChangeText={(t) => {
+              setAmount(t);
+              if (amountErr) setAmountErr(undefined);
+            }}
             placeholder="0"
             keyboardType="numeric"
             error={amountErr}
+            boxed
           />
           <Field
             label="Reason"
             value={reason}
             onChangeText={setReason}
             placeholder="Why do you need it early?"
+            boxed
           />
           <PrimaryButton
             label="Submit request"
@@ -277,36 +363,35 @@ export function EarningsScreen({ navigation }: ScreenProps<'Earnings'>) {
   );
 }
 
-function BreakRow({
-  label,
-  value,
-  negative,
-  strong,
-}: {
-  label: string;
-  value: string;
-  negative?: boolean;
-  strong?: boolean;
-}) {
+/** One order's share of the next payout; opens the order. */
+function OrderLineRow({ line, onPress }: { line: OrderLine; onPress: () => void }) {
   return (
-    <View style={styles.breakRow}>
-      <AppText variant={strong ? 'bodyMedium' : 'body'} color={strong ? colors.ink : colors.meta}>
-        {label}
-      </AppText>
-      <AppText
-        variant={strong ? 'bodyMedium' : 'body'}
-        color={strong ? colors.ink : negative ? colors.danger : colors.ink}
-      >
-        {value}
-      </AppText>
-    </View>
+    <ListRow
+      label={`Order ${shortRef(line.orderId)}`}
+      hint={`Sale ${formatPaise(line.gross)} · Fee −${formatPaise(line.commission)} · TCS −${formatPaise(line.tcs)}`}
+      right={
+        <AppText variant="bodyMedium" color={colors.success}>
+          {formatPaise(line.net)}
+        </AppText>
+      }
+      onPress={onPress}
+    />
+  );
+}
+
+function FeesPanel({ fees }: { fees: StoreFees }) {
+  return (
+    <Panel title="Your fees">
+      <DetailRow label="Platform fee" value={formatBp(fees.platformFeeBp)} />
+      <DetailRow label="GST on fee" value={formatBp(fees.gstRateBp)} />
+      <DetailRow label="TCS" value={formatBp(fees.tcsRateBp)} />
+      <DetailRow label="Payouts" value={`Every ${cadence(fees.payoutCadenceDays)}`} />
+    </Panel>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { paddingTop: spacing.xs, paddingBottom: spacing.xxl, gap: spacing.md },
-  headerRow: { marginBottom: spacing.xs },
-  h1: { fontSize: 26, lineHeight: 30, marginBottom: spacing.sm },
+  content: { paddingBottom: spacing.xxl, gap: spacing.md },
   flex: { flex: 1 },
   alignEnd: { alignItems: 'flex-end' },
   hero: {
@@ -316,34 +401,29 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   heroAmt: { fontSize: 34, lineHeight: 40 },
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: radii.card,
-    padding: spacing.md,
-    gap: spacing.sm,
-  },
-  rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  cadence: { marginTop: spacing.xs },
-  blockLabel: {},
-  breakRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  divider: { height: 1, backgroundColor: colors.hairline, marginVertical: spacing.xs },
-  earlyHint: { marginBottom: spacing.xs },
-  linkRow: {
+  rowBetween: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: radii.card,
-    padding: spacing.md,
+    justifyContent: 'space-between',
+    gap: spacing.sm,
   },
-  linkIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: colors.accent,
+  chipCenter: { alignSelf: 'center' },
+  cadence: { marginTop: spacing.xs },
+  section: { gap: spacing.sm },
+  toggle: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.xs,
   },
-  sheet: { padding: spacing.lg, gap: spacing.md },
+  earlyHint: { marginBottom: spacing.xs },
+  sheet: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radii.sheet,
+    borderTopRightRadius: radii.sheet,
+    padding: spacing.lg,
+    gap: spacing.md,
+  },
   sheetTitle: { fontSize: 20, lineHeight: 24 },
 });

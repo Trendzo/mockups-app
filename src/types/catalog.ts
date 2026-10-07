@@ -5,7 +5,8 @@ export type ListingStatus = 'draft' | 'active' | 'retired' | 'taken_down';
 export type VariantMode = 'single' | 'color_size' | 'custom';
 export type ListingPolicy = 'return' | 'replace' | 'final_sale';
 export type CatalogGender = 'her' | 'him' | 'unisex';
-export type InventoryFlag = 'low' | 'out' | 'oversold' | 'in_stock' | 'all';
+/** Server-side inventory filters; omit for "all". */
+export type InventoryFlag = 'low' | 'out' | 'oversold';
 export type AttributeAxisType = 'enum' | 'free_text' | 'numeric' | 'color';
 
 export const AGE_GROUP_VALUES = ['0-2', '3-7', '8-12', '13-17', '18-24', '25-40', '40+'];
@@ -159,26 +160,62 @@ export interface PatchVariantInput {
   attributesLabel?: string;
 }
 
+/** GET /retailer/inventory row — one per VARIANT (`id` is the variant id). */
 export interface InventoryRow {
-  variantId: string;
+  id: string;
   listingId: string;
   listingName: string;
+  listingStatus: ListingStatus;
+  brandName?: string | null;
   attributesLabel: string;
   sku?: string | null;
-  stock: number;
-  reserved: number;
   pricePaise: number;
+  /** MRP in paise. */
   compareAtPrice?: number | null;
-  status?: ListingStatus;
-  brand?: string | null;
-  category?: string | null;
-  imageUrl?: string | null;
+  /** On hand. */
+  stock: number;
+  /** Held for open orders / carts. available = max(0, stock − reserved). */
+  reserved: number;
+  /** Variant on sale; inactive variants are hidden from customers. */
+  isActive: boolean;
 }
 
 export interface InventoryPage {
   rows: InventoryRow[];
   total: number;
-  page: number;
-  pageSize: number;
-  lowStockThreshold: number;
+  /** The store's saved threshold; the portal falls back to 5 when absent. */
+  lowStockThreshold?: number;
+}
+
+/** GET /retailer/inventory/:variantId/reservations — who is holding stock. */
+export interface InventoryReservation {
+  id: string;
+  /** e.g. order / cart / pos hold (raw server value). */
+  ownerKind: string;
+  ownerId: string;
+  qty: number;
+}
+
+/** GET /retailer/inventory/adjustments — store-wide stock ledger. */
+export interface StockAdjustment {
+  id: string;
+  variantId: string;
+  /** +received / −sold. */
+  delta: number;
+  /** Stock after the change. */
+  newStock: number;
+  /** snake_case server reason (order, pos_sale, manual, import…). */
+  reason: string;
+  note: string | null;
+  actorKind: 'system' | 'admin' | 'retailer' | string;
+  at: string;
+}
+
+/** GET /retailer/inventory/reports/inventory-health/best-sellers */
+export interface BestSeller {
+  variantId: string;
+  listingName: string;
+  attributesLabel: string;
+  unitsSold: number;
+  stock: number;
 }

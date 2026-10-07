@@ -11,9 +11,11 @@ import {
   BottomSheet,
   SheetSurface,
   Icon,
+  ListRow,
   PressableScale,
   PrimaryButton,
   Screen,
+  SectionHeader,
   StatusChip,
   toneForStatus,
   useToast,
@@ -21,21 +23,25 @@ import {
 import { ScreenProps } from '../navigation/types';
 import { useAuth } from '../store/auth';
 import { useKyc, useRetailerMe } from '../api/onboardingHooks';
+import { useInbox } from '../api/notifications';
 import { CatalogExportKind, downloadCatalogCsv } from '../api/catalogueExport';
 import { requestAccountClosure } from '../api/onboarding';
 import { colors, radii, spacing } from '../theme/theme';
 import { ACCOUNT_DELETION_URL, SUPPORT_URL, WEB_PORTAL_HOME_URL } from '../config/legal';
 
-/** Profile (§account): view your retailer details, request changes, log out. */
+/** Account tab: who you are, plus the menu into every store-management area. */
 export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
   const toast = useToast();
   const retailer = useAuth(s => s.retailer);
   const logout = useAuth(s => s.logout);
   const me = useRetailerMe(!!retailer);
   const kyc = useKyc(!!retailer);
+  const inbox = useInbox(!!retailer);
 
   const profile = me.data?.retailer;
   const store = me.data?.store;
+  const storeName = store?.legalName ?? store?.name ?? profile?.storeName;
+  const posEnabled = store?.posBillingEnabled === true;
 
   // Prefer the fresh /retailer/me, fall back to the persisted auth snapshot.
   const legalName = profile?.legalName ?? retailer?.legalName ?? '-';
@@ -135,7 +141,7 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
       >
         <View style={styles.headerRow}>
           <AppText variant="cardTitle" color={colors.ink} style={styles.h1}>
-            Profile
+            Account
           </AppText>
         </View>
 
@@ -170,12 +176,8 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
         <View style={styles.card}>
           <InfoRow label="Business name" value={legalName} />
           {/* Show the store NAME only - never the raw store id/number. */}
-          {store && (store.name ?? profile?.storeName) ? (
-            <InfoRow
-              label="Store"
-              value={(store.name ?? profile?.storeName)!}
-              chip={store.status}
-            />
+          {store && storeName ? (
+            <InfoRow label="Store" value={storeName} chip={store.status} />
           ) : null}
           {address ? <InfoRow label="Address" value={address} /> : null}
           <InfoRow label="Account status" value={status.replace(/_/g, ' ')} chip={status} />
@@ -208,63 +210,142 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
           </PressableScale>
         </View>
 
-        {/* Actions */}
+        {/* Store */}
         <View style={styles.actions}>
-          <ActionRow
-            icon="layers-outline"
-            label="Bulk Mockup"
-            hint="Beta · queue mockups for many products"
-            onPress={() => navigation.navigate('SelectPhotos', { bulk: true })}
+          <SectionHeader label="Store" />
+          <ListRow
+            icon="storefront-outline"
+            label="Store profile"
+            hint="Contact, photos, hours, address, legal & bank"
+            onPress={() => navigation.navigate('StoreProfile')}
           />
-          <ActionRow
+          <ListRow
+            icon="power-outline"
+            label="Storefront & GST"
+            hint="Online status, pause, GST scheme, counter billing"
+            onPress={() => navigation.navigate('StoreStatus')}
+          />
+          <ListRow
+            icon="calendar-outline"
+            label="Holiday calendar"
+            hint="Block orders on days you're closed"
+            onPress={() => navigation.navigate('HolidayCalendar')}
+          />
+          <ListRow
+            icon="time-outline"
+            label="Pickup slots"
+            hint="Windows and capacity for store pickup"
+            onPress={() => navigation.navigate('PickupSlots')}
+          />
+        </View>
+
+        {/* Sales & money */}
+        <View style={styles.actions}>
+          <SectionHeader label="Sales & money" />
+          <ListRow
+            icon="receipt-outline"
+            label="Billing counter"
+            hint={posEnabled ? 'Bill walk-in customers' : 'Request activation to bill in-store sales'}
+            onPress={() => navigation.navigate('Register')}
+          />
+          {posEnabled ? (
+            <ListRow
+              icon="stats-chart-outline"
+              label="Counter sales"
+              hint="Bills, receipts and the day's cash"
+              onPress={() => navigation.navigate('PosSales')}
+            />
+          ) : null}
+          <ListRow
             icon="wallet-outline"
             label="Earnings & payouts"
-            hint="Beta · unsettled amount owed & next payout"
+            hint="What you're owed and the next payout"
             onPress={() => navigation.navigate('Earnings')}
           />
-          <ActionRow
-            icon="open-outline"
-            label="Open web portal"
-            hint="Billing terminal, orders, payouts & full ops"
-            onPress={() => Linking.openURL(WEB_PORTAL_HOME_URL)}
+          <ListRow
+            icon="cash-outline"
+            label="Payout history"
+            hint="Every settlement to your bank"
+            onPress={() => navigation.navigate('Payouts')}
           />
-          <ActionRow
-            icon="create-outline"
-            label="Request a change"
-            hint="GST, bank, legal name & address need approval"
-            onPress={() => navigation.navigate('ChangeRequest')}
+        </View>
+
+        {/* Products */}
+        <View style={styles.actions}>
+          <SectionHeader label="Products" />
+          <ListRow
+            icon="layers-outline"
+            label="Inventory"
+            hint="Stock, prices and low-stock alerts"
+            onPress={() => navigation.navigate('Inventory')}
           />
-          <ActionRow
+          <ListRow
+            icon="albums-outline"
+            label="Create many products"
+            hint="Beta · queue AI product photos for many garments"
+            onPress={() => navigation.navigate('SelectPhotos', { bulk: true })}
+          />
+          <ListRow
+            icon="download-outline"
+            label="Export catalog (CSV)"
+            hint="Download your products or inventory"
+            onPress={() => setExportOpen(true)}
+          />
+        </View>
+
+        {/* Account */}
+        <View style={styles.actions}>
+          <SectionHeader label="Account" />
+          <ListRow
+            icon="notifications-outline"
+            label="Notifications"
+            hint="Inbox and alert settings"
+            badge={inbox.unread}
+            onPress={() => navigation.navigate('Notifications')}
+          />
+          <ListRow
             icon="shield-checkmark-outline"
             label="Verification (KYC)"
             hint={kycNeedsAction ? 'Action needed' : 'View your documents'}
             tone={kycNeedsAction ? 'warning' : undefined}
             onPress={() => navigation.navigate('Kyc')}
           />
-          <ActionRow
-            icon="download-outline"
-            label="Export catalog (CSV)"
-            hint="Download your products or inventory"
-            onPress={() => setExportOpen(true)}
+          <ListRow
+            icon="create-outline"
+            label="Request a change"
+            hint="GST, bank, legal name & address need approval"
+            onPress={() => navigation.navigate('ChangeRequest')}
+          />
+          <ListRow
+            icon="person-circle-outline"
+            label="Account status"
+            hint="Closure, reopening and messages from Trendzo"
+            onPress={() => navigation.navigate('AccountStatus')}
+          />
+          <ListRow
+            icon="open-outline"
+            label="Open web portal"
+            hint="Full store dashboard on the web"
+            onPress={() => Linking.openURL(WEB_PORTAL_HOME_URL)}
           />
           {/* In-app viewers for the same backend-fetched docs shown at signup */}
-          <ActionRow
+          <ListRow
             icon="document-text-outline"
             label="Terms of Service"
             onPress={() => navigation.navigate('LegalDoc', { kind: 'terms' })}
           />
-          <ActionRow
+          <ListRow
             icon="lock-closed-outline"
             label="Privacy Policy"
             onPress={() => navigation.navigate('LegalDoc', { kind: 'privacy' })}
           />
-          <ActionRow
+          <ListRow
             icon="help-circle-outline"
             label="Support"
             onPress={() => Linking.openURL(SUPPORT_URL)}
           />
           {canManageAccount ? (
-            <ActionRow
+            <ListRow
               icon="trash-outline"
               label={closurePending ? 'Closure requested' : 'Request account closure'}
               tone="danger"
@@ -447,44 +528,11 @@ function InfoRow({
           <StatusChip
             label={chip.replace(/_/g, ' ')}
             tone={toneForStatus(chip)}
+            style={styles.chipCenter}
           />
         ) : null}
       </View>
     </View>
-  );
-}
-
-function ActionRow({
-  icon,
-  label,
-  hint,
-  tone,
-  onPress,
-}: {
-  icon: string;
-  label: string;
-  hint?: string;
-  tone?: 'warning' | 'danger';
-  onPress: () => void;
-}) {
-  return (
-    <PressableScale onPress={onPress} toScale={0.98} style={styles.actionRow}>
-      <Icon name={icon} size={20} color={tone ? colors.danger : colors.ink} />
-      <View style={styles.flex}>
-        <AppText
-          variant="bodyMedium"
-          color={tone === 'danger' ? colors.danger : colors.ink}
-        >
-          {label}
-        </AppText>
-        {hint ? (
-          <AppText variant="meta" color={tone ? colors.danger : colors.meta}>
-            {hint}
-          </AppText>
-        ) : null}
-      </View>
-      <Icon name="chevron-forward" size={18} color={colors.meta} />
-    </PressableScale>
   );
 }
 
@@ -512,6 +560,7 @@ const styles = StyleSheet.create({
   },
   infoRow: { gap: 2 },
   infoValueRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  chipCenter: { alignSelf: 'center' },
   viewMore: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -79,7 +79,7 @@ export function SelectPhotosScreen({ navigation, route }: ScreenProps<'SelectPho
       clearImages(); // keep the config; just reset the photos for the next product
       toast.show('Queued — add the next product', 'success');
     } catch (e) {
-      toast.show((e as { message?: string })?.message ?? 'Could not queue mockups', 'error');
+      toast.show((e as { message?: string })?.message ?? 'Could not queue this product', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -135,14 +135,14 @@ export function SelectPhotosScreen({ navigation, route }: ScreenProps<'SelectPho
 
         <View style={styles.header}>
           <AppText variant="sectionLabel" color={colors.meta}>
-            {bulk ? 'Bulk Mockup · Beta' : 'Step 1 · Garment photos'}
+            {bulk ? 'Create many products · Beta' : 'Create product · Step 1'}
           </AppText>
           <AppText variant="cardTitle" color={colors.ink} style={styles.title}>
             Add product photos
           </AppText>
           <AppText variant="meta" color={colors.meta}>
             {bulk
-              ? 'Queue each product, then add the next. Mockups generate in the background.'
+              ? 'Queue each product, then add the next. Photos are created in the background.'
               : 'Front is required. The rest are extra references that improve fidelity.'}
           </AppText>
         </View>

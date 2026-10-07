@@ -13,10 +13,12 @@ export interface BottomNavTab {
   set?: IconSet;
   label: string;
   active?: boolean;
+  /** Count bubble on the icon (e.g. new orders waiting). Hidden at 0. */
+  badge?: number;
   onPress: () => void;
 }
 
-/** Floating 4-item bottom nav (pill), matching the app's floating-bar style. */
+/** Floating bottom nav (pill), matching the app's floating-bar style. */
 export function BottomNav({ tabs }: { tabs: BottomNavTab[] }) {
   const insets = useSafeAreaInsets();
   return (
@@ -29,7 +31,16 @@ export function BottomNav({ tabs }: { tabs: BottomNavTab[] }) {
           const tint = t.active ? colors.ink : colors.inkMuted;
           return (
             <PressableScale key={t.key} onPress={t.onPress} style={styles.tab} haptic>
-              <Icon name={t.icon} set={t.set} size={22} color={tint} />
+              <View>
+                <Icon name={t.icon} set={t.set} size={22} color={tint} />
+                {t.badge ? (
+                  <View style={styles.badge}>
+                    <AppText variant="navCounter" color={colors.accentInk} style={styles.badgeText}>
+                      {t.badge > 9 ? '9+' : t.badge}
+                    </AppText>
+                  </View>
+                ) : null}
+              </View>
               <AppText variant="meta" color={tint} style={styles.label}>
                 {t.label}
               </AppText>
@@ -59,4 +70,19 @@ const styles = StyleSheet.create({
   },
   tab: { flex: 1, alignItems: 'center', gap: 3 },
   label: { fontSize: 11, lineHeight: 13 },
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -9,
+    minWidth: 16,
+    height: 16,
+    paddingHorizontal: 3,
+    borderRadius: 8,
+    backgroundColor: colors.danger,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: colors.surface,
+  },
+  badgeText: { fontSize: 9, lineHeight: 11 },
 });

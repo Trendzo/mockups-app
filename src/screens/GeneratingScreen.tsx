@@ -246,7 +246,7 @@ export function GeneratingScreen({ navigation, route }: ScreenProps<'Generating'
     phase === 'reconciling'
       ? ['Checking your last generation...', 'Looking for saved progress...']
       : phase === 'polling'
-      ? ['Generation is still running...', 'Checking for finished mockups...']
+      ? ['Generation is still running...', 'Checking for finished photos...']
       : STATUS_MESSAGES;
 
   return (

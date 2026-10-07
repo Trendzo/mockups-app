@@ -165,7 +165,7 @@ export function ConfigureScreen({ navigation }: ScreenProps<'Configure'>) {
         </View>
 
         {/* Mockup type: product shots, or on a male / female model */}
-        <Section label="Mockup type">
+        <Section label="Photo style">
           <SegmentedControl<GenType>
             value={genType}
             onChange={setGenType}

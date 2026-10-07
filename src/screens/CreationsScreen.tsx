@@ -62,10 +62,10 @@ export function CreationsScreen({ navigation }: ScreenProps<'Creations'>) {
         <View style={styles.empty}>
           <Icon name="images" size={44} color={colors.inkMuted} />
           <AppText variant="body" color={colors.meta} style={styles.emptyText}>
-            Nothing yet. Generate your first mockup and it'll show up here.
+            Nothing yet. Create your first product and it'll show up here.
           </AppText>
           <PrimaryButton
-            label="New mockup"
+            label="Create product"
             tone="accent"
             fullWidth={false}
             onPress={() => navigation.navigate('SelectPhotos')}

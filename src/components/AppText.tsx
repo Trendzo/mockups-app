@@ -55,6 +55,9 @@ export function AppText({
   return (
     <Text
       allowFontScaling
+      // Scale with the user's text size, but cap it: unbounded growth overflowed
+      // fixed-height pills, chips and single-line rows.
+      maxFontSizeMultiplier={1.3}
       {...rest}
       style={[typeScale[variant], { color }, style, lineFix]}
     >

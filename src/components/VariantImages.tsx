@@ -116,14 +116,14 @@ export function VariantImages({
       );
       const fronts = images.filter((im) => !/back|hanger|flat/i.test(im.name));
       const urls = (fronts.length ? fronts : images).map((im) => im.url).slice(0, 2);
-      if (!urls.length) throw new Error('No mockups returned');
+      if (!urls.length) throw new Error('No photos returned');
       // Drop the source photo we generated from - the mockups take its place.
       const srcIdx = imageUrls.indexOf(source);
       if (srcIdx >= 0) onRemoveImage(srcIdx);
       setGenerated(urls);
-      toast.show('Mockup ready', 'success');
+      toast.show('AI photos ready', 'success');
     } catch (e: any) {
-      toast.show(e?.message ?? 'Could not generate mockups', 'error');
+      toast.show(e?.message ?? 'Could not create photos', 'error');
     } finally {
       setGenerating(false);
     }
@@ -231,7 +231,7 @@ export function VariantImages({
               <>
                 <Icon name="sparkles" size={18} color={colors.accentInk} />
                 <AppText variant="bodyMedium" color={colors.accentInk}>
-                  Generate mockup
+                  Create AI photos
                 </AppText>
               </>
             )}
@@ -254,7 +254,7 @@ export function VariantImages({
         <View style={styles.genBlock}>
           <View style={styles.genHead}>
             <AppText variant="sectionLabel" color={colors.meta}>
-              Generated mockup{generated.length > 1 ? 's' : ''}
+              AI photo{generated.length > 1 ? 's' : ''}
             </AppText>
             <PressableScale onPress={() => replaceImages(generated)} haptic={false}>
               <AppText variant="meta" color={colors.ink}>

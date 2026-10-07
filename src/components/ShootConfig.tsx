@@ -36,7 +36,7 @@ export function ShootConfig() {
     <View style={styles.wrap}>
       <View style={styles.block}>
         <AppText variant="sectionLabel" color={colors.meta}>
-          Mockup type
+          Photo style
         </AppText>
         <SegmentedControl<GenType>
           value={genType}

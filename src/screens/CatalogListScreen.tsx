@@ -33,7 +33,8 @@ import {
   useToast,
 } from '../components';
 import { ScreenProps } from '../navigation/types';
-import { useListings } from '../api/catalogHooks';
+import { usePullRefresh } from '../utils/usePullRefresh';
+import { useListings, useLowStockThreshold } from '../api/catalogHooks';
 import { useRetailerMe } from '../api/onboardingHooks';
 import { useBulkJobs, useDismissBulkJob } from '../api/bulkMockupHooks';
 import { deleteListing, updateListing } from '../api/catalogManagement';
@@ -47,7 +48,6 @@ import { colors, radii, spacing } from '../theme/theme';
 
 type StatusFilter = 'all' | ListingStatus;
 type StockFilter = 'all' | 'in_stock' | 'low' | 'out';
-const LOW_STOCK = 5;
 const SCREEN_W = Dimensions.get('window').width;
 
 const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
@@ -119,6 +119,9 @@ export function CatalogListScreen({ navigation }: ScreenProps<'Catalog'>) {
   const [filterOpen, setFilterOpen] = useState(false);
 
   const listingsQ = useListings(status === 'all' ? undefined : status);
+  const pull = usePullRefresh(listingsQ.refetch);
+  // The store's saved low-stock alert level (Inventory → settings), default 5.
+  const { threshold: lowStock } = useLowStockThreshold();
   const all = listingsQ.data ?? [];
 
   // Ready bulk-mockup jobs surface here as draft rows to finish. Only under the
@@ -144,7 +147,7 @@ export function CatalogListScreen({ navigation }: ScreenProps<'Catalog'>) {
       const t = totalStock(l);
       if (stock === 'out' && t !== 0) return false;
       if (stock === 'in_stock' && t <= 0) return false;
-      if (stock === 'low' && !(t > 0 && t <= LOW_STOCK)) return false;
+      if (stock === 'low' && !(t > 0 && t <= lowStock)) return false;
     }
     return true;
   });
@@ -167,6 +170,9 @@ export function CatalogListScreen({ navigation }: ScreenProps<'Catalog'>) {
             Catalog
           </AppText>
         </View>
+        <PressableScale onPress={() => navigation.navigate('Inventory')} style={styles.iconBtn}>
+          <Icon name="layers-outline" size={22} color={colors.ink} />
+        </PressableScale>
         <PressableScale onPress={() => setFilterOpen(true)} style={styles.iconBtn}>
           <Icon name="options-outline" size={22} color={colors.ink} />
           {filtersActive ? <View style={styles.dot} /> : null}
@@ -193,8 +199,8 @@ export function CatalogListScreen({ navigation }: ScreenProps<'Catalog'>) {
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
-              refreshing={listingsQ.isRefetching}
-              onRefresh={() => listingsQ.refetch()}
+              refreshing={pull.refreshing}
+              onRefresh={pull.onRefresh}
               tintColor={colors.ink}
             />
           }
@@ -202,7 +208,7 @@ export function CatalogListScreen({ navigation }: ScreenProps<'Catalog'>) {
             readyJobs.length ? (
               <View style={styles.jobsHeader}>
                 <AppText variant="sectionLabel" color={colors.meta}>
-                  Generated mockups · finish setup
+                  AI photos ready · finish setup
                 </AppText>
                 {readyJobs.map((job) => (
                   <DraftMockupRow
@@ -332,7 +338,7 @@ function DraftMockupRow({
           Untitled draft
         </AppText>
         <AppText variant="meta" color={colors.meta} numberOfLines={1}>
-          Finish setup · {n} mockup{n === 1 ? '' : 's'}
+          Finish setup · {n} photo{n === 1 ? '' : 's'}
         </AppText>
       </View>
       <StatusChip label="draft" tone={toneForStatus('draft')} />

@@ -5,6 +5,7 @@ import {
 } from '@react-navigation/bottom-tabs';
 import { MainBottomNav, MainTab } from '../components';
 import { HomeScreen } from '../screens/HomeScreen';
+import { OrdersScreen } from '../screens/OrdersScreen';
 import { CatalogListScreen } from '../screens/CatalogListScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 
@@ -13,6 +14,7 @@ const Tab = createBottomTabNavigator();
 // Screens are typed for the native stack; they only use navigate/goBack, which
 // the tab navigation also provides. Cast to satisfy the tab screen signature.
 const Home = HomeScreen as React.ComponentType<object>;
+const Orders = OrdersScreen as React.ComponentType<object>;
 const Catalog = CatalogListScreen as React.ComponentType<object>;
 const Profile = ProfileScreen as React.ComponentType<object>;
 
@@ -29,6 +31,7 @@ export function MainTabs() {
       screenOptions={{ headerShown: false }}
     >
       <Tab.Screen name="Home" component={Home} />
+      <Tab.Screen name="Orders" component={Orders} />
       <Tab.Screen name="Catalog" component={Catalog} />
       <Tab.Screen name="Profile" component={Profile} />
     </Tab.Navigator>

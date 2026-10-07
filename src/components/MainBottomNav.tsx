@@ -1,15 +1,20 @@
 import React from 'react';
 import { BottomNav } from './BottomNav';
-import { useCaptureDraft } from '../store/captureDraft';
+import { useActiveOrders } from '../api/ordersHooks';
+import { useNewOrderAlerts } from '../utils/useNewOrderAlerts';
 
-export type MainTab = 'home' | 'catalog' | 'profile';
+export type MainTab = 'home' | 'orders' | 'catalog' | 'profile';
 
 /**
- * The app's persistent bottom nav (Home · Create · Catalog · Profile — Scan is
- * currently hidden, see below), rendered on each main page with the active tab set.
- * Only the three top-level pages (Home · Catalog · Profile) highlight an active tab;
- * Create is an action that pushes its own screen. Pushed detail/form screens use
- * their own back button.
+ * The app's persistent bottom nav: Home · Orders · Billing · Catalog · Account.
+ * The four top-level pages highlight their tab; Billing is an action that pushes
+ * the counter (POS) screen. Orders carries a live count of new orders waiting
+ * to be accepted. Pushed detail/form screens use their own back button.
+ *
+ * The old "Create" tab (photo → product) now lives behind Home's "Add product"
+ * and Catalog's "New product". The Scan screen (QR → web register) stays
+ * registered in RootNavigator but unreachable from here; in-app billing scans
+ * directly.
  */
 export function MainBottomNav({
   navigation,
@@ -18,11 +23,10 @@ export function MainBottomNav({
   navigation: { navigate: (name: string, params?: object) => void };
   active: MainTab;
 }) {
-  const clearDraft = useCaptureDraft((s) => s.clear);
-  const startNewMockup = () => {
-    clearDraft();
-    navigation.navigate('SelectPhotos');
-  };
+  const ordersQ = useActiveOrders();
+  const newOrders = (ordersQ.data ?? []).filter((o) => o.status === 'routing').length;
+  // Mounted for as long as the main tabs are, so alerts fire on any screen.
+  useNewOrderAlerts(ordersQ.data);
 
   return (
     <BottomNav
@@ -35,21 +39,19 @@ export function MainBottomNav({
           onPress: () => navigation.navigate('Home'),
         },
         {
-          key: 'create',
-          icon: 'add-circle-outline',
-          label: 'Create',
-          onPress: startNewMockup,
+          key: 'orders',
+          icon: 'bag-handle-outline',
+          label: 'Orders',
+          active: active === 'orders',
+          badge: newOrders,
+          onPress: () => navigation.navigate('Orders'),
         },
-        // Scan tab hidden for now — kept here (not deleted) so it can be restored
-        // in one step. The Scan screen + its route stay registered in
-        // RootNavigator; it's simply unreachable from the bottom nav.
-        // {
-        //   key: 'scan',
-        //   icon: 'barcode-scan',
-        //   set: 'mci',
-        //   label: 'Scan',
-        //   onPress: () => navigation.navigate('Scan'),
-        // },
+        {
+          key: 'billing',
+          icon: 'receipt-outline',
+          label: 'Billing',
+          onPress: () => navigation.navigate('Register'),
+        },
         {
           key: 'catalog',
           icon: 'pricetags-outline',
@@ -60,7 +62,7 @@ export function MainBottomNav({
         {
           key: 'profile',
           icon: 'person-circle-outline',
-          label: 'Profile',
+          label: 'Account',
           active: active === 'profile',
           onPress: () => navigation.navigate('Profile'),
         },

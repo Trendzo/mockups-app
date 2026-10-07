@@ -60,6 +60,7 @@ export function Field({
         ) : null}
         <TextInput
           placeholderTextColor={colors.inkMuted}
+          maxFontSizeMultiplier={1.3}
           {...inputProps}
           secureTextEntry={isSecure && hidden}
           style={[styles.input, locked ? styles.inputLockedText : null, inputProps.style]}

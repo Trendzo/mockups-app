@@ -85,7 +85,7 @@ export function ReviewResultsScreen({
       if (leavingRef.current || !canDecide) return;
       e.preventDefault();
       Alert.alert(
-        'Discard these mockups?',
+        'Discard these photos?',
         'If you go back now, the generated images will be lost.',
         [
           { text: 'Stay', style: 'cancel' },
@@ -187,7 +187,7 @@ export function ReviewResultsScreen({
           {chosen.length} of {items.length} selected
         </AppText>
         <AppText variant="meta" color={colors.meta} style={styles.sub}>
-          Tap to select · hold &amp; drag to reorder · ⤢ to zoom. Chosen mockups
+          Tap to select · hold &amp; drag to reorder · ⤢ to zoom. Chosen photos
           publish in this order.
         </AppText>
 

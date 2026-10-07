@@ -178,7 +178,7 @@ export function PendingApprovalScreen({ navigation }: ScreenProps<'PendingApprov
           <View style={styles.header}>
             <View style={styles.headerText}>
               <AppText variant="sectionLabel" color={colors.meta}>
-                {me.data?.retailer.legalName ?? 'Trendzo Studio'}
+                {me.data?.retailer.legalName ?? 'Trendzo Retailer'}
               </AppText>
               <AppText variant="cardTitle" color={colors.ink} style={styles.statusH1}>
                 Account status
@@ -272,7 +272,7 @@ export function PendingApprovalScreen({ navigation }: ScreenProps<'PendingApprov
           <Icon name="time-outline" size={30} color={colors.ink} />
         </View>
         <AppText variant="sectionLabel" color={colors.meta}>
-          Trendzo Studio
+          Trendzo Retailer
         </AppText>
         <AppText variant="cardTitle" color={colors.ink} style={styles.h1}>
           Almost there

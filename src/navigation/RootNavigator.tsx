@@ -28,6 +28,22 @@ import { VariantsStep } from '../screens/ProductWizard/VariantsStep';
 import { DetailsStep } from '../screens/ProductWizard/DetailsStep';
 import { ReviewStep } from '../screens/ProductWizard/ReviewStep';
 import { KycScreen } from '../screens/KycScreen';
+import { OrderDetailScreen } from '../screens/OrderDetailScreen';
+import { NotificationsScreen } from '../screens/NotificationsScreen';
+import { NotificationSettingsScreen } from '../screens/NotificationSettingsScreen';
+import { PayoutsScreen } from '../screens/PayoutsScreen';
+import { PayoutDetailScreen } from '../screens/PayoutDetailScreen';
+import { InventoryScreen } from '../screens/InventoryScreen';
+import { StoreProfileScreen } from '../screens/StoreProfileScreen';
+import { StoreStatusScreen } from '../screens/StoreStatusScreen';
+import { HolidayCalendarScreen } from '../screens/HolidayCalendarScreen';
+import { PickupSlotsScreen } from '../screens/PickupSlotsScreen';
+import { AccountStatusScreen } from '../screens/AccountStatusScreen';
+import { RegisterScreen } from '../screens/RegisterScreen';
+import { RegisterPaymentScreen } from '../screens/RegisterPaymentScreen';
+import { RegisterDayScreen } from '../screens/RegisterDayScreen';
+import { PosSalesScreen } from '../screens/PosSalesScreen';
+import { PosSaleDetailScreen } from '../screens/PosSaleDetailScreen';
 import { ChangeRequestScreen } from '../screens/ChangeRequestScreen';
 import { useAuth } from '../store/auth';
 import { useSettings } from '../store/settings';
@@ -223,6 +239,26 @@ export function RootNavigator() {
         <Stack.Screen name="Kyc" component={KycScreen} />
         <Stack.Screen name="ChangeRequest" component={ChangeRequestScreen} />
         <Stack.Screen name="LegalDoc" component={LegalDocViewerScreen} />
+
+        {/* Store management */}
+        <Stack.Screen name="OrderDetail" component={OrderDetailScreen} />
+        <Stack.Screen name="Notifications" component={NotificationsScreen} />
+        <Stack.Screen name="NotificationSettings" component={NotificationSettingsScreen} />
+        <Stack.Screen name="Payouts" component={PayoutsScreen} />
+        <Stack.Screen name="PayoutDetail" component={PayoutDetailScreen} />
+        <Stack.Screen name="Inventory" component={InventoryScreen} />
+        <Stack.Screen name="StoreProfile" component={StoreProfileScreen} />
+        <Stack.Screen name="StoreStatus" component={StoreStatusScreen} />
+        <Stack.Screen name="HolidayCalendar" component={HolidayCalendarScreen} />
+        <Stack.Screen name="PickupSlots" component={PickupSlotsScreen} />
+        <Stack.Screen name="AccountStatus" component={AccountStatusScreen} />
+
+        {/* Counter billing (POS) */}
+        <Stack.Screen name="Register" component={RegisterScreen} />
+        <Stack.Screen name="RegisterPayment" component={RegisterPaymentScreen} />
+        <Stack.Screen name="RegisterDay" component={RegisterDayScreen} />
+        <Stack.Screen name="PosSales" component={PosSalesScreen} />
+        <Stack.Screen name="PosSaleDetail" component={PosSaleDetailScreen} />
       </Stack.Navigator>
     );
   }

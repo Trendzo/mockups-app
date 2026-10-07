@@ -1,16 +1,19 @@
 import { http, unwrapEnvelope } from './client';
 import { normalizeAuthError } from './auth';
 import {
+  BestSeller,
   CatalogBrand,
   CatalogCategory,
   CreateListingInput,
   DefaultVariantInput,
   InventoryFlag,
   InventoryPage,
+  InventoryReservation,
   Listing,
   ListingStatus,
   PatchVariantInput,
   SizeScale,
+  StockAdjustment,
   UpdateListingInput,
   Variant,
   VariantGroup,
@@ -163,4 +166,25 @@ export const getInventory = (params: {
 export const patchInventorySettings = (lowStockThreshold: number) =>
   req<{ lowStockThreshold: number }>(() =>
     http.patch('/retailer/inventory/settings', { lowStockThreshold }),
+  );
+
+/** Who is holding a variant's reserved units (open orders, carts, held bills). */
+export const getReservations = (variantId: string, limit = 5) =>
+  req<InventoryReservation[]>(() =>
+    http.get(`/retailer/inventory/${encodeURIComponent(variantId)}/reservations`, {
+      params: { limit },
+    }),
+  );
+
+/** Store-wide stock ledger, newest first. `from`/`to` are ISO instants. */
+export const getStockAdjustments = (params: { from?: string; to?: string; limit?: number }) =>
+  req<StockAdjustment[]>(() =>
+    http.get('/retailer/inventory/adjustments', { params: { limit: 200, ...params } }),
+  );
+
+export const getBestSellers = (days = 30, limit = 10) =>
+  req<BestSeller[]>(() =>
+    http.get('/retailer/inventory/reports/inventory-health/best-sellers', {
+      params: { days, limit },
+    }),
   );

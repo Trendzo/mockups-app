@@ -1,8 +1,12 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Mode, ModelGender } from '../types/enums';
 import { PublishResult, Submission } from '../types/api';
-import { VariantMode } from '../types/catalog';
+import { InventoryFlag, VariantMode } from '../types/catalog';
+import { OrderTab } from '../types/orders';
 import { UploadFile } from '../utils/image';
+
+/** Tabs on the Store profile screen. */
+export type StoreProfileTab = 'basics' | 'photos' | 'hours' | 'address' | 'legal' | 'documents';
 
 /** A captured/picked local image passing through the flow. */
 export interface LocalPhoto {
@@ -33,10 +37,42 @@ export type RootStackParamList = {
   /** Read-only backend-fetched legal doc (Profile → Terms / Privacy). */
   LegalDoc: { kind: 'terms' | 'privacy' };
 
-  // Bottom-tab container (Home · Catalog · Profile share one persistent bar).
-  // `screen` picks the tab to land on (e.g. the wizard exits to Catalog).
-  Main: { screen?: 'Home' | 'Catalog' | 'Profile' } | undefined;
+  // Bottom-tab container (Home · Orders · Catalog · Account share one
+  // persistent bar). `screen` picks the tab to land on (e.g. the wizard exits
+  // to Catalog).
+  Main:
+    | { screen?: 'Home' | 'Orders' | 'Catalog' | 'Profile'; params?: { tab?: OrderTab } }
+    | undefined;
   Home: undefined;
+
+  // ---- Store management ----
+  // Online orders from the consumer app. `tab` preselects a status tab.
+  Orders: { tab?: OrderTab } | undefined;
+  OrderDetail: { id: string };
+  Notifications: undefined;
+  NotificationSettings: undefined;
+
+  // Counter billing (POS). The cart lives in the register store.
+  Register: undefined;
+  RegisterPayment: undefined;
+  RegisterDay: undefined;
+  PosSales: undefined;
+  // `changePaise` is set right after a sale completes (shows "Give change").
+  PosSaleDetail: { id: string; justCompleted?: boolean; changePaise?: number };
+
+  // Money
+  Payouts: undefined;
+  PayoutDetail: { id: string };
+
+  // Stock across every variant (inline edit, bulk on/off, history).
+  Inventory: { flag?: InventoryFlag } | undefined;
+
+  // Store settings & operations
+  StoreProfile: { tab?: StoreProfileTab } | undefined;
+  StoreStatus: undefined;
+  HolidayCalendar: undefined;
+  PickupSlots: undefined;
+  AccountStatus: undefined;
 
   // QR checkout scanner → pushes picks to an open web Register over SSE
   Scan: undefined;
@@ -47,7 +83,7 @@ export type RootStackParamList = {
   SelectPhotos: { bulk?: boolean } | undefined;
   // Bulk-mockup job queue (beta): queued / processing / ready / failed.
   BulkJobs: undefined;
-  // Earnings / payouts (beta): unsettled amount owed + breakdown + next payout.
+  // Earnings & payouts: unsettled amount owed, per-order breakdown, next payout.
   Earnings: undefined;
   // sink 'custom' delivers the shot to a registered cameraSink handler (e.g.
   // variant photos) instead of the mockup capture draft.

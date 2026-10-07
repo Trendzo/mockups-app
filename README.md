@@ -118,6 +118,28 @@ src/
 - Button gating enforces preconditions: decision needs `ready_for_review`,
   publish needs `accepted`.
 
+## Store management (retailer app)
+
+The app runs the whole store, not just product photos. Every feature calls the
+same `/retailer/*` endpoints as the web portal (`wp.trendzonow.com`); there is no
+app-only backend. Bottom nav: **Home · Orders · Billing · Catalog · Account**.
+
+| Area | Screens | Endpoints |
+|---|---|---|
+| Dashboard | `HomeScreen` | `/retailer/orders` (live board + latest 200), `/retailer/pos/summary`, `/retailer/payouts/upcoming`, `/retailer/inventory` (low/out counts), best sellers |
+| Orders | `OrdersScreen`, `OrderDetailScreen`, `screens/orders/*` | `GET /retailer/orders?statusIn=`, `GET /retailer/orders/:id`, `POST /retailer/orders/:id/<action>`, `/retailer/returns/:id/verify\|decline`, `/retailer/invoices` |
+| Billing (POS) | `RegisterScreen`, `RegisterPaymentScreen`, `PosSalesScreen`, `PosSaleDetailScreen`, `RegisterDayScreen` | `/retailer/pos/lookup`, `/quote`, `/sales`, `/sales/hold`, `/held`, `/customers`, `/summary`, `/day/open\|close` |
+| Money | `EarningsScreen`, `PayoutsScreen`, `PayoutDetailScreen` | `/retailer/payouts`, `/payouts/:id`, `/payouts/:id/deductions`, `/payouts/upcoming`, `/retailer/fees` |
+| Inventory | `InventoryScreen` | `/retailer/inventory`, `PATCH /retailer/variants/:id`, `/inventory/:id/reservations`, `/inventory/adjustments`, `/inventory/settings` |
+| Store | `StoreProfileScreen`, `StoreStatusScreen`, `HolidayCalendarScreen`, `PickupSlotsScreen`, `AccountStatusScreen` | `/retailer/store/profile\|hours\|bank\|documents\|pause\|resume\|holiday-closures\|pickup-slots`, `/retailer/account/*` |
+| Notifications | `NotificationsScreen`, `NotificationSettingsScreen` | `/retailer/inbox`, `/retailer/notification-prefs` |
+
+- The store object comes from `GET /retailer/me` (`.store`); store writes refetch it.
+- Counter billing only opens when `store.posBillingEnabled` is true; otherwise the
+  Billing screen offers to request activation (a `pos_billing_activation` change request).
+- Pure logic (dashboard maths, order actions, deep links, cart discounts) is
+  covered by `__tests__/storeManagement.test.ts`.
+
 ## Notes / deviations from the original spec
 
 - `react-native-fast-image` (unmaintained, React ≤18) → swapped for the

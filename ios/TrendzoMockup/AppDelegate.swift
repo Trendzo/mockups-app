@@ -5,6 +5,9 @@ import ReactAppDependencyProvider
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
+  /// colors.canvas (#E7E7E5) — matches LaunchScreen.storyboard and the JS theme.
+  static let canvas = UIColor(red: 231 / 255, green: 231 / 255, blue: 229 / 255, alpha: 1)
+
   var window: UIWindow?
 
   var reactNativeDelegate: ReactNativeDelegate?
@@ -22,6 +25,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     reactNativeFactory = factory
 
     window = UIWindow(frame: UIScreen.main.bounds)
+    // App canvas behind everything until the first screen draws (the default
+    // system background is black in Dark Mode and flashed on every launch).
+    window?.backgroundColor = AppDelegate.canvas
 
     factory.startReactNative(
       withModuleName: "TrendzoMockup",
@@ -34,6 +40,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 }
 
 class ReactNativeDelegate: RCTDefaultReactNativeFactoryDelegate {
+  override func customize(_ rootView: RCTRootView) {
+    super.customize(rootView)
+    rootView.backgroundColor = AppDelegate.canvas
+  }
+
   override func sourceURL(for bridge: RCTBridge) -> URL? {
     self.bundleURL()
   }

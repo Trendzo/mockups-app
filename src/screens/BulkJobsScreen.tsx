@@ -6,13 +6,13 @@ import {
   BackButton,
   Banner,
   Icon,
-  PressableScale,
   PrimaryButton,
   Screen,
   StatusChip,
   useToast,
 } from '../components';
 import { ScreenProps } from '../navigation/types';
+import { usePullRefresh } from '../utils/usePullRefresh';
 import { useBulkJobs, useCancelBulkJob, useDismissBulkJob } from '../api/bulkMockupHooks';
 import { useProductDraft } from '../store/productDraft';
 import { aiCopyToast } from '../utils/aiCopy';
@@ -36,6 +36,7 @@ const STATUS_META: Record<BulkJobStatus, { label: string; tone: StatusTone }> = 
 export function BulkJobsScreen({ navigation }: ScreenProps<'BulkJobs'>) {
   const toast = useToast();
   const jobsQ = useBulkJobs();
+  const pull = usePullRefresh(jobsQ.refetch);
   const cancel = useCancelBulkJob();
   const dismiss = useDismissBulkJob();
   const jobs = jobsQ.data ?? [];
@@ -55,7 +56,7 @@ export function BulkJobsScreen({ navigation }: ScreenProps<'BulkJobs'>) {
         <BackButton onPress={() => navigation.goBack()} />
       </View>
       <AppText variant="sectionLabel" color={colors.meta}>
-        Bulk Mockup · Beta
+        Create many products · Beta
       </AppText>
       <AppText variant="cardTitle" color={colors.ink} style={styles.h1}>
         Generation queue
@@ -79,14 +80,14 @@ export function BulkJobsScreen({ navigation }: ScreenProps<'BulkJobs'>) {
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
-              refreshing={jobsQ.isRefetching}
-              onRefresh={() => jobsQ.refetch()}
+              refreshing={pull.refreshing}
+              onRefresh={pull.onRefresh}
               tintColor={colors.ink}
             />
           }
           ListEmptyComponent={
             <AppText variant="meta" color={colors.meta} style={styles.empty}>
-              No mockup jobs yet. Add products from the Bulk Mockup screen.
+              Nothing queued yet. Add products from Create many products.
             </AppText>
           }
           renderItem={({ item }) => (
@@ -131,7 +132,7 @@ function JobRow({
         )}
         <View style={styles.cardBody}>
           <AppText variant="bodyMedium" color={colors.ink} numberOfLines={1}>
-            {job.mode === 'with_model' ? 'On-model mockups' : 'Product mockups'}
+            {job.mode === 'with_model' ? 'On-model photos' : 'Product photos'}
           </AppText>
           <AppText variant="meta" color={colors.meta}>
             {job.status === 'ready'
@@ -139,7 +140,7 @@ function JobRow({
               : job.status === 'failed'
                 ? job.errorMessage ?? 'Generation failed'
                 : job.status === 'processing'
-                  ? 'Generating mockups…'
+                  ? 'Creating photos…'
                   : 'Waiting in queue'}
           </AppText>
         </View>

@@ -128,13 +128,41 @@ export interface ResubmitPrefill {
 }
 
 // ---- Post-login: /retailer/me ----
+export type GstScheme = 'regular' | 'composition';
+/** While paused: 'visible' keeps listings browsable (checkout off), 'hidden' hides them. */
+export type PauseVisibility = 'visible' | 'hidden';
+
+/** `/retailer/me` → store. The single source for store settings (there's no GET /retailer/store). */
 export interface Store {
   id: string;
   name?: string;
+  legalName?: string;
   status: StoreStatus;
   /** Retailer self-serve online/offline toggle. Future ISO timestamp while
    *  offline (store auto-reopens then); null/absent = online, accepting orders. */
   orderPauseUntil?: string | null;
+  gstin?: string;
+  gstScheme?: GstScheme | null;
+  /** 2-digit GST state code (place of supply). */
+  stateCode?: string;
+  /** One free-text line; changes go through a change request. */
+  address?: string;
+  lat?: number | null;
+  lng?: number | null;
+  contactPhone?: string | null;
+  managerName?: string | null;
+  galleryImageUrls?: string[] | null;
+  /** Basis points (1000 = 10%). */
+  platformFeeBp?: number;
+  /** 0 → set on approval. */
+  payoutCadenceDays?: number;
+  pauseReason?: string | null;
+  pauseVisibility?: PauseVisibility | null;
+  pauseUntil?: string | null;
+  /** 'account_closed_by_owner' when an approved closure suspended it. */
+  suspendReason?: string | null;
+  /** Counter billing switched on by Trendzo (via a change request). */
+  posBillingEnabled?: boolean;
 }
 
 export interface RetailerProfile {
@@ -216,4 +244,7 @@ export interface ChangeRequest {
   reason?: string;
   status: ChangeRequestStatus;
   createdAt?: string;
+  submittedAt?: string;
+  decisionNote?: string | null;
+  evidenceUrl?: string | null;
 }
