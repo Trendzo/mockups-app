@@ -4,14 +4,20 @@ import {
   PosCreateSaleRequest,
   PosCustomer,
   PosDaySummary,
+  PosExchangeRequest,
+  PosExchangeResult,
   PosHeldRow,
   PosHoldRequest,
   PosLookupResponse,
   PosLookupRow,
   PosQuote,
   PosQuoteRequest,
+  PosReceipt,
+  PosReturnRequest,
+  PosReturnResult,
   PosSaleCreated,
   PosSaleDetail,
+  PosSaleInvoice,
   PosSaleRow,
   RegisterInfo,
 } from '../types/pos';
@@ -94,9 +100,57 @@ export const getSale = (id: string) =>
 
 /** Tax-invoice PDF. `pdfUrl` is absent while it's still being generated. */
 export const getSaleInvoice = (id: string) =>
-  req<{ pdfUrl?: string | null }>(() =>
-    http.get(`/retailer/pos/sales/${encodeURIComponent(id)}/invoice`),
+  req<PosSaleInvoice>(() => http.get(`/retailer/pos/sales/${encodeURIComponent(id)}/invoice`));
+
+/**
+ * The sale as a printable receipt object (built from the sale's frozen snapshots, so a reprint
+ * matches the original). Used to render the 80mm receipt on the phone.
+ */
+export const getSaleReceipt = (id: string) =>
+  req<PosReceipt>(() =>
+    http.get(`/retailer/pos/sales/${encodeURIComponent(id)}/receipt`, { params: { format: 'json' } }),
   );
+
+/** The same receipt as server-rendered plain text (`{ text }`). */
+export const getSaleReceiptText = async (id: string) =>
+  (
+    await req<{ text: string }>(() =>
+      http.get(`/retailer/pos/sales/${encodeURIComponent(id)}/receipt`, { params: { format: 'text' } }),
+    )
+  ).text;
+
+/**
+ * Return items from a completed sale and refund them. The refund tenders must add up to the
+ * refund due exactly; reuse the request's idempotency key on retries.
+ */
+export const returnSale = (saleId: string, body: PosReturnRequest) =>
+  req<PosReturnResult>(() =>
+    http.post(`/retailer/pos/sales/${encodeURIComponent(saleId)}/returns`, body),
+  );
+
+/**
+ * Exchange: hand back lines of a completed sale and sell replacements, settling only the
+ * difference (one side, or neither for an even swap).
+ */
+export const exchangeSale = (saleId: string, body: PosExchangeRequest) =>
+  req<PosExchangeResult>(() =>
+    http.post(`/retailer/pos/sales/${encodeURIComponent(saleId)}/exchange`, body),
+  );
+
+/**
+ * Throw away a HELD bill (it never reached a customer, so nothing to refund). The backend track is
+ * adding this; an older server answers 404 "Route … not found" / 405 — see `isDiscardUnsupported`.
+ */
+export const discardHeldBill = (id: string) =>
+  req<unknown>(() => http.delete(`/retailer/pos/sales/${encodeURIComponent(id)}`));
+
+/** True when the server has no "discard a held bill" endpoint yet (hide the action then). */
+export function isDiscardUnsupported(e: unknown): boolean {
+  const err = e as { status?: number; message?: string } | null;
+  if (err?.status === 405) return true;
+  // A genuinely missing bill is "Sale not found"; a missing ROUTE says "Route DELETE:… not found".
+  return err?.status === 404 && /^route\b/i.test(err.message ?? '');
+}
 
 /** Void a completed sale: restores stock and issues a credit note. Irreversible. */
 export const voidSale = (id: string, reason: string) =>

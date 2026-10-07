@@ -38,11 +38,12 @@ import type { SegmentOption } from '../components';
 import { ScreenProps } from '../navigation/types';
 import { useChangeRequests, useRetailerMe } from '../api/onboardingHooks';
 import { useRequestPosActivation } from '../api/storeSettingsHooks';
-import { findByCode, getSale } from '../api/pos';
+import { findByCode, getSale, isDiscardUnsupported } from '../api/pos';
 import {
   useBillQuote,
   useCustomerLookup,
   useDebouncedValue,
+  useDiscardHeldBill,
   useHeldBills,
   useHoldSale,
   useLookupNow,
@@ -69,12 +70,19 @@ import { ChangeRequest, Store } from '../types/onboarding';
 import { formatPaise } from '../utils/money';
 import { plural } from '../utils/format';
 import { Haptics } from '../utils/haptics';
+import { gstinError, normalizeGstin } from '../utils/gstin';
+import { usePermissions } from '../utils/usePermission';
 import { colors, radii, spacing, type as typeScale } from '../theme/theme';
 
 type Nav = ScreenProps<'Register'>['navigation'];
 type Sheet = null | 'held' | 'menu' | 'line' | 'bill' | 'customer';
 
-const GSTIN_RE = /^[0-9A-Z]{15}$/;
+/**
+ * Set once the server answers that it has no "discard a held bill" endpoint (an older backend), so the
+ * Discard action stays hidden for the rest of the session instead of failing on every tap.
+ */
+let heldDiscardUnsupported = false;
+
 const EMPTY_CUSTOMER: RegisterCustomer = { phone: '', name: '', gstin: '', b2b: false };
 const DISCOUNT_MODES: SegmentOption<DiscountMode>[] = [
   { value: 'amount', label: '₹ off' },
@@ -110,6 +118,7 @@ const isStoreInactive = (store: Store | null) =>
 export function RegisterScreen({ navigation }: ScreenProps<'Register'>) {
   const meQ = useRetailerMe();
   const store = meQ.data?.store ?? null;
+  const { can } = usePermissions();
 
   if (!meQ.data) {
     return (
@@ -133,6 +142,21 @@ export function RegisterScreen({ navigation }: ScreenProps<'Register'>) {
 
   if (store?.posBillingEnabled !== true) {
     return <ActivationView store={store} onBack={() => navigation.goBack()} />;
+  }
+
+  // Ringing up a sale needs pos.sell (every default role has it; a custom role might not).
+  if (!can('pos.sell')) {
+    return (
+      <Screen edges={['top', 'bottom']}>
+        <ScreenHeader overline="Billing counter" title="New bill" onBack={() => navigation.goBack()} />
+        <Banner
+          tone="warning"
+          title="No access to the billing counter"
+          message="Your role can't create bills. Ask the owner to enable it."
+          style={styles.gapTop}
+        />
+      </Screen>
+    );
   }
 
   return <Counter navigation={navigation} inactive={isStoreInactive(store)} />;
@@ -225,8 +249,12 @@ function Counter({ navigation, inactive }: { navigation: Nav; inactive: boolean 
   const billDisc = billDiscountPaise(lines, billMode, billValue);
   const netBeforeBill = lines.reduce((s, l) => s + lineNetPaise(l), 0);
 
+  const { can } = usePermissions();
   const heldQ = useHeldBills();
   const holdQ = useHoldSale();
+  const discardQ = useDiscardHeldBill();
+  const [discardable, setDiscardable] = useState(!heldDiscardUnsupported);
+  const [discardingId, setDiscardingId] = useState<string | null>(null);
 
   const [query, setQuery] = useState('');
   const debounced = useDebouncedValue(query);
@@ -368,6 +396,41 @@ function Counter({ navigation, inactive }: { navigation: Nav; inactive: boolean 
     ]);
   };
 
+  /** Throw a parked bill away for good (it never reached a customer, so there's nothing to refund). */
+  const discard = (row: PosHeldRow) =>
+    Alert.alert(
+      'Discard this held bill?',
+      `${row.customerName || 'Walk-in'} · ${formatPaise(row.payablePaise)}. This can't be undone.`,
+      [
+        { text: 'Keep it', style: 'cancel' },
+        {
+          text: 'Discard',
+          style: 'destructive',
+          onPress: async () => {
+            setDiscardingId(row.id);
+            try {
+              await discardQ.mutateAsync(row.id);
+              // Discarding the bill that's open on the counter empties the counter too.
+              if (useRegister.getState().holdSaleId === row.id) useRegister.getState().reset();
+              toast.show('Held bill discarded', 'success');
+            } catch (e) {
+              if (isDiscardUnsupported(e)) {
+                heldDiscardUnsupported = true;
+                setDiscardable(false);
+              } else if ((e as { status?: number })?.status === 404) {
+                toast.show('That bill is already gone', 'info');
+                heldQ.refetch();
+              } else {
+                toast.show(errorMessage(e, "Couldn't discard the bill"), 'error');
+              }
+            } finally {
+              setDiscardingId(null);
+            }
+          },
+        },
+      ],
+    );
+
   const clearBill = () =>
     Alert.alert(
       'Clear this bill?',
@@ -387,7 +450,7 @@ function Counter({ navigation, inactive }: { navigation: Nav; inactive: boolean 
       ],
     );
 
-  const goTo = (name: 'PosSales' | 'RegisterDay') => {
+  const goTo = (name: 'PosSales' | 'RegisterDay' | 'PosLabels') => {
     setSheet(null);
     navigation.navigate(name);
   };
@@ -524,6 +587,7 @@ function Counter({ navigation, inactive }: { navigation: Nav; inactive: boolean 
               fetching={quoteQ.isFetching}
               error={quoteQ.isError ? quoteQ.error : null}
               billDiscPaise={billDisc}
+              hasGstin={customer.b2b && !!customer.gstin.trim()}
               onRetry={() => quoteQ.refetch()}
             />
           </>
@@ -575,8 +639,10 @@ function Counter({ navigation, inactive }: { navigation: Nav; inactive: boolean 
                   row={row}
                   current={row.id === holdSaleId}
                   resuming={resumingId === row.id}
-                  disabled={!!resumingId}
+                  disabled={!!resumingId || !!discardingId}
+                  discarding={discardingId === row.id}
                   onResume={() => resume(row)}
+                  onDiscard={discardable ? () => discard(row) : undefined}
                 />
               ))}
             </ScrollView>
@@ -589,8 +655,15 @@ function Counter({ navigation, inactive }: { navigation: Nav; inactive: boolean 
       <BottomSheet visible={sheet === 'menu'} onClose={closeSheet}>
         <SheetSurface style={styles.sheet}>
           <SheetTitle title="Billing counter" />
-          <SheetAction icon="receipt-outline" label="Sales history" onPress={() => goTo('PosSales')} />
-          <SheetAction icon="calculator-outline" label="Day summary & cash" onPress={() => goTo('RegisterDay')} />
+          {can('pos.view') ? (
+            <SheetAction icon="receipt-outline" label="Sales history" onPress={() => goTo('PosSales')} />
+          ) : null}
+          {can('pos.view') ? (
+            <SheetAction icon="calculator-outline" label="Day summary & cash" onPress={() => goTo('RegisterDay')} />
+          ) : null}
+          {can('pos.labels') ? (
+            <SheetAction icon="pricetag-outline" label="Product labels" onPress={() => goTo('PosLabels')} />
+          ) : null}
           {lines.length || holdSaleId ? (
             <SheetAction icon="trash-outline" label="Clear bill" danger onPress={clearBill} />
           ) : null}
@@ -822,12 +895,15 @@ function TotalsPanel({
   fetching,
   error,
   billDiscPaise,
+  hasGstin,
   onRetry,
 }: {
   quote?: PosQuote;
   fetching: boolean;
   error: unknown;
   billDiscPaise: number;
+  /** A customer GSTIN is on the bill. */
+  hasGstin: boolean;
   onRetry: () => void;
 }) {
   if (!quote) {
@@ -876,6 +952,14 @@ function TotalsPanel({
       <AppText variant="meta" color={colors.meta}>
         Prices include GST.
       </AppText>
+      {hasGstin ? (
+        // The quote can't see the customer, so it always splits GST as CGST + SGST. The final invoice
+        // uses IGST when the GSTIN is from another state — same tax, same total.
+        <AppText variant="meta" color={colors.meta}>
+          This shows CGST + SGST. If the customer's GSTIN is from another state, the invoice shows it as
+          IGST instead — the total stays the same.
+        </AppText>
+      ) : null}
     </Panel>
   );
 }
@@ -924,13 +1008,18 @@ function HeldRow({
   current,
   resuming,
   disabled,
+  discarding,
   onResume,
+  onDiscard,
 }: {
   row: PosHeldRow;
   current: boolean;
   resuming: boolean;
   disabled: boolean;
+  discarding: boolean;
   onResume: () => void;
+  /** Absent when the server can't discard held bills (older backend). */
+  onDiscard?: () => void;
 }) {
   return (
     <View style={styles.heldRow}>
@@ -958,6 +1047,21 @@ function HeldRow({
           style={styles.resumeBtn}
         />
       )}
+      {onDiscard ? (
+        discarding ? (
+          <ActivityIndicator size="small" color={colors.danger} style={styles.discardBtn} />
+        ) : (
+          <PressableScale
+            onPress={onDiscard}
+            disabled={disabled}
+            hitSlop={8}
+            toScale={0.9}
+            style={styles.discardBtn}
+          >
+            <Icon name="trash-outline" size={18} color={colors.danger} />
+          </PressableScale>
+        )
+      ) : null}
     </View>
   );
 }
@@ -1087,12 +1191,13 @@ function CustomerSheet({ onClose }: { onClose: () => void }) {
     const next: RegisterCustomer = {
       phone: digits,
       name: draft.name.trim(),
-      gstin: draft.gstin.trim().toUpperCase(),
+      gstin: normalizeGstin(draft.gstin),
       b2b: draft.b2b,
     };
     const errs: { phone?: string; gstin?: string } = {};
     if (next.phone && next.phone.length !== 10) errs.phone = 'Enter a 10-digit mobile number';
-    if (next.b2b && !GSTIN_RE.test(next.gstin)) errs.gstin = 'Enter the 15-character GSTIN';
+    const gstinProblem = next.b2b ? gstinError(next.gstin) : null;
+    if (gstinProblem) errs.gstin = gstinProblem;
     if (errs.phone || errs.gstin) {
       setErrors(errs);
       return;
@@ -1300,4 +1405,5 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
   resumeBtn: { paddingVertical: spacing.sm, paddingHorizontal: spacing.md, minWidth: 96 },
+  discardBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
 });

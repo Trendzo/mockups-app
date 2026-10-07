@@ -3,6 +3,8 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import {
   closeDay,
   createSale,
+  discardHeldBill,
+  exchangeSale,
   findCustomers,
   getDaySummary,
   getSale,
@@ -12,10 +14,17 @@ import {
   lookupProducts,
   openDay,
   quoteBill,
+  returnSale,
   voidSale,
 } from './pos';
 import { retryUnlessClientError } from './request';
-import { PosCreateSaleRequest, PosHoldRequest, PosQuoteRequest } from '../types/pos';
+import {
+  PosCreateSaleRequest,
+  PosExchangeRequest,
+  PosHoldRequest,
+  PosQuoteRequest,
+  PosReturnRequest,
+} from '../types/pos';
 
 /** `value` once it has stopped changing for `ms` (typeahead / search boxes). */
 export function useDebouncedValue<T>(value: T, ms = 220): T {
@@ -151,6 +160,32 @@ export function useHoldSale() {
   return useMutation({
     mutationFn: (body: PosHoldRequest) => holdSale(body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['pos', 'held'] }),
+  });
+}
+
+export function useDiscardHeldBill() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => discardHeldBill(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['pos', 'held'] }),
+  });
+}
+
+/** Return items against `saleId` and refund them. */
+export function useReturnSale(saleId: string) {
+  const invalidate = useInvalidatePos();
+  return useMutation({
+    mutationFn: (body: PosReturnRequest) => returnSale(saleId, body),
+    onSuccess: invalidate,
+  });
+}
+
+/** Exchange items of `saleId` for others, settling the difference. */
+export function useExchangeSale(saleId: string) {
+  const invalidate = useInvalidatePos();
+  return useMutation({
+    mutationFn: (body: PosExchangeRequest) => exchangeSale(saleId, body),
+    onSuccess: invalidate,
   });
 }
 

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { resolveScan } from '../api/pos';
 import { idempotencyKey } from '../api/request';
 import { useAuth } from './auth';
+import { normalizeGstin } from '../utils/gstin';
 import {
   PosBillLine,
   PosCustomerInput,
@@ -83,7 +84,7 @@ export function customerInput(c: RegisterCustomer): PosCustomerInput {
   const phone = c.phone.replace(/\D/g, '');
   if (phone) out.phone = phone;
   if (c.name.trim()) out.name = c.name.trim();
-  if (c.b2b && c.gstin.trim()) out.gstin = c.gstin.trim().toUpperCase();
+  if (c.b2b && c.gstin.trim()) out.gstin = normalizeGstin(c.gstin);
   return out;
 }
 

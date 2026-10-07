@@ -28,7 +28,7 @@ import {
   refreshCartStock,
   useRegister,
 } from '../store/register';
-import { PosTender, PosTenderMethod, TENDER_LABEL } from '../types/pos';
+import { PosTender, PosTenderMethod, TENDER_LABEL, TENDER_REFERENCE_MAX } from '../types/pos';
 import { formatPaise, paiseToRupeeInput, parseRupeesToPaise } from '../utils/money';
 import { plural } from '../utils/format';
 import { Haptics } from '../utils/haptics';
@@ -81,6 +81,8 @@ export function RegisterPaymentScreen({ navigation }: ScreenProps<'RegisterPayme
   const [cashText, setCashText] = useState('');
   /** Card/UPI amount; null = the full remaining amount. */
   const [amountText, setAmountText] = useState<string | null>(null);
+  /** Card slip / UPI transaction id for the leg being added (optional). */
+  const [referenceText, setReferenceText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [completing, setCompleting] = useState(false);
   const busyRef = useRef(false);
@@ -151,8 +153,19 @@ export function RegisterPaymentScreen({ navigation }: ScreenProps<'RegisterPayme
       setError(`Can't be more than the ${formatPaise(remaining)} due`);
       return;
     }
-    addTender({ method, amountPaise: digitalAmount, tenderedPaise: digitalAmount });
+    const reference = referenceText.trim();
+    if (reference.length > TENDER_REFERENCE_MAX) {
+      setError(`Reference can be at most ${TENDER_REFERENCE_MAX} characters`);
+      return;
+    }
+    addTender({
+      method,
+      amountPaise: digitalAmount,
+      tenderedPaise: digitalAmount,
+      ...(reference ? { reference } : {}),
+    });
     setAmountText(null);
+    setReferenceText('');
   };
 
   const removeTender = (index: number) => {
@@ -163,6 +176,7 @@ export function RegisterPaymentScreen({ navigation }: ScreenProps<'RegisterPayme
   const pickMethod = (m: PosTenderMethod) => {
     setMethod(m);
     setAmountText(null);
+    setReferenceText('');
     setError(null);
   };
 
@@ -332,6 +346,20 @@ export function RegisterPaymentScreen({ navigation }: ScreenProps<'RegisterPayme
                       onSubmitEditing={addDigital}
                       error={error}
                     />
+                    <Field
+                      label="Reference (optional)"
+                      value={referenceText}
+                      onChangeText={(t) => {
+                        setReferenceText(t);
+                        setError(null);
+                      }}
+                      placeholder={method === 'upi' ? 'UPI transaction id' : 'Card slip / approval code'}
+                      autoCapitalize="characters"
+                      autoCorrect={false}
+                      maxLength={TENDER_REFERENCE_MAX}
+                      returnKeyType="done"
+                      onSubmitEditing={addDigital}
+                    />
                     <AppText variant="meta" color={colors.meta}>
                       Enter less to split the bill across payment methods.
                     </AppText>
@@ -375,10 +403,17 @@ function TenderRow({
   return (
     <View style={styles.tenderRow}>
       <Icon name={TENDER_ICON[tender.method]} size={18} color={colors.ink} />
-      <AppText variant="body" color={colors.ink} style={styles.flex}>
-        {TENDER_LABEL[tender.method]} {formatPaise(tender.amountPaise)}
-        {given}
-      </AppText>
+      <View style={styles.flex}>
+        <AppText variant="body" color={colors.ink}>
+          {TENDER_LABEL[tender.method]} {formatPaise(tender.amountPaise)}
+          {given}
+        </AppText>
+        {tender.reference ? (
+          <AppText variant="meta" color={colors.meta} numberOfLines={1}>
+            Ref {tender.reference}
+          </AppText>
+        ) : null}
+      </View>
       <PressableScale onPress={onRemove} disabled={disabled} hitSlop={10} toScale={0.9} style={styles.removeBtn}>
         <Icon name="close" size={16} color={colors.meta} />
       </PressableScale>
