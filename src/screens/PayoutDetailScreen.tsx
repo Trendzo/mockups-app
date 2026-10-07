@@ -5,18 +5,29 @@ import {
   Banner,
   DetailRow,
   Divider,
+  EmptyState,
   Icon,
+  ListRow,
   Panel,
   PressableScale,
   Screen,
   ScreenHeader,
   StatusChip,
+  useToast,
 } from '../components';
 import type { StatusTone } from '../components';
 import { ScreenProps } from '../navigation/types';
 import { usePayout, usePayoutDeductions } from '../api/earningsHooks';
+import { openPdfUrl } from '../api/invoices';
 import { errorMessage } from '../api/request';
-import { bankTail, PayoutDeductions, PayoutRow, payoutStatusMeta } from '../types/earnings';
+import {
+  bankTail,
+  cycleLabel,
+  PayoutDeductions,
+  PayoutRow,
+  payoutStatusMeta,
+} from '../types/earnings';
+import { usePermissions } from '../utils/usePermission';
 import { formatPaise } from '../utils/money';
 import {
   formatDateTime,
@@ -85,10 +96,14 @@ function heroLine(p: PayoutRow): string {
 /** One settlement: what reached the bank, the transfer details, and how gross became net. */
 export function PayoutDetailScreen({ navigation, route }: ScreenProps<'PayoutDetail'>) {
   const { id } = route.params;
-  const payoutQ = usePayout(id);
-  const dedQ = usePayoutDeductions(id);
+  const toast = useToast();
+  const { can } = usePermissions();
+  const allowed = can('payouts.view');
+  const payoutQ = usePayout(allowed ? id : undefined);
+  const dedQ = usePayoutDeductions(allowed ? id : undefined);
   const p = payoutQ.data;
   const [refreshing, setRefreshing] = useState(false);
+  const [openingPdf, setOpeningPdf] = useState(false);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -101,6 +116,32 @@ export function PayoutDetailScreen({ navigation, route }: ScreenProps<'PayoutDet
 
   const openOrder = (orderId: string) => navigation.navigate('OrderDetail', { id: orderId });
 
+  // The hosted statement PDF for the cycle, when it has been rendered.
+  const openStatementPdf = async (url: string) => {
+    if (openingPdf) return;
+    setOpeningPdf(true);
+    try {
+      await openPdfUrl(url, `statement-${p?.period || id}`);
+    } catch (e) {
+      toast.show(errorMessage(e, "Couldn't open the statement PDF"), 'error');
+    } finally {
+      setOpeningPdf(false);
+    }
+  };
+
+  if (!allowed) {
+    return (
+      <Screen edges={['top']}>
+        <ScreenHeader overline="Payout" title="Payout details" onBack={() => navigation.goBack()} />
+        <EmptyState
+          icon="lock-closed-outline"
+          title="Not available for your role"
+          message="Ask the store owner or a manager about payouts."
+        />
+      </Screen>
+    );
+  }
+
   return (
     <Screen edges={['top']}>
       <ScrollView
@@ -112,7 +153,7 @@ export function PayoutDetailScreen({ navigation, route }: ScreenProps<'PayoutDet
       >
         <ScreenHeader
           overline="Payout"
-          title={p?.period || 'Payout details'}
+          title={p ? cycleLabel(p) || 'Payout details' : 'Payout details'}
           onBack={() => navigation.goBack()}
         />
 
@@ -129,6 +170,21 @@ export function PayoutDetailScreen({ navigation, route }: ScreenProps<'PayoutDet
             ) : null}
 
             <Hero payout={p} />
+            <CyclePanel payout={p} />
+            <ListRow
+              icon="document-text-outline"
+              label="Billing statement"
+              hint="Gross to net for this cycle"
+              onPress={() => navigation.navigate('BillingStatementDetail', { id: p.id })}
+            />
+            {p.statementUrl ? (
+              <ListRow
+                icon="download-outline"
+                label="Statement PDF"
+                hint={openingPdf ? 'Opening…' : 'Download the cycle statement'}
+                onPress={() => openStatementPdf(p.statementUrl as string)}
+              />
+            ) : null}
             <TransferPanel payout={p} />
 
             {dedQ.isLoading ? (
@@ -186,6 +242,26 @@ function Hero({ payout }: { payout: PayoutRow }) {
         </AppText>
       ) : null}
     </View>
+  );
+}
+
+function CyclePanel({ payout }: { payout: PayoutRow }) {
+  const hasDates = !!(payout.cycleStart && payout.cycleEnd);
+  // Net can exceed gross when credits outweigh the fees (rare).
+  const taken = payout.grossPaise - payout.netPaise;
+  return (
+    <Panel title="Settlement cycle">
+      {hasDates ? <DetailRow label="Period" value={cycleLabel(payout)} /> : null}
+      <DetailRow label="Gross sales" value={formatPaise(payout.grossPaise)} />
+      <DetailRow
+        label={taken >= 0 ? 'Fees & deductions' : 'Credits & adjustments'}
+        value={taken >= 0 ? minus(taken) : signed(-taken)}
+        tone={taken >= 0 ? 'negative' : 'positive'}
+        hint="Commission, taxes, refunds and adjustments; itemised below"
+      />
+      <Divider />
+      <DetailRow label="Net payout" value={formatPaise(payout.netPaise)} strong />
+    </Panel>
   );
 }
 

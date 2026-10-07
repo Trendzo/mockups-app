@@ -7,11 +7,13 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import {
+  adjustVariantStock,
   createBrand,
   getBestSellers,
   getCatalogBrands,
   getCatalogCategories,
   getCatalogSizeScales,
+  getDeadStock,
   getInventory,
   getListing,
   getListings,
@@ -20,10 +22,13 @@ import {
   patchInventorySettings,
   patchVariant,
 } from './catalogManagement';
-import { errorCode } from './request';
+import { applyInventoryImport, dryRunInventoryImport } from './inventoryImport';
+import { errorCode, retryUnlessClientError } from './request';
 import {
+  AdjustStockInput,
   InventoryFlag,
   InventoryPage,
+  InventoryRow,
   ListingStatus,
   PatchVariantInput,
 } from '../types/catalog';
@@ -141,14 +146,33 @@ export function useReservations(variantId: string | null) {
   });
 }
 
-/** Stock ledger for a time window (ISO instants). */
-export function useStockAdjustments(range: { from?: string; to?: string }, enabled = true) {
+/**
+ * Stock ledger, newest first. Pass `variantId` for one variant's history (the
+ * server filters it, so the 200-entry page is all that variant's changes);
+ * `from`/`to` are ISO instants.
+ */
+export function useStockAdjustments(
+  range: { variantId?: string; from?: string; to?: string; limit?: number },
+  enabled = true,
+) {
   return useQuery({
     queryKey: ['inventory', 'adjustments', range],
     queryFn: () => getStockAdjustments(range),
     enabled,
     staleTime: 30_000,
     retry: 0,
+  });
+}
+
+/** Dead-stock report; re-queried whenever the days threshold changes. */
+export function useDeadStock(daysWithoutSale: number, enabled = true) {
+  return useQuery({
+    queryKey: ['inventory', 'dead-stock', daysWithoutSale],
+    queryFn: () => getDeadStock({ daysWithoutSale }),
+    enabled,
+    staleTime: 60_000,
+    retry: retryUnlessClientError,
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -183,6 +207,25 @@ export function useUpdateVariant() {
 /** The inline edits the Inventory screen makes (stock is an absolute count). */
 export type InventoryRowPatch = Pick<PatchVariantInput, 'stock' | 'pricePaise' | 'isActive'>;
 
+/** Write an edit into every loaded inventory page so the row updates before the refetch. */
+function patchInventoryCache(
+  qc: ReturnType<typeof useQueryClient>,
+  id: string,
+  patch: Partial<InventoryRow>,
+) {
+  qc.setQueriesData<InfiniteData<InventoryPage>>(
+    { queryKey: ['inventory', 'infinite'] },
+    (old) =>
+      old && {
+        ...old,
+        pages: old.pages.map((page) => ({
+          ...page,
+          rows: page.rows.map((row) => (row.id === id ? { ...row, ...patch } : row)),
+        })),
+      },
+  );
+}
+
 /**
  * useUpdateVariant for the Inventory list: the same PATCH, but the change is
  * also written into the loaded inventory pages straight away, so the row (and
@@ -194,20 +237,31 @@ export function useUpdateInventoryRow() {
   return useMutation({
     mutationFn: ({ id, patch }: { id: string; patch: InventoryRowPatch }) => patchVariant(id, patch),
     onSuccess: (_variant, { id, patch }) => {
-      qc.setQueriesData<InfiniteData<InventoryPage>>(
-        { queryKey: ['inventory', 'infinite'] },
-        (old) =>
-          old && {
-            ...old,
-            pages: old.pages.map((page) => ({
-              ...page,
-              rows: page.rows.map((row) => (row.id === id ? { ...row, ...patch } : row)),
-            })),
-          },
-      );
+      patchInventoryCache(qc, id, patch);
       invalidate();
     },
     // Stock below reserved: our reserved count was stale, so pull the real one.
+    onError: (e) => {
+      if (errorCode(e) === 'invalid_state') invalidate();
+    },
+  });
+}
+
+/**
+ * Stock correction for logins that hold `inventory.adjust` but not `listings.edit`
+ * (floor staff): POST /retailer/inventory/:variantId/adjust. Same optimistic row
+ * update and invalid_state refetch as the PATCH path.
+ */
+export function useAdjustStock() {
+  const qc = useQueryClient();
+  const invalidate = useInvalidateStock();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: AdjustStockInput }) =>
+      adjustVariantStock(id, input),
+    onSuccess: (_res, { id, input }) => {
+      patchInventoryCache(qc, id, { stock: input.newStock });
+      invalidate();
+    },
     onError: (e) => {
       if (errorCode(e) === 'invalid_state') invalidate();
     },
@@ -231,6 +285,17 @@ export function useBulkSetVariantsActive() {
     },
     onSettled: invalidate,
   });
+}
+
+/** Dry-run a parsed CSV: the plan and per-row errors, nothing written. */
+export function useDryRunInventoryImport() {
+  return useMutation({ mutationFn: dryRunInventoryImport });
+}
+
+/** Apply a parsed CSV (all-or-nothing); refreshes stock and product lists. */
+export function useApplyInventoryImport() {
+  const invalidate = useInvalidateStock();
+  return useMutation({ mutationFn: applyInventoryImport, onSuccess: invalidate });
 }
 
 export function useSaveLowStockThreshold() {

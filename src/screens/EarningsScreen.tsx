@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Linking, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import {
   AppText,
   Banner,
   BottomSheet,
   DetailRow,
   Divider,
+  EmptyState,
   Field,
   Icon,
   ListRow,
@@ -19,7 +20,6 @@ import {
   StatusChip,
   useToast,
 } from '../components';
-import type { StatusTone } from '../components';
 import { ScreenProps } from '../navigation/types';
 import {
   useCreateEarlyDisbursement,
@@ -29,20 +29,21 @@ import {
   useUpcomingPayout,
 } from '../api/earningsHooks';
 import { errorMessage } from '../api/request';
-import { EarlyDisbursementStatus, StoreFees, UpcomingPayout } from '../types/earnings';
+import {
+  EarlyDisbursementRequest,
+  earlyStatusMeta,
+  StoreFees,
+  UpcomingPayout,
+} from '../types/earnings';
+import { usePermissions } from '../utils/usePermission';
 import { formatPaise, parseRupeesToPaise } from '../utils/money';
-import { formatDayDate, plural, shortRef } from '../utils/format';
-import { WEB_PORTAL_PAYOUTS_URL } from '../config/legal';
+import { formatDate, formatDayDate, plural, shortRef } from '../utils/format';
 import { colors, radii, spacing } from '../theme/theme';
-
-const EARLY_STATUS: Record<EarlyDisbursementStatus, { label: string; tone: StatusTone }> = {
-  pending: { label: 'Pending', tone: 'warning' },
-  approved: { label: 'Approved', tone: 'success' },
-  rejected: { label: 'Rejected', tone: 'danger' },
-};
 
 /** Orders listed before the "Show all" toggle. */
 const ORDERS_PREVIEW = 10;
+/** Decided early-payout requests listed before "Show all". */
+const EARLY_PREVIEW = 3;
 
 type OrderLine = UpcomingPayout['orderBreakdown'][number];
 
@@ -59,15 +60,22 @@ function formatBp(bp: number): string {
 
 /**
  * Earnings & payouts: what the store is owed right now and when it lands, how
- * sales became that amount (overall and per order), early payout requests, the
- * store's fee rates, and links to payout history and the web-portal statement.
+ * sales became that amount (overall and per order), early payout requests and
+ * their history, the store's fee rates, and links to payout history, billing
+ * statements and invoices.
  */
 export function EarningsScreen({ navigation }: ScreenProps<'Earnings'>) {
   const toast = useToast();
-  const upcomingQ = useUpcomingPayout();
-  const earlyQ = useEarlyDisbursements();
-  const payoutsQ = usePayouts();
-  const feesQ = useFees();
+  // Each query is gated like its endpoint: a login without the permission would only 403.
+  const { can } = usePermissions();
+  const canPayouts = can('payouts.view');
+  const canInvoices = can('invoicing.view');
+  const canEarly = can('early_disbursement.request');
+  const canFees = can('store.view_profile');
+  const upcomingQ = useUpcomingPayout(canPayouts);
+  const earlyQ = useEarlyDisbursements(canEarly);
+  const payoutsQ = usePayouts(canPayouts);
+  const feesQ = useFees(canFees);
   const createEarly = useCreateEarlyDisbursement();
   const up = upcomingQ.data;
 
@@ -76,10 +84,13 @@ export function EarningsScreen({ navigation }: ScreenProps<'Earnings'>) {
   const [reason, setReason] = useState('');
   const [amountErr, setAmountErr] = useState<string | undefined>();
   const [showAllOrders, setShowAllOrders] = useState(false);
+  const [showAllEarly, setShowAllEarly] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const owed = up?.outstandingPayable ?? 0;
   const pendingEarly = (earlyQ.data ?? []).find((r) => r.status === 'pending');
+  const decidedEarly = (earlyQ.data ?? []).filter((r) => r.status !== 'pending');
+  const visibleEarly = showAllEarly ? decidedEarly : decidedEarly.slice(0, EARLY_PREVIEW);
   const orders = up?.orderBreakdown ?? [];
   const visibleOrders = showAllOrders ? orders : orders.slice(0, ORDERS_PREVIEW);
   const failedPayouts = (payoutsQ.data ?? []).filter((p) => p.status === 'failed').length;
@@ -90,19 +101,13 @@ export function EarningsScreen({ navigation }: ScreenProps<'Earnings'>) {
     try {
       await Promise.all([
         upcomingQ.refetch(),
-        earlyQ.refetch(),
+        canEarly ? earlyQ.refetch() : undefined,
         payoutsQ.refetch(),
-        feesQ.refetch(),
+        canFees ? feesQ.refetch() : undefined,
       ]);
     } finally {
       setRefreshing(false);
     }
-  };
-
-  const openStatement = () => {
-    Linking.openURL(WEB_PORTAL_PAYOUTS_URL).catch(() =>
-      toast.show("Couldn't open the web portal", 'error'),
-    );
   };
 
   const submitEarly = () => {
@@ -133,6 +138,19 @@ export function EarningsScreen({ navigation }: ScreenProps<'Earnings'>) {
       },
     );
   };
+
+  if (!canPayouts) {
+    return (
+      <Screen edges={['top']}>
+        <ScreenHeader overline="Payments" title="Earnings & payouts" onBack={() => navigation.goBack()} />
+        <EmptyState
+          icon="lock-closed-outline"
+          title="Not available for your role"
+          message="Ask the store owner or a manager about payments."
+        />
+      </Screen>
+    );
+  }
 
   return (
     <Screen edges={['top']}>
@@ -275,50 +293,97 @@ export function EarningsScreen({ navigation }: ScreenProps<'Earnings'>) {
           </View>
         ) : null}
 
-        {/* Early disbursement */}
-        <Panel title="Early payout">
-          {pendingEarly ? (
-            <View style={styles.rowBetween}>
-              <View style={styles.flex}>
-                <AppText variant="bodyMedium" color={colors.ink}>
-                  {formatPaise(pendingEarly.amountPaise)} requested
-                </AppText>
-                <AppText variant="meta" color={colors.meta} numberOfLines={1}>
-                  {pendingEarly.reason}
-                </AppText>
+        {/* Early disbursement: needs early_disbursement.request, else absent. */}
+        {canEarly ? (
+          <Panel title="Early payout">
+            {pendingEarly ? (
+              <View style={styles.rowBetween}>
+                <View style={styles.flex}>
+                  <AppText variant="bodyMedium" color={colors.ink}>
+                    {formatPaise(pendingEarly.amountPaise)} requested
+                  </AppText>
+                  <AppText variant="meta" color={colors.meta} numberOfLines={2}>
+                    {pendingEarly.reason}
+                  </AppText>
+                  <AppText variant="meta" color={colors.meta}>
+                    Requested {formatDate(pendingEarly.requestedAt)}. Waiting for admin review.
+                  </AppText>
+                </View>
+                <StatusChip
+                  label={earlyStatusMeta(pendingEarly.status).label}
+                  tone={earlyStatusMeta(pendingEarly.status).tone}
+                  style={styles.chipCenter}
+                />
               </View>
-              <StatusChip
-                label={EARLY_STATUS[pendingEarly.status].label}
-                tone={EARLY_STATUS[pendingEarly.status].tone}
-                style={styles.chipCenter}
-              />
-            </View>
-          ) : (
-            <>
-              <AppText variant="meta" color={colors.meta} style={styles.earlyHint}>
-                Get part of what you're owed before the next cycle. Needs admin
-                approval and a small fee.
+            ) : (
+              <>
+                <AppText variant="meta" color={colors.meta} style={styles.earlyHint}>
+                  Get part of what you're owed before the next cycle. Needs admin
+                  approval and a small fee.
+                </AppText>
+                <PrimaryButton
+                  label="Request early payout"
+                  tone="ghost"
+                  disabled={owed <= 0}
+                  onPress={() => setSheetOpen(true)}
+                />
+              </>
+            )}
+            {earlyQ.isError && !earlyQ.data ? (
+              <AppText variant="meta" color={colors.danger}>
+                Couldn't load your early payout requests. {errorMessage(earlyQ.error)}
               </AppText>
-              <PrimaryButton
-                label="Request early payout"
-                tone="ghost"
-                disabled={owed <= 0}
-                onPress={() => setSheetOpen(true)}
-              />
-            </>
-          )}
-        </Panel>
+            ) : null}
+            {decidedEarly.length > 0 ? (
+              <>
+                <Divider />
+                <AppText variant="sectionLabel" color={colors.meta}>
+                  Past requests
+                </AppText>
+                {visibleEarly.map((r, i) => (
+                  <React.Fragment key={r.id}>
+                    {i > 0 ? <Divider /> : null}
+                    <EarlyRequestRow request={r} />
+                  </React.Fragment>
+                ))}
+                {decidedEarly.length > EARLY_PREVIEW ? (
+                  <PressableScale
+                    onPress={() => setShowAllEarly((v) => !v)}
+                    haptic={false}
+                    style={styles.toggle}
+                  >
+                    <AppText variant="meta" color={colors.ink}>
+                      {showAllEarly ? 'Show less' : `Show all ${decidedEarly.length}`}
+                    </AppText>
+                    <Icon
+                      name={showAllEarly ? 'chevron-up' : 'chevron-down'}
+                      size={16}
+                      color={colors.ink}
+                    />
+                  </PressableScale>
+                ) : null}
+              </>
+            ) : null}
+          </Panel>
+        ) : null}
 
         {/* Permission-gated: simply absent when the rates can't be read. */}
         {feesQ.data ? <FeesPanel fees={feesQ.data} /> : null}
 
         <ListRow
           icon="document-text-outline"
-          label="Full statement"
-          hint="Payouts & invoices on the web portal"
-          right={<Icon name="open-outline" size={18} color={colors.meta} />}
-          onPress={openStatement}
+          label="Billing statements"
+          hint="Gross to net for every settlement cycle"
+          onPress={() => navigation.navigate('BillingStatements')}
         />
+        {canInvoices ? (
+          <ListRow
+            icon="receipt-outline"
+            label="Invoices"
+            hint="Customer tax invoices and commission invoices"
+            onPress={() => navigation.navigate('Invoices')}
+          />
+        ) : null}
       </ScrollView>
 
       {/* Early-payout request sheet */}
@@ -379,6 +444,33 @@ function OrderLineRow({ line, onPress }: { line: OrderLine; onPress: () => void 
   );
 }
 
+/** A decided early-payout request: amount, outcome, reason, dates and the admin's note. */
+function EarlyRequestRow({ request: r }: { request: EarlyDisbursementRequest }) {
+  const status = earlyStatusMeta(r.status);
+  return (
+    <View style={styles.earlyRow}>
+      <View style={styles.rowBetween}>
+        <AppText variant="bodyMedium" color={colors.ink}>
+          {formatPaise(r.amountPaise)}
+        </AppText>
+        <StatusChip label={status.label} tone={status.tone} />
+      </View>
+      <AppText variant="meta" color={colors.meta} numberOfLines={2}>
+        {r.reason}
+      </AppText>
+      <AppText variant="meta" color={colors.meta}>
+        Requested {formatDate(r.requestedAt)}
+        {r.decidedAt ? ` · Decided ${formatDate(r.decidedAt)}` : ''}
+      </AppText>
+      {r.decisionNote ? (
+        <AppText variant="meta" color={colors.ink}>
+          “{r.decisionNote}”
+        </AppText>
+      ) : null}
+    </View>
+  );
+}
+
 function FeesPanel({ fees }: { fees: StoreFees }) {
   return (
     <Panel title="Your fees">
@@ -418,6 +510,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   earlyHint: { marginBottom: spacing.xs },
+  earlyRow: { gap: 2 },
   sheet: {
     backgroundColor: colors.surface,
     borderTopLeftRadius: radii.sheet,

@@ -219,3 +219,124 @@ export interface BestSeller {
   unitsSold: number;
   stock: number;
 }
+
+// ---- Stock adjust (floor staff) -------------------------------------------
+// POST /retailer/inventory/:variantId/adjust, gated by `inventory.adjust` (so a
+// login without `listings.edit` can still correct counts). Reasons are values of
+// the server's inventory_adjustment_reason enum.
+export type StockAdjustReason = 'manual_edit' | 'damage_writeoff' | 'audit_correction';
+
+export interface AdjustStockInput {
+  /** Absolute on-hand count after the change. */
+  newStock: number;
+  reason: StockAdjustReason;
+}
+
+// ---- CSV import (POST /retailer/inventory/import) -------------------------
+/** One import row, exactly as the server's ImportRowSchema takes it. */
+export interface InventoryImportRow {
+  sku?: string;
+  productName?: string;
+  variantLabel?: string;
+  /** Pipe-encoded `Key=Value|Key=Value`. */
+  attributes?: string;
+  brand?: string;
+  category?: string;
+  gender?: 'her' | 'him' | 'unisex';
+  pricePaise?: number;
+  stock: number;
+}
+
+export interface InventoryImportSummary {
+  parsed: number;
+  stockUpdates: number;
+  variantCreates: number;
+  listingCreates: number;
+  noChange: number;
+  errors: number;
+}
+
+export type InventoryImportAction =
+  | 'stock_update'
+  | 'variant_create'
+  | 'listing_create'
+  | 'no_change'
+  | 'error';
+
+export interface InventoryImportPlanEntry {
+  /** 1-based index into the `rows` array that was sent. */
+  row: number;
+  identifier: string;
+  action: InventoryImportAction;
+  stockUpdate?: {
+    variantId: string;
+    sku: string | null;
+    currentStock: number;
+    newStock: number;
+    delta: number;
+    currentPricePaise?: number;
+    newPricePaise?: number;
+  };
+  variantCreate?: {
+    listingId: string;
+    listingName: string;
+    attributesLabel: string;
+    sku?: string;
+    pricePaise: number;
+    stock: number;
+  };
+  listingCreate?: {
+    listingName: string;
+    brandSlug?: string;
+    categorySlug?: string;
+    categoryLabel?: string;
+    gender: string;
+    variant: { attributesLabel: string; sku?: string; pricePaise: number; stock: number };
+  };
+  error?: { reason: string; detail?: string };
+}
+
+export interface InventoryImportError {
+  /** 1-based index into the `rows` array that was sent. */
+  row: number;
+  sku?: string;
+  reason: string;
+  detail?: string;
+}
+
+/** `dryRun: true` response: nothing was written. */
+export interface InventoryImportDryRun {
+  dryRun: true;
+  applied: 0;
+  summary: InventoryImportSummary;
+  plan: InventoryImportPlanEntry[];
+  errors: InventoryImportError[];
+}
+
+/** `dryRun: false` success response. A row error is a 422 and applies nothing. */
+export interface InventoryImportApplied {
+  dryRun: false;
+  applied: {
+    stockUpdates: number;
+    variantCreates: number;
+    listingCreates: number;
+    priceUpdates: number;
+  };
+  appliedTotal: number;
+  createdListings: { row: number; listingId: string; name: string }[];
+  createdVariants: { row: number; variantId: string; listingId: string; sku: string | null }[];
+  updatedVariants: { row: number; variantId: string; delta: number; priceChanged: boolean }[];
+}
+
+// ---- Dead stock (GET /retailer/reports/listings/dead-stock) ---------------
+export interface DeadStockRow {
+  variantId: string;
+  listingId: string;
+  listingName: string;
+  /** The variant's attributes label ("M / Black"). */
+  label: string;
+  sku: string | null;
+  totalStock: number;
+  /** Last order placed for this variant; null = never sold. */
+  lastSoldAt: string | null;
+}

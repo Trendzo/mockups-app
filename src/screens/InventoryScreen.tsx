@@ -22,6 +22,7 @@ import {
   Icon,
   IconButton,
   KeyboardStickyView,
+  ListRow,
   PressableScale,
   PrimaryButton,
   QtyStepper,
@@ -39,17 +40,16 @@ import {
   useSaveLowStockThreshold,
   useStockAdjustments,
 } from '../api/catalogHooks';
-import { useRetailerMe } from '../api/onboardingHooks';
+import { downloadCatalogCsv } from '../api/catalogueExport';
 import { errorMessage } from '../api/request';
-import { useAuth } from '../store/auth';
 import {
-  canWriteCatalog,
   InventoryFlag,
   InventoryPage,
   InventoryRow,
   ListingStatus,
   StockAdjustment,
 } from '../types/catalog';
+import { usePermissions } from '../utils/usePermission';
 import { formatDayDate, humanize, plural, timeAgo } from '../utils/format';
 import { colors, radii, spacing, type as typeScale } from '../theme/theme';
 import { InventoryRowCard, rowTitle } from './inventory/InventoryRowCard';
@@ -76,21 +76,31 @@ const STATUS_OPTIONS: FilterOption<StatusFilter>[] = [
 const DEFAULT_THRESHOLD = 5;
 const THRESHOLD_MIN = 1;
 const THRESHOLD_MAX = 50;
-const HISTORY_DAYS = 90;
-/** The stock ledger's page size; a full page means older changes were cut off. */
+/** The stock ledger's page size (server max); a full page means older changes were cut off. */
 const LEDGER_LIMIT = 200;
 
 /**
  * Stock across every variant in the store: search + flag/status filters, inline
- * stock / price / on-sale edits, bulk on/off, held-stock and history sheets.
+ * stock / price / on-sale edits, bulk on/off, held-stock and history sheets, and
+ * a menu for CSV import / export and the dead-stock report.
+ *
+ * What a login can do follows the server's permissions: `listings.edit` edits
+ * stock, price and on-sale (and bulk on/off); `inventory.adjust` alone (floor
+ * staff) corrects stock counts only; the menu entries need `inventory.import`,
+ * `inventory.export` and `reports.view`.
  */
 export function InventoryScreen({ navigation, route }: ScreenProps<'Inventory'>) {
   const insets = useSafeAreaInsets();
   const toast = useToast();
-  // Prefer the fresh /retailer/me sub-role; the login snapshot may omit it.
-  const me = useRetailerMe();
-  const authSubRole = useAuth((s) => s.retailer?.subRole);
-  const canWrite = canWriteCatalog(me.data?.retailer.subRole ?? authSubRole);
+  const { can } = usePermissions();
+  const canEdit = can('listings.edit');
+  const canAdjust = can('inventory.adjust');
+  const canImport = can('inventory.import');
+  const canExport = can('inventory.export');
+  const canReports = can('reports.view');
+  /** Anything that opens the inline editor. */
+  const canWrite = canEdit || canAdjust;
+  const hasMenu = canImport || canExport || canReports;
 
   const [flag, setFlag] = useState<FlagFilter>(route.params?.flag ?? 'all');
   const [status, setStatus] = useState<StatusFilter>('all');
@@ -129,9 +139,12 @@ export function InventoryScreen({ navigation, route }: ScreenProps<'Inventory'>)
   const [holds, setHolds] = useState<SheetTarget>(null);
   const [history, setHistory] = useState<SheetTarget>(null);
   const [pulling, setPulling] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const bulk = useBulkSetVariantsActive();
 
-  const selecting = canWrite && selectMode;
+  // Bulk on/off patches variants, which needs listings.edit.
+  const selecting = canEdit && selectMode;
   // Bulk actions only touch rows loaded under the current search / filters.
   const selectedIds = rows.filter((r) => selected.has(r.id)).map((r) => r.id);
   const allSelected = rows.length > 0 && selectedIds.length === rows.length;
@@ -242,6 +255,35 @@ export function InventoryScreen({ navigation, route }: ScreenProps<'Inventory'>)
     }
   };
 
+  /** CSV of what the current search / filters show (the file matches the screen). */
+  const exportCsv = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const { location, filename } = await downloadCatalogCsv('inventory', {
+        filters: {
+          q: query || undefined,
+          flag: flag === 'all' ? undefined : flag,
+          status: status === 'all' ? undefined : status,
+        },
+      });
+      setMenuOpen(false);
+      toast.show(
+        location === 'downloads' ? `Saved ${filename} to Downloads` : `Saved ${filename} to Files`,
+        'success',
+      );
+    } catch (e) {
+      toast.show(errorMessage(e, "Couldn't export inventory"), 'error');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const goFromMenu = (target: 'InventoryImport' | 'DeadStock') => {
+    setMenuOpen(false);
+    navigation.navigate(target);
+  };
+
   const empty = emptyCopy(query, flag, status, threshold);
 
   return (
@@ -252,14 +294,25 @@ export function InventoryScreen({ navigation, route }: ScreenProps<'Inventory'>)
         onBack={() => navigation.goBack()}
         style={styles.header}
         right={
-          canWrite ? (
+          canEdit || canAdjust || hasMenu ? (
             <>
-              <IconButton
-                icon="checkbox-outline"
-                tone={selecting ? 'ink' : 'surface'}
-                onPress={toggleSelectMode}
-              />
-              <IconButton icon="options-outline" onPress={openThreshold} />
+              {canEdit ? (
+                <IconButton
+                  icon="checkbox-outline"
+                  tone={selecting ? 'ink' : 'surface'}
+                  onPress={toggleSelectMode}
+                />
+              ) : null}
+              {canAdjust ? <IconButton icon="options-outline" onPress={openThreshold} /> : null}
+              {hasMenu ? (
+                <IconButton
+                  icon="ellipsis-horizontal"
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    setMenuOpen(true);
+                  }}
+                />
+              ) : null}
             </>
           ) : undefined
         }
@@ -276,6 +329,7 @@ export function InventoryScreen({ navigation, route }: ScreenProps<'Inventory'>)
             selectMode={selecting}
             selected={selected.has(item.id)}
             expanded={canWrite && !selecting && expandedId === item.id}
+            editMode={canEdit ? 'full' : 'stock'}
             onPress={onPressRow}
             onSaved={onSaved}
             onHolds={openHolds}
@@ -443,6 +497,41 @@ export function InventoryScreen({ navigation, route }: ScreenProps<'Inventory'>)
         visible={!!history?.open}
         onClose={() => setHistory((t) => t && { ...t, open: false })}
       />
+      <BottomSheet visible={menuOpen} onClose={() => setMenuOpen(false)}>
+        <SheetSurface style={styles.sheet}>
+          <AppText variant="cardTitle" color={colors.ink} style={styles.sheetTitle}>
+            Inventory tools
+          </AppText>
+          {canImport ? (
+            <ListRow
+              icon="cloud-upload-outline"
+              label="Import from CSV"
+              hint="Update stock and prices, or add variants, in bulk"
+              style={styles.menuRow}
+              onPress={() => goFromMenu('InventoryImport')}
+            />
+          ) : null}
+          {canExport ? (
+            <ListRow
+              icon="download-outline"
+              label={exporting ? 'Exporting…' : 'Export to CSV'}
+              hint="Save what the list shows now to Downloads"
+              style={styles.menuRow}
+              onPress={exportCsv}
+            />
+          ) : null}
+          {canReports ? (
+            <ListRow
+              icon="hourglass-outline"
+              label="Dead stock"
+              hint="Variants that have stopped selling"
+              style={styles.menuRow}
+              onPress={() => goFromMenu('DeadStock')}
+            />
+          ) : null}
+          <PrimaryButton label="Close" tone="surface" onPress={() => setMenuOpen(false)} />
+        </SheetSurface>
+      </BottomSheet>
     </Screen>
   );
 }
@@ -645,14 +734,6 @@ function HoldsSheet({
   );
 }
 
-/** Local midnight HISTORY_DAYS back - stable all day, so the ledger cache is reused. */
-function historyFrom(): string {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() - HISTORY_DAYS);
-  return d.toISOString();
-}
-
 function HistorySheet({
   row,
   visible,
@@ -663,19 +744,13 @@ function HistorySheet({
   onClose: () => void;
 }) {
   const { height } = useWindowDimensions();
-  const [from] = useState(historyFrom);
-  // The ledger is store-wide (no variant filter server-side): fetch the window
-  // once and pick this variant's entries out of it. Disabled while closed, so
-  // saves don't refetch it in the background; the cached entries stay put.
-  const q = useStockAdjustments({ from }, visible && !!row);
-  const rowId = row?.id;
-  const entries = useMemo(
-    () => (rowId && q.data ? q.data.filter((a) => a.variantId === rowId) : []),
-    [q.data, rowId],
-  );
-  const ledger = q.data ?? [];
-  const cutoff = ledger.length >= LEDGER_LIMIT ? ledger[ledger.length - 1].at : null;
-  const span = cutoff ? `since ${formatDayDate(cutoff)}` : `in the last ${HISTORY_DAYS} days`;
+  // The server filters the ledger by variant, so this is just this variant's latest
+  // changes. Disabled while closed, so saves don't refetch it in the background; the
+  // cached entries stay put.
+  const q = useStockAdjustments({ variantId: row?.id }, visible && !!row);
+  const entries = q.data ?? [];
+  // A full page means older changes were cut off.
+  const cutoff = entries.length >= LEDGER_LIMIT ? entries[entries.length - 1].at : null;
 
   return (
     <BottomSheet visible={visible} onClose={onClose}>
@@ -702,7 +777,7 @@ function HistorySheet({
           />
         ) : entries.length === 0 ? (
           <AppText variant="body" color={colors.meta}>
-            No stock changes {span}.
+            No stock changes recorded for this variant yet.
           </AppText>
         ) : (
           <ScrollView style={{ maxHeight: height * 0.5 }} showsVerticalScrollIndicator={false}>
@@ -714,7 +789,7 @@ function HistorySheet({
             ))}
             {cutoff ? (
               <AppText variant="meta" color={colors.meta} style={styles.more}>
-                Showing changes {span}.
+                Showing the latest {LEDGER_LIMIT} changes, back to {formatDayDate(cutoff)}.
               </AppText>
             ) : null}
           </ScrollView>
@@ -809,6 +884,8 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   sheetTitle: { fontSize: 20, lineHeight: 24 },
+  // The sheet is white, so rows take the canvas grey to stay visible.
+  menuRow: { backgroundColor: colors.canvas },
   sheetLoader: { marginVertical: spacing.lg },
   thresholdRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   holdLine: {
