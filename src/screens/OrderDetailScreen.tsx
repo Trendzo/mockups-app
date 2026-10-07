@@ -12,6 +12,7 @@ import {
   KeyboardStickyView,
   ListRow,
   Panel,
+  PressableScale,
   PrimaryButton,
   Screen,
   ScreenHeader,
@@ -21,33 +22,47 @@ import {
 import type { StatusTone } from '../components';
 import { ScreenProps } from '../navigation/types';
 import { useOrder, useOrderAction, useReturnsDecision } from '../api/ordersHooks';
+import { useCreateIssue } from '../api/issuesHooks';
 import { openOrderInvoice } from '../api/invoices';
 import { errorMessage } from '../api/request';
 import {
   ACTOR_LABEL,
+  DeliveryAttempt,
+  HeldItem,
   NEEDS_ATTENTION,
   OrderDetail,
+  OrderDispute,
+  OrderRefund,
   OrderReturn,
   PAYMENT_LABEL,
+  itemOutcomeMeta,
   orderStatusMeta,
 } from '../types/orders';
-import { countdown, useNow } from '../utils/orders';
+import { issueDecisionLabel, issueStatusMeta } from '../types/issues';
+import { RETURN_REASON_LABEL } from '../types/returns';
+import { countdown, orderBill, useNow } from '../utils/orders';
 import { formatPaise } from '../utils/money';
 import { formatDateTime, formatDayDate, formatTime, humanize, shortRef, timeAgo } from '../utils/format';
+import { usePermissions } from '../utils/usePermission';
 import {
   ACTION_DONE,
+  IssueActionKey,
   OrderActionDef,
   OrderActionKey,
   actionsFor,
+  issueActionsFor,
   pendingReturnIds,
 } from './orders/orderActions';
 import {
   CounterReturnSheet,
+  DeliveryOtpSheet,
   DoorVisitSheet,
   HandoverSheet,
   PickupHandoverSheet,
   ReasonSheet,
 } from './orders/OrderActionSheets';
+import { RaiseIssueSheet } from './orders/RaiseIssueSheet';
+import { EvidenceStrip } from './orders/EvidenceStrip';
 import { colors, radii, spacing } from '../theme/theme';
 
 type Sheet =
@@ -58,7 +73,10 @@ type Sheet =
   | 'mark-undelivered'
   | 'door-close'
   | 'decline-return'
-  | 'counter-return';
+  | 'counter-return'
+  | 'mark-delivered'
+  | 'raise-issue'
+  | 'request-refund';
 
 const RETURN_META: Record<string, { label: string; tone: StatusTone }> = {
   pending: { label: 'Awaiting verification', tone: 'warning' },
@@ -73,12 +91,21 @@ const PAYMENT_STATUS: Record<string, string> = {
   superseded: 'Replaced',
 };
 
+const REFUND_DEST: Record<string, string> = {
+  original_tender: 'Original payment',
+  wallet: 'Trendzo wallet',
+  cash: 'Cash at the counter',
+  manual_payout: 'Manual payout',
+};
+
 export function OrderDetailScreen({ navigation, route }: ScreenProps<'OrderDetail'>) {
   const { id } = route.params;
   const toast = useToast();
   const orderQ = useOrder(id);
   const action = useOrderAction();
   const returns = useReturnsDecision();
+  const createIssue = useCreateIssue();
+  const { can } = usePermissions();
   const [sheet, setSheet] = useState<Sheet>(null);
   const [invoiceBusy, setInvoiceBusy] = useState(false);
   const order = orderQ.data;
@@ -105,9 +132,13 @@ export function OrderDetailScreen({ navigation, route }: ScreenProps<'OrderDetai
 
   const busy = action.isPending || returns.isPending;
   const meta = orderStatusMeta(order.status);
-  const actions = actionsFor(order);
+  // Hide what this login has no permission for (the server enforces it regardless).
+  const actions = actionsFor(order, can);
+  const issueActions = issueActionsFor(order, can);
   const primary = actions.find((a) => a.primary && !a.disabledReason) ?? null;
   const secondary = actions.filter((a) => a !== primary);
+  const canViewIssues = can('disputes.view');
+  const canViewReturns = can('returns.view');
 
   /** POST /retailer/orders/:id/<action> with a success toast; closes any sheet. */
   const post = (key: OrderActionKey, endpoint: string, body?: object) =>
@@ -161,9 +192,8 @@ export function OrderDetailScreen({ navigation, route }: ScreenProps<'OrderDetai
         );
         return;
       case 'mark-delivered':
-        confirm('Mark as delivered?', 'Confirm the customer has received the order.', 'Delivered', () =>
-          post('mark-delivered', 'mark-delivered'),
-        );
+        // The server wants the customer's delivery OTP as proof of handover.
+        setSheet('mark-delivered');
         return;
       case 'confirm-return-received':
         confirm('Goods received?', 'Confirm the returned items are back at your store.', 'Received', () =>
@@ -195,6 +225,24 @@ export function OrderDetailScreen({ navigation, route }: ScreenProps<'OrderDetai
       setInvoiceBusy(false);
     }
   };
+
+  const openIssue = (issueId: string) => {
+    if (canViewIssues) navigation.navigate('IssueDetail', { id: issueId });
+  };
+
+  /** Raise dispute / Request refund — both file a dispute (kind 'dispute'). */
+  const raiseIssue = (input: { subject: string; description: string; evidence: string[] }) =>
+    createIssue.mutate(
+      { orderId: order.id, kind: 'dispute', ...input },
+      {
+        onSuccess: (res) => {
+          toast.show(sheet === 'request-refund' ? 'Refund request raised' : 'Dispute raised', 'success');
+          setSheet(null);
+          if (res?.issueId) openIssue(res.issueId);
+        },
+        onError: (e) => toast.show(errorMessage(e, "Couldn't raise the dispute"), 'error'),
+      },
+    );
 
   return (
     <Screen edges={['top']}>
@@ -241,7 +289,23 @@ export function OrderDetailScreen({ navigation, route }: ScreenProps<'OrderDetai
               Needs your attention
             </AppText>
           ) : null}
+          {order.group?.siblingOrders?.length ? (
+            <AppText variant="meta" color={colors.meta}>
+              Part of a checkout with {order.group.siblingOrders.length} other order
+              {order.group.siblingOrders.length === 1 ? '' : 's'}
+            </AppText>
+          ) : null}
         </Panel>
+
+        {order.openDispute ? (
+          <Banner
+            tone="warning"
+            title="A dispute is open on this order"
+            message="Funds are held until an admin decides. No further refund actions until it's resolved."
+            actionLabel={canViewIssues ? 'View dispute' : undefined}
+            onAction={() => openIssue(order.openDispute!.id)}
+          />
+        ) : null}
 
         {/* Customer + delivery */}
         <Panel title="Customer">
@@ -293,54 +357,92 @@ export function OrderDetailScreen({ navigation, route }: ScreenProps<'OrderDetai
 
         {/* Items */}
         <Panel title={`Items (${order.items.length})`}>
-          {order.items.map((it) => (
-            <View key={it.id} style={styles.item}>
-              {it.galleryImageSnap ? (
-                <AppImage uri={it.galleryImageSnap} radius={radii.sm} containerStyle={styles.thumb} />
-              ) : (
-                <View style={[styles.thumb, styles.thumbEmpty]}>
-                  <Icon name="shirt-outline" size={20} color={colors.inkMuted} />
+          {order.items.map((it) => {
+            const outcome = itemOutcomeMeta(it.outcome);
+            return (
+              <View key={it.id} style={styles.item}>
+                {it.galleryImageSnap ? (
+                  <AppImage uri={it.galleryImageSnap} radius={radii.sm} containerStyle={styles.thumb} />
+                ) : (
+                  <View style={[styles.thumb, styles.thumbEmpty]}>
+                    <Icon name="shirt-outline" size={20} color={colors.inkMuted} />
+                  </View>
+                )}
+                <View style={styles.flex}>
+                  <AppText variant="bodyMedium" color={colors.ink} numberOfLines={2}>
+                    {it.listingNameSnap}
+                  </AppText>
+                  <AppText variant="meta" color={colors.meta} numberOfLines={1}>
+                    {[it.brandSnap, it.attributesLabelSnap].filter(Boolean).join(' · ')}
+                  </AppText>
+                  <AppText variant="meta" color={colors.meta}>
+                    {it.qty} × {formatPaise(it.unitPricePaise)}
+                  </AppText>
+                  {outcome ? (
+                    <StatusChip label={outcome.label} tone={outcome.tone} style={styles.outcomeChip} />
+                  ) : null}
                 </View>
-              )}
-              <View style={styles.flex}>
-                <AppText variant="bodyMedium" color={colors.ink} numberOfLines={2}>
-                  {it.listingNameSnap}
-                </AppText>
-                <AppText variant="meta" color={colors.meta} numberOfLines={1}>
-                  {[it.brandSnap, it.attributesLabelSnap].filter(Boolean).join(' · ')}
-                </AppText>
-                <AppText variant="meta" color={colors.meta}>
-                  {it.qty} × {formatPaise(it.unitPricePaise)}
+                <AppText variant="bodyMedium" color={colors.ink}>
+                  {formatPaise(it.netLinePaise)}
                 </AppText>
               </View>
-              <AppText variant="bodyMedium" color={colors.ink}>
-                {formatPaise(it.netLinePaise)}
-              </AppText>
-            </View>
-          ))}
+            );
+          })}
         </Panel>
 
         {/* Bill */}
         <BillPanel order={order} />
 
-        {order.returns?.length ? <ReturnsPanel returns={order.returns} /> : null}
+        {order.returns?.length ? (
+          <ReturnsPanel
+            returns={order.returns}
+            onOpen={canViewReturns ? (rid) => navigation.navigate('ReturnDetail', { id: rid }) : undefined}
+          />
+        ) : null}
+
+        {order.heldItems?.length ? <HeldItemsPanel held={order.heldItems} /> : null}
 
         {order.refunds?.length ? (
-          <Panel title="Refunds">
-            {order.refunds.map((r) => (
-              <View key={r.id} style={styles.rowBetween}>
-                <AppText variant="body" color={colors.ink}>
-                  {formatPaise(r.totalRefundPaise)}
-                </AppText>
-                <StatusChip
-                  label={humanize(r.status)}
-                  tone={r.status === 'succeeded' ? 'success' : r.status === 'failed' ? 'danger' : 'warning'}
-                  style={styles.chipCenter}
-                />
-              </View>
-            ))}
-          </Panel>
+          <RefundsPanel
+            refunds={order.refunds}
+            cashReturnId={
+              can('returns.accept') ? order.returns?.find((r) => r.storeDecision === 'accepted')?.id : undefined
+            }
+            onOpenReturn={(rid) => navigation.navigate('ReturnDetail', { id: rid })}
+          />
         ) : null}
+
+        {/* Disputes */}
+        <Panel title="Disputes">
+          {order.disputes?.length ? (
+            order.disputes.map((d) => (
+              <DisputeRow key={d.id} dispute={d} onPress={canViewIssues ? () => openIssue(d.id) : undefined} />
+            ))
+          ) : (
+            <AppText variant="meta" color={colors.meta}>
+              No disputes on this order.
+            </AppText>
+          )}
+          {issueActions.length ? (
+            <View style={styles.footerRow}>
+              {issueActions.map((a) => (
+                <PrimaryButton
+                  key={a.key}
+                  label={a.label}
+                  tone="surface"
+                  disabled={!!a.disabledReason}
+                  onPress={() => setSheet(a.key as IssueActionKey)}
+                  style={styles.flex}
+                />
+              ))}
+            </View>
+          ) : null}
+          {issueActions.find((a) => a.disabledReason) ? (
+            <AppText variant="meta" color={colors.meta}>
+              {issueActions.find((a) => a.disabledReason)?.disabledReason}
+            </AppText>
+          ) : null}
+        </Panel>
 
         {order.transitions?.length ? <Timeline order={order} /> : null}
 
@@ -445,6 +547,20 @@ export function OrderDetailScreen({ navigation, route }: ScreenProps<'OrderDetai
         onSubmit={(items) => post('counter-return', 'returns/open-counter', { items })}
         onClose={() => setSheet(null)}
       />
+      <DeliveryOtpSheet
+        visible={sheet === 'mark-delivered'}
+        busy={action.isPending}
+        onSubmit={(otp) => post('mark-delivered', 'mark-delivered', { otp })}
+        onClose={() => setSheet(null)}
+      />
+      <RaiseIssueSheet
+        visible={sheet === 'raise-issue' || sheet === 'request-refund'}
+        mode={sheet === 'request-refund' ? 'refund' : 'dispute'}
+        orderId={order.id}
+        busy={createIssue.isPending}
+        onSubmit={raiseIssue}
+        onClose={() => setSheet(null)}
+      />
     </Screen>
   );
 }
@@ -468,56 +584,94 @@ function Deadline({
   );
 }
 
+/**
+ * The bill as rows that add up to the total: items − offers − coupon − points +
+ * GST (CGST/SGST or IGST) + fees. The wallet is shown beneath the total as part of
+ * how it was paid, not as a further discount.
+ */
 function BillPanel({ order }: { order: OrderDetail }) {
-  const minus = (p?: number) => `− ${formatPaise(p ?? 0)}`;
+  const bill = orderBill(order);
   const payment = order.payments?.[0];
+  const method = PAYMENT_LABEL[order.paymentMethod] ?? humanize(order.paymentMethod);
   return (
     <Panel title="Bill">
-      <DetailRow label="Items" value={formatPaise(order.itemsSubtotalPaise ?? 0)} />
-      {order.couponPaise ? <DetailRow label="Coupon" value={minus(order.couponPaise)} tone="negative" /> : null}
-      {order.walletAppliedPaise ? (
-        <DetailRow label="Wallet" value={minus(order.walletAppliedPaise)} tone="negative" />
-      ) : null}
-      {order.pointsRedeemedPaise ? (
-        <DetailRow label="Points" value={minus(order.pointsRedeemedPaise)} tone="negative" />
-      ) : null}
-      <DetailRow label="Tax (GST)" value={formatPaise(order.taxPaise ?? 0)} />
-      {order.deliveryFeePaise ? <DetailRow label="Delivery fee" value={formatPaise(order.deliveryFeePaise)} /> : null}
-      {order.handlingFeePaise ? <DetailRow label="Handling fee" value={formatPaise(order.handlingFeePaise)} /> : null}
-      {order.convenienceFeePaise ? (
-        <DetailRow label="Convenience fee" value={formatPaise(order.convenienceFeePaise)} />
-      ) : null}
+      {bill.rows.map((r) => (
+        <DetailRow
+          key={r.key}
+          label={r.label}
+          hint={r.hint}
+          value={r.amountPaise < 0 ? `− ${formatPaise(-r.amountPaise)}` : formatPaise(r.amountPaise)}
+          tone={r.kind === 'discount' ? 'negative' : 'default'}
+        />
+      ))}
       <Divider />
-      <DetailRow label="Total" value={formatPaise(order.grandTotalPaise)} strong />
+      <DetailRow label="Total" value={formatPaise(bill.totalPaise)} strong />
+      {bill.walletPaise > 0 ? (
+        <>
+          <DetailRow label="Paid from wallet" value={formatPaise(bill.walletPaise)} tone="muted" />
+          <DetailRow
+            label={order.paymentMethod === 'cod' ? 'Cash to collect' : `Paid by ${method}`}
+            value={formatPaise(bill.chargedPaise)}
+            tone="muted"
+          />
+        </>
+      ) : null}
       <AppText variant="meta" color={colors.meta}>
-        {PAYMENT_LABEL[order.paymentMethod] ?? humanize(order.paymentMethod)}
+        {method}
         {payment ? ` · ${PAYMENT_STATUS[payment.status] ?? humanize(payment.status)}` : ''}
       </AppText>
     </Panel>
   );
 }
 
-function ReturnsPanel({ returns }: { returns: OrderReturn[] }) {
+function ReturnsPanel({
+  returns,
+  onOpen,
+}: {
+  returns: OrderReturn[];
+  onOpen?: (returnId: string) => void;
+}) {
   return (
     <Panel title="Returns">
       {returns.map((r) => {
         const m = RETURN_META[r.storeDecision] ?? { label: humanize(r.storeDecision), tone: 'neutral' as StatusTone };
-        return (
-          <View key={r.id} style={styles.returnRow}>
+        const body = (
+          <>
             <View style={styles.rowBetween}>
-              <AppText variant="bodyMedium" color={colors.ink}>
+              <AppText variant="bodyMedium" color={colors.ink} style={styles.flex}>
                 {r.kind === 'door_return' ? 'Returned at the door' : 'Customer return'}
               </AppText>
               <StatusChip label={m.label} tone={m.tone} style={styles.chipCenter} />
+              {onOpen ? <Icon name="chevron-forward" size={16} color={colors.meta} /> : null}
             </View>
             {r.reasonText ? (
               <AppText variant="body" color={colors.ink}>
                 “{r.reasonText}”
               </AppText>
             ) : null}
+            {r.reasonCategory ? (
+              <AppText variant="meta" color={colors.meta}>
+                {RETURN_REASON_LABEL[r.reasonCategory] ?? humanize(r.reasonCategory)}
+              </AppText>
+            ) : null}
             <AppText variant="meta" color={colors.meta}>
               Opened {timeAgo(r.openedAt)}
             </AppText>
+          </>
+        );
+        return onOpen ? (
+          <PressableScale
+            key={r.id}
+            onPress={() => onOpen(r.id)}
+            toScale={0.98}
+            haptic={false}
+            style={styles.returnRow}
+          >
+            {body}
+          </PressableScale>
+        ) : (
+          <View key={r.id} style={styles.returnRow}>
+            {body}
           </View>
         );
       })}
@@ -525,10 +679,132 @@ function ReturnsPanel({ returns }: { returns: OrderReturn[] }) {
   );
 }
 
+/** Returned goods the store is holding for the customer (after a declined return). */
+function HeldItemsPanel({ held }: { held: HeldItem[] }) {
+  return (
+    <Panel title="Items held">
+      {held.map((h) => (
+        <View key={h.id} style={styles.returnRow}>
+          <View style={styles.rowBetween}>
+            <AppText variant="bodyMedium" color={colors.ink} style={styles.flex}>
+              {h.status === 'holding' ? 'Holding for the customer' : 'Hold closed'}
+            </AppText>
+            <StatusChip
+              label={humanize(h.status)}
+              tone={h.status === 'holding' ? 'warning' : 'neutral'}
+              style={styles.chipCenter}
+            />
+          </View>
+          <AppText variant="meta" color={colors.meta}>
+            {h.status === 'holding' ? 'Hold ends' : 'Hold ended'} {formatDateTime(h.holdingWindowExpiresAt)}
+            {h.disposition ? ` · ${humanize(h.disposition)}` : ''}
+          </AppText>
+        </View>
+      ))}
+    </Panel>
+  );
+}
+
+function RefundsPanel({
+  refunds,
+  cashReturnId,
+  onOpenReturn,
+}: {
+  refunds: OrderRefund[];
+  /** A return of this order to open for the cash hand-over (when permitted). */
+  cashReturnId?: string;
+  onOpenReturn: (returnId: string) => void;
+}) {
+  return (
+    <Panel title="Refunds">
+      {refunds.map((r) => {
+        const cashDue = (r.disbursements ?? []).find((d) => d.destination === 'cash' && d.status === 'pending');
+        return (
+          <View key={r.id} style={styles.returnRow}>
+            <View style={styles.rowBetween}>
+              <AppText variant="bodyMedium" color={colors.ink}>
+                {formatPaise(r.totalRefundPaise)}
+              </AppText>
+              <StatusChip
+                label={humanize(r.status)}
+                tone={r.status === 'succeeded' ? 'success' : r.status === 'failed' ? 'danger' : 'warning'}
+                style={styles.chipCenter}
+              />
+            </View>
+            {(r.disbursements ?? []).map((d) => (
+              <View key={d.id} style={styles.rowBetween}>
+                <AppText variant="meta" color={colors.meta} style={styles.flex}>
+                  {REFUND_DEST[d.destination] ?? humanize(d.destination)} · {humanize(d.status)}
+                </AppText>
+                <AppText variant="meta" color={colors.ink}>
+                  {formatPaise(d.amountPaise)}
+                </AppText>
+              </View>
+            ))}
+            {cashDue ? (
+              <Banner
+                tone="warning"
+                title={`Hand ${formatPaise(cashDue.amountPaise)} in cash to the customer`}
+                message="Cash-on-delivery refund — you are repaid in your next payout."
+                actionLabel={cashReturnId ? 'Open the return to record it' : undefined}
+                onAction={cashReturnId ? () => onOpenReturn(cashReturnId) : undefined}
+              />
+            ) : null}
+          </View>
+        );
+      })}
+    </Panel>
+  );
+}
+
+function DisputeRow({ dispute, onPress }: { dispute: OrderDispute; onPress?: () => void }) {
+  const meta = issueStatusMeta(dispute.status);
+  const body = (
+    <>
+      <View style={styles.rowBetween}>
+        <StatusChip label={meta.label} tone={meta.tone} style={styles.chipCenter} />
+        {dispute.heldAmountPaise ? (
+          <StatusChip
+            label={`Held ${formatPaise(dispute.heldAmountPaise)}`}
+            tone="warning"
+            style={styles.chipCenter}
+          />
+        ) : null}
+        <View style={styles.flex} />
+        <AppText variant="meta" color={colors.meta}>
+          {timeAgo(dispute.createdAt)}
+        </AppText>
+        {onPress ? <Icon name="chevron-forward" size={16} color={colors.meta} /> : null}
+      </View>
+      <AppText variant="bodyMedium" color={colors.ink} numberOfLines={2}>
+        {dispute.subject}
+      </AppText>
+      <AppText variant="meta" color={colors.meta}>
+        Opened by {ACTOR_LABEL[dispute.openedByActorType] ?? humanize(dispute.openedByActorType)}
+        {dispute.returnId ? ' · on a return' : ''}
+      </AppText>
+      {dispute.decision ? (
+        <AppText variant="meta" color={colors.ink}>
+          Decision: {issueDecisionLabel(dispute.decision)}
+          {dispute.decisionNote ? ` — ${dispute.decisionNote}` : ''}
+        </AppText>
+      ) : null}
+    </>
+  );
+  return onPress ? (
+    <PressableScale onPress={onPress} toScale={0.98} haptic={false} style={styles.returnRow}>
+      {body}
+    </PressableScale>
+  ) : (
+    <View style={styles.returnRow}>{body}</View>
+  );
+}
+
 function Timeline({ order }: { order: OrderDetail }) {
   const steps = [...(order.transitions ?? [])].sort(
     (a, b) => new Date(a.at).getTime() - new Date(b.at).getTime(),
   );
+  const attempts = order.deliveryAttempts ?? [];
   return (
     <Panel title="Timeline">
       {steps.map((t, i) => {
@@ -555,7 +831,37 @@ function Timeline({ order }: { order: OrderDetail }) {
           </View>
         );
       })}
+      {attempts.length ? <DeliveryAttempts attempts={attempts} /> : null}
     </Panel>
+  );
+}
+
+function DeliveryAttempts({ attempts }: { attempts: DeliveryAttempt[] }) {
+  return (
+    <>
+      <Divider />
+      <AppText variant="sectionLabel" color={colors.meta}>
+        Delivery attempts
+      </AppText>
+      {attempts.map((a) => (
+        <View key={a.id} style={styles.returnRow}>
+          <View style={styles.rowBetween}>
+            <AppText variant="bodyMedium" color={colors.ink} style={styles.flex}>
+              #{a.attemptNumber} · {humanize(a.outcome)}
+            </AppText>
+            <AppText variant="meta" color={colors.meta}>
+              {timeAgo(a.attemptedAt)}
+            </AppText>
+          </View>
+          {a.notes ? (
+            <AppText variant="meta" color={colors.ink}>
+              {a.notes}
+            </AppText>
+          ) : null}
+          <EvidenceStrip urls={[...(a.proofPhotos ?? []), ...(a.signatureUrl ? [a.signatureUrl] : [])]} />
+        </View>
+      ))}
+    </>
   );
 }
 
@@ -567,6 +873,7 @@ const styles = StyleSheet.create({
   center: { textAlign: 'center' },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap' },
   chipCenter: { alignSelf: 'center' },
+  outcomeChip: { marginTop: 2 },
   iconLine: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
   item: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.xs },
   thumb: { width: 48, height: 64, borderRadius: radii.sm },

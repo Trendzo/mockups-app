@@ -121,9 +121,15 @@ describe('routeForDeepLink (notifications)', () => {
     });
     expect(routeForDeepLink('/retailer/payouts')).toEqual({ name: 'Earnings' });
     expect(routeForDeepLink('/retailer/store/kyc')).toEqual({ name: 'Kyc' });
+    // The returns queue + return detail have their own screens now.
+    expect(routeForDeepLink('/retailer/returns')).toEqual({ name: 'Returns' });
     expect(routeForDeepLink('/retailer/returns/ret_1')).toEqual({
-      name: 'Main',
-      params: { screen: 'Orders', params: { tab: 'returns' } },
+      name: 'ReturnDetail',
+      params: { id: 'ret_1' },
+    });
+    expect(routeForDeepLink('/retailer/disputes/iss_1')).toEqual({
+      name: 'IssueDetail',
+      params: { id: 'iss_1' },
     });
     expect(routeForDeepLink('/retailer/listings/lst_7')).toEqual({
       name: 'ProductDetail',
@@ -159,6 +165,15 @@ describe('actionsFor (order detail)', () => {
     });
     expect(keys(pending)).toEqual(['accept-return', 'decline-return']);
     expect(keys(detail('returned_to_store'))).toEqual([]);
+  });
+
+  it('in returning_to_store offers "Mark received" OR accept / decline, never both (web parity)', () => {
+    const waiting = detail('returning_to_store', {
+      returns: [{ id: 'r1', kind: 'door_return', storeDecision: 'pending', openedAt: iso() }],
+    });
+    expect(keys(waiting)).toEqual(['accept-return', 'decline-return']);
+    expect(keys(detail('returning_to_store'))).toEqual(['confirm-return-received']);
+    expect(actionsFor(detail('returning_to_store'))[0].primary).toBe(true);
   });
 
   it('disables moves the server does not allow for the retailer', () => {

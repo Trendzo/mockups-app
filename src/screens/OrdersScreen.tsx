@@ -1,24 +1,37 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, RefreshControl, StyleSheet } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  RefreshControl,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native';
 import {
   AppText,
   Banner,
   EmptyState,
   FilterChips,
+  Icon,
   IconButton,
   OrderCard,
+  PressableScale,
+  PrimaryButton,
   Screen,
   ScreenHeader,
   useToast,
 } from '../components';
 import { ScreenProps } from '../navigation/types';
-import { useActiveOrders, useDoneOrders, useOrderAction } from '../api/ordersHooks';
+import { useActiveOrders, useFinishedOrders, useOrderAction } from '../api/ordersHooks';
+import { useIssuesAwaitingStore } from '../api/issuesHooks';
 import { useInbox } from '../api/notifications';
 import { errorMessage } from '../api/request';
 import { ORDER_TABS, OrderRow, OrderTab } from '../types/orders';
-import { sortForTab } from '../utils/orders';
+import { matchesOrderSearch, sortForTab } from '../utils/orders';
+import { usePermissions } from '../utils/usePermission';
 import { usePullRefresh } from '../utils/usePullRefresh';
-import { colors, spacing } from '../theme/theme';
+import { colors, radii, spacing, type as typeScale } from '../theme/theme';
 
 const EMPTY: Record<OrderTab, { icon: string; title: string; message: string }> = {
   new: {
@@ -38,6 +51,7 @@ const DONE_TABS: OrderTab[] = ['completed', 'cancelled'];
 /** Online orders from the consumer app, grouped the way the store works them. */
 export function OrdersScreen({ navigation, route }: ScreenProps<'Orders'>) {
   const toast = useToast();
+  const { can } = usePermissions();
   const [tab, setTab] = useState<OrderTab>(route.params?.tab ?? 'new');
   // Re-select whenever another screen links here with a tab. Keyed on the
   // params object (new on every navigate) so tapping the same Home tile twice
@@ -48,28 +62,44 @@ export function OrdersScreen({ navigation, route }: ScreenProps<'Orders'>) {
   }, [params]);
 
   const showDone = DONE_TABS.includes(tab);
+  const statuses = ORDER_TABS.find((t) => t.key === tab)!.statuses;
+
+  // History search: typed text filters the loaded rows at once; the server query
+  // (`q`) follows once typing pauses.
+  const [search, setSearch] = useState('');
+  const [query, setQuery] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setQuery(search.trim()), 400);
+    return () => clearTimeout(t);
+  }, [search]);
+
   const activeQ = useActiveOrders();
-  const doneQ = useDoneOrders(showDone);
+  const finishedQ = useFinishedOrders(statuses, query, showDone);
   const inbox = useInbox();
   const action = useOrderAction();
+  const canViewIssues = can('disputes.view');
+  const awaitingStore = useIssuesAwaitingStore(canViewIssues);
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const source = showDone ? doneQ : activeQ;
+  const source = showDone ? finishedQ : activeQ;
   const pull = usePullRefresh(source.refetch);
-  const all: OrderRow[] = useMemo(() => source.data ?? [], [source.data]);
   const active: OrderRow[] = useMemo(() => activeQ.data ?? [], [activeQ.data]);
+  const loaded: OrderRow[] = useMemo(
+    () => (showDone ? finishedQ.data ?? [] : active),
+    [showDone, finishedQ.data, active],
+  );
 
   const counts = useMemo(() => {
     const c = {} as Record<OrderTab, number>;
     for (const t of ORDER_TABS) c[t.key] = active.filter((o) => t.statuses.includes(o.status)).length;
     return c;
   }, [active]);
+  const pendingReturns = useMemo(() => active.filter((o) => o.hasPendingReturn).length, [active]);
 
-  const statuses = ORDER_TABS.find((t) => t.key === tab)!.statuses;
-  const rows = useMemo(
-    () => sortForTab(tab, all.filter((o) => statuses.includes(o.status))),
-    [tab, all, statuses],
-  );
+  const rows = useMemo(() => {
+    const inTab = loaded.filter((o) => statuses.includes(o.status));
+    return sortForTab(tab, showDone ? inTab.filter((o) => matchesOrderSearch(o, search)) : inTab);
+  }, [tab, loaded, statuses, showDone, search]);
 
   const run = (order: OrderRow, act: 'accept' | 'reject') => {
     setBusyId(order.id);
@@ -100,17 +130,36 @@ export function OrdersScreen({ navigation, route }: ScreenProps<'Orders'>) {
     count: DONE_TABS.includes(t.key) ? undefined : counts[t.key],
   }));
 
+  const canAccept = can('orders.accept');
+  const searching = showDone && search.trim().length > 0;
+
   return (
     <Screen edges={['top']}>
       <ScreenHeader
         overline="Online orders"
         title="Orders"
         right={
-          <IconButton
-            icon="notifications-outline"
-            badge={inbox.unread}
-            onPress={() => navigation.navigate('Notifications')}
-          />
+          <>
+            {can('returns.view') ? (
+              <IconButton
+                icon="return-down-back-outline"
+                badge={pendingReturns}
+                onPress={() => navigation.navigate('Returns')}
+              />
+            ) : null}
+            {canViewIssues ? (
+              <IconButton
+                icon="chatbubbles-outline"
+                badge={awaitingStore.count}
+                onPress={() => navigation.navigate('Issues')}
+              />
+            ) : null}
+            <IconButton
+              icon="notifications-outline"
+              badge={inbox.unread}
+              onPress={() => navigation.navigate('Notifications')}
+            />
+          </>
         }
       />
       <FilterChips options={options} value={tab} onChange={setTab} style={styles.chips} />
@@ -132,6 +181,7 @@ export function OrdersScreen({ navigation, route }: ScreenProps<'Orders'>) {
           keyExtractor={(o) => o.id}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
           refreshControl={
             <RefreshControl
               refreshing={pull.refreshing}
@@ -140,19 +190,68 @@ export function OrdersScreen({ navigation, route }: ScreenProps<'Orders'>) {
             />
           }
           ListHeaderComponent={
-            tab === 'new' && rows.length > 0 ? (
+            showDone ? (
+              <View style={styles.searchBox}>
+                <Icon name="search" size={18} color={colors.meta} />
+                <TextInput
+                  value={search}
+                  onChangeText={setSearch}
+                  placeholder="Search order, customer or phone"
+                  placeholderTextColor={colors.inkMuted}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="search"
+                  onSubmitEditing={() => setQuery(search.trim())}
+                  style={styles.searchInput}
+                />
+                {search ? (
+                  <PressableScale onPress={() => setSearch('')} hitSlop={10} haptic={false}>
+                    <Icon name="close-circle" size={18} color={colors.inkMuted} />
+                  </PressableScale>
+                ) : null}
+              </View>
+            ) : tab === 'new' && rows.length > 0 ? (
               <AppText variant="meta" color={colors.meta}>
                 Accept quickly — an order not accepted in time moves to another store.
               </AppText>
             ) : null
           }
-          ListEmptyComponent={<EmptyState {...EMPTY[tab]} />}
+          ListEmptyComponent={
+            searching ? (
+              finishedQ.isFetching ? (
+                <ActivityIndicator color={colors.ink} style={styles.loader} />
+              ) : (
+                <EmptyState
+                  icon="search-outline"
+                  title="No matching orders"
+                  message={
+                    finishedQ.hasNextPage
+                      ? 'Not in what is loaded yet — load more to keep looking.'
+                      : `Nothing found for “${search.trim()}”.`
+                  }
+                />
+              )
+            ) : (
+              <EmptyState {...EMPTY[tab]} />
+            )
+          }
+          ListFooterComponent={
+            showDone && finishedQ.hasNextPage ? (
+              <PrimaryButton
+                label="Load more"
+                tone="surface"
+                loading={finishedQ.isFetchingNextPage}
+                onPress={() => finishedQ.fetchNextPage()}
+                style={styles.more}
+              />
+            ) : null
+          }
           renderItem={({ item }) => (
             <OrderCard
               order={item}
               onPress={() => navigation.navigate('OrderDetail', { id: item.id })}
-              onAccept={() => run(item, 'accept')}
-              onReject={() => confirmReject(item)}
+              onAccept={canAccept ? () => run(item, 'accept') : undefined}
+              onReject={canAccept ? () => confirmReject(item) : undefined}
               busy={busyId === item.id}
             />
           )}
@@ -168,4 +267,21 @@ const styles = StyleSheet.create({
   banner: { marginTop: spacing.md },
   // Clears the floating bottom nav.
   list: { paddingTop: spacing.md, paddingBottom: 140, gap: spacing.sm },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.surface,
+    borderRadius: radii.sm + 4,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: spacing.sm + 4,
+    color: colors.ink,
+    fontFamily: typeScale.body.fontFamily,
+    fontSize: typeScale.body.fontSize,
+  },
+  more: { marginTop: spacing.sm },
 });

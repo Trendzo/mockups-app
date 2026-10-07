@@ -1,7 +1,15 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  InfiniteData,
+  keepPreviousData,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { acceptReturn, declineReturn, getOrder, listOrders, orderAction } from './orders';
 import { pollUnlessForbidden, retryUnlessClientError } from './request';
-import { ACTIVE_STATUSES, DONE_STATUSES } from '../types/orders';
+import { dedupeOrders, nextOrderOffset } from '../utils/orders';
+import { ACTIVE_STATUSES, DONE_STATUSES, OrderRow, OrderStatus } from '../types/orders';
 
 /**
  * Live board: every order still in motion. Polled so a new order (which must
@@ -31,6 +39,38 @@ export function useDoneOrders(enabled = true) {
   });
 }
 
+/** Rows per "Load more" step on the Finished tabs (server max is 200). */
+export const FINISHED_PAGE_SIZE = 50;
+
+// Module-level so the query keeps the same `select` between renders.
+const flattenFinished = (data: InfiniteData<OrderRow[]>) => dedupeOrders(data.pages);
+
+/**
+ * Finished orders (history) with search and "Load more". Each (statuses, search)
+ * pair is its own key, so typing starts again at page 1 while the previous rows
+ * stay on screen until the new ones land.
+ *
+ * Paging uses `offset` and search uses `q` — both newer backend params. An older
+ * server drops them silently, so the hook guards itself: a short page ends the
+ * list, and a page that adds nothing new (a server that ignores `offset` keeps
+ * answering with page 1) ends it too instead of looping on duplicates.
+ */
+export function useFinishedOrders(statuses: OrderStatus[], search: string, enabled = true) {
+  const q = search.trim();
+  return useInfiniteQuery({
+    queryKey: ['orders', 'finished', statuses.join(','), q],
+    queryFn: ({ pageParam }) =>
+      listOrders(statuses, FINISHED_PAGE_SIZE, { offset: pageParam, q }),
+    initialPageParam: 0,
+    getNextPageParam: (_last, all) => nextOrderOffset(all, FINISHED_PAGE_SIZE),
+    select: flattenFinished,
+    enabled,
+    retry: retryUnlessClientError,
+    staleTime: 30_000,
+    placeholderData: keepPreviousData,
+  });
+}
+
 /** Latest orders of every status — the dashboard's sales maths. */
 export function useRecentOrders(enabled = true) {
   return useQuery({
@@ -54,12 +94,15 @@ export function useOrder(id?: string) {
   });
 }
 
-function useInvalidateOrder() {
+/** After any write on an order: the lists, this order, stock, returns and disputes. */
+export function useInvalidateOrder() {
   const qc = useQueryClient();
   return (id: string) => {
     void qc.invalidateQueries({ queryKey: ['orders'] });
     void qc.invalidateQueries({ queryKey: ['order', id] });
     void qc.invalidateQueries({ queryKey: ['inventory'] });
+    void qc.invalidateQueries({ queryKey: ['returns'] });
+    void qc.invalidateQueries({ queryKey: ['issues'] });
   };
 }
 

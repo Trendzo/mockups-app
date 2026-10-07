@@ -4,6 +4,7 @@
  * Money is integer paise.
  */
 import type { StatusTone } from '../components/StatusChip';
+import type { IssueDecision, IssueStatus } from './issues';
 
 export type OrderStatus =
   | 'pending'
@@ -45,6 +46,58 @@ export interface OrderRow {
   hasPendingReturn?: boolean;
 }
 
+/** Where one line of an order ended up (order_item_outcome). */
+export type OrderItemOutcome =
+  | 'pending_delivery'
+  | 'delivered_kept'
+  | 'at_door_kept'
+  | 'at_door_returned'
+  | 'at_door_refused'
+  | 'at_door_return_rejected'
+  | 'at_store_pending_verification'
+  | 'store_accepted_return'
+  | 'store_rejected_held'
+  | 'held_collected_at_counter'
+  | 'held_redelivered'
+  | 'held_abandoned'
+  | 'held_window_expired'
+  | 'dispute_open'
+  | 'dispute_resolved_refund'
+  | 'dispute_resolved_fresh_delivery'
+  | 'dispute_resolved_pickup'
+  | 'dispute_resolved_no_refund'
+  | 'cancelled';
+
+/** Shown under an item once it has left the plain "waiting to be delivered" state. */
+export const ITEM_OUTCOME_LABEL: Record<OrderItemOutcome, { label: string; tone: StatusTone } | null> = {
+  pending_delivery: null,
+  delivered_kept: { label: 'Delivered', tone: 'success' },
+  at_door_kept: { label: 'Kept at the door', tone: 'success' },
+  at_door_returned: { label: 'Returned at the door', tone: 'warning' },
+  at_door_refused: { label: 'Refused at the door', tone: 'danger' },
+  at_door_return_rejected: { label: 'Return refused by agent', tone: 'neutral' },
+  at_store_pending_verification: { label: 'Awaiting your verification', tone: 'warning' },
+  store_accepted_return: { label: 'Return accepted', tone: 'neutral' },
+  store_rejected_held: { label: 'Return declined · held', tone: 'danger' },
+  held_collected_at_counter: { label: 'Collected at counter', tone: 'neutral' },
+  held_redelivered: { label: 'Re-delivered', tone: 'neutral' },
+  held_abandoned: { label: 'Held · abandoned', tone: 'neutral' },
+  held_window_expired: { label: 'Hold window expired', tone: 'neutral' },
+  dispute_open: { label: 'In dispute', tone: 'warning' },
+  dispute_resolved_refund: { label: 'Dispute: refunded', tone: 'neutral' },
+  dispute_resolved_fresh_delivery: { label: 'Dispute: fresh delivery', tone: 'neutral' },
+  dispute_resolved_pickup: { label: 'Dispute: pickup', tone: 'neutral' },
+  dispute_resolved_no_refund: { label: 'Dispute: no refund', tone: 'neutral' },
+  cancelled: { label: 'Cancelled', tone: 'danger' },
+};
+
+export function itemOutcomeMeta(outcome?: string | null): { label: string; tone: StatusTone } | null {
+  if (!outcome) return null;
+  const known = ITEM_OUTCOME_LABEL[outcome as OrderItemOutcome];
+  if (known !== undefined) return known;
+  return { label: outcome.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase()), tone: 'neutral' };
+}
+
 export interface OrderItem {
   id: string;
   listingId: string;
@@ -56,6 +109,15 @@ export interface OrderItem {
   unitPricePaise: number;
   qty: number;
   netLinePaise: number;
+  /** unit price x qty, before any discount. */
+  lineSubtotalPaise?: number;
+  retailerPromoAllocPaise?: number;
+  platformPromoAllocPaise?: number;
+  couponAllocPaise?: number;
+  pointsAllocPaise?: number;
+  gstRateBp?: number;
+  gstAllocPaise?: number;
+  outcome?: OrderItemOutcome | string;
 }
 
 export interface OrderTransition {
@@ -71,23 +133,71 @@ export type ReturnDecision = 'pending' | 'accepted' | 'rejected';
 
 export interface OrderReturn {
   id: string;
+  orderItemId?: string;
   kind: 'door_return' | 'standard_return' | string;
   storeDecision: ReturnDecision;
   openedAt: string;
   reasonText?: string | null;
+  reasonCategory?: string | null;
   agentDisposition?: string | null;
+  storeDecidedAt?: string | null;
+  /** Custody: null while the goods are not yet physically at the store. */
+  goodsReceivedAt?: string | null;
+  /** The store's decision deadline; the sweep auto-accepts + refunds after it. */
+  verificationWindowExpiresAt?: string | null;
+}
+
+export type RefundDestination = 'original_tender' | 'wallet' | 'cash' | 'manual_payout' | string;
+
+export interface RefundDisbursement {
+  id: string;
+  status: 'pending' | 'succeeded' | 'failed' | string;
+  destination: RefundDestination;
+  amountPaise: number;
 }
 
 export interface OrderRefund {
   id: string;
   status: 'pending' | 'processing' | 'succeeded' | 'partially_disbursed' | 'failed' | string;
   totalRefundPaise: number;
-  disbursements?: {
-    id: string;
-    status: 'pending' | 'succeeded' | 'failed' | string;
-    destination: string;
-    amountPaise: number;
-  }[];
+  reason?: string | null;
+  createdAt?: string;
+  disbursements?: RefundDisbursement[];
+}
+
+/** A returned item the store is holding for the customer (after a declined return). */
+export interface HeldItem {
+  id: string;
+  returnId: string;
+  status: 'holding' | 'expired' | 'resolved' | string;
+  disposition?: string | null;
+  holdingWindowExpiresAt: string;
+}
+
+/** A dispute tied to the order or one of its returns (open or decided). */
+export interface OrderDispute {
+  id: string;
+  status: IssueStatus | string;
+  subject: string;
+  description: string;
+  openedByActorType: string;
+  createdAt: string;
+  decision: IssueDecision | string | null;
+  decisionNote: string | null;
+  decidedAt: string | null;
+  returnId: string | null;
+  /** Payout withheld from the store until the dispute is decided. */
+  heldAmountPaise: number | null;
+}
+
+export interface DeliveryAttempt {
+  id: string;
+  attemptNumber: number;
+  outcome: 'delivered' | 'undelivered' | 'returning_to_store' | string;
+  notes?: string | null;
+  proofPhotos?: string[];
+  signatureUrl?: string | null;
+  attemptedAt: string;
 }
 
 /** GET /retailer/orders/:id */
@@ -118,20 +228,44 @@ export interface OrderDetail {
   assignedAgentId?: string | null;
   items: OrderItem[];
   payments?: { id: string; status: string; amountPaise: number; gatewayRef?: string | null }[];
+
+  // Bill. grandTotal = items − retailerPromo − platformPromo − coupon − points
+  // + tax (cgst + sgst + igst) + delivery + handling + convenience. The wallet is a
+  // payment tender (it pays part of the total), NOT a further discount.
   itemsSubtotalPaise?: number;
+  retailerPromoPaise?: number;
+  platformPromoPaise?: number;
   couponPaise?: number;
   walletAppliedPaise?: number;
   pointsRedeemedPaise?: number;
   taxPaise?: number;
+  taxSplitKind?: 'intra_state' | 'inter_state' | string;
+  cgstPaise?: number;
+  sgstPaise?: number;
+  igstPaise?: number;
   deliveryFeePaise?: number;
   handlingFeePaise?: number;
   convenienceFeePaise?: number;
   grandTotalPaise: number;
+
+  /** The checkout this order belongs to. `siblingOrders` is only sent to admins. */
+  group?: {
+    id: string;
+    status?: string;
+    placedAt?: string;
+    combinedTotalPaise?: number;
+    siblingOrders?: OrderRow[];
+  } | null;
   transitions?: OrderTransition[];
+  deliveryAttempts?: DeliveryAttempt[];
   availableTransitions?: { from: OrderStatus; to: OrderStatus; actors: string[] }[];
   returns?: OrderReturn[];
   refunds?: OrderRefund[];
-  openDispute?: { id: string } | null;
+  heldItems?: HeldItem[];
+  /** Every dispute on this order or its returns, newest first. */
+  disputes?: OrderDispute[];
+  /** The live dispute, if any — hides raise-dispute / request-refund while it is open. */
+  openDispute?: { id: string; status?: string } | null;
 }
 
 export const ORDER_STATUS_META: Record<OrderStatus, { label: string; tone: StatusTone }> = {
