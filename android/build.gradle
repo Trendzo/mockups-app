@@ -29,3 +29,21 @@ apply plugin: "com.facebook.react.rootproject"
 // which hardcodes real "node_modules/<pkg>/android/build/..." paths that a
 // Gradle-only property change doesn't follow. Symlinks keep those paths
 // resolving exactly as before while the bytes live on APFS.
+
+// react-native-print 0.11.0 (2023) ships a stale Android build file (compileSdk/buildTools 31,
+// targetSdk 29) that fails :checkReleaseAarMetadata against react-android's minCompileSdk. Align
+// that one library with the app's SDK levels. Registered here so it runs before AGP finalises the
+// library's variants.
+// (:app is already evaluated by the React root-project plugin, so only touch that one project.)
+subprojects { sub ->
+    if (sub.name == 'react-native-print') {
+        sub.afterEvaluate {
+            if (sub.plugins.hasPlugin('com.android.library')) {
+                sub.android {
+                    compileSdkVersion rootProject.ext.compileSdkVersion
+                    buildToolsVersion rootProject.ext.buildToolsVersion
+                }
+            }
+        }
+    }
+}
