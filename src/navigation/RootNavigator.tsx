@@ -44,6 +44,18 @@ import { RegisterPaymentScreen } from '../screens/RegisterPaymentScreen';
 import { RegisterDayScreen } from '../screens/RegisterDayScreen';
 import { PosSalesScreen } from '../screens/PosSalesScreen';
 import { PosSaleDetailScreen } from '../screens/PosSaleDetailScreen';
+import { IssuesScreen } from '../screens/IssuesScreen';
+import { IssueDetailScreen } from '../screens/IssueDetailScreen';
+import { ReturnsScreen } from '../screens/ReturnsScreen';
+import { ReturnDetailScreen } from '../screens/ReturnDetailScreen';
+import { PosReturnScreen } from '../screens/PosReturnScreen';
+import { PosExchangeScreen } from '../screens/PosExchangeScreen';
+import { PosLabelsScreen } from '../screens/PosLabelsScreen';
+import { BillingStatementsScreen } from '../screens/BillingStatementsScreen';
+import { BillingStatementDetailScreen } from '../screens/BillingStatementDetailScreen';
+import { InvoicesScreen } from '../screens/InvoicesScreen';
+import { InventoryImportScreen } from '../screens/InventoryImportScreen';
+import { DeadStockScreen } from '../screens/DeadStockScreen';
 import { ChangeRequestScreen } from '../screens/ChangeRequestScreen';
 import { useAuth } from '../store/auth';
 import { useSettings } from '../store/settings';
@@ -259,6 +271,20 @@ export function RootNavigator() {
         <Stack.Screen name="RegisterDay" component={RegisterDayScreen} />
         <Stack.Screen name="PosSales" component={PosSalesScreen} />
         <Stack.Screen name="PosSaleDetail" component={PosSaleDetailScreen} />
+
+        {/* Added for the store-app completion work (stubs replaced per track) */}
+        <Stack.Screen name="Issues" component={IssuesScreen} />
+        <Stack.Screen name="IssueDetail" component={IssueDetailScreen} />
+        <Stack.Screen name="Returns" component={ReturnsScreen} />
+        <Stack.Screen name="ReturnDetail" component={ReturnDetailScreen} />
+        <Stack.Screen name="PosReturn" component={PosReturnScreen} />
+        <Stack.Screen name="PosExchange" component={PosExchangeScreen} />
+        <Stack.Screen name="PosLabels" component={PosLabelsScreen} />
+        <Stack.Screen name="BillingStatements" component={BillingStatementsScreen} />
+        <Stack.Screen name="BillingStatementDetail" component={BillingStatementDetailScreen} />
+        <Stack.Screen name="Invoices" component={InvoicesScreen} />
+        <Stack.Screen name="InventoryImport" component={InventoryImportScreen} />
+        <Stack.Screen name="DeadStock" component={DeadStockScreen} />
       </Stack.Navigator>
     );
   }

@@ -119,6 +119,21 @@ export type RootStackParamList = {
   ProductWizardDetails: undefined;
   ProductWizardReview: undefined;
 
+
+  // ---- Added for the store-app completion work; each track replaces its stub screens ----
+  Issues: { orderId?: string } | undefined; // T2
+  IssueDetail: { id: string }; // T2
+  Returns: undefined; // T2
+  ReturnDetail: { id: string }; // T2
+  PosReturn: { saleId: string }; // T3
+  PosExchange: { saleId: string }; // T3
+  PosLabels: undefined; // T3
+  BillingStatements: undefined; // T4
+  BillingStatementDetail: { id: string }; // T4
+  Invoices: { kind?: 'invoice' | 'commission' | 'all' } | undefined; // T4
+  InventoryImport: undefined; // T4
+  DeadStock: undefined; // T4
+
   // Dev
   Profile: undefined;
 };
