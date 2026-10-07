@@ -13,6 +13,9 @@ export type Weekday =
 /**
  * Store settings are owner/manager-only (staff and delivery agents read). No
  * sub-role on the session = the primary account — never lock the owner out.
+ *
+ * @deprecated No screen calls this any more: use `usePermissions().can(key)` with
+ * store.edit_profile / store.holidays_edit / store.pause / store.resume instead.
  */
 export function canManageStore(subRole?: string | null): boolean {
   return !subRole || subRole === 'owner' || subRole === 'manager';

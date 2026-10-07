@@ -12,6 +12,8 @@ export type AttributeAxisType = 'enum' | 'free_text' | 'numeric' | 'color';
 export const AGE_GROUP_VALUES = ['0-2', '3-7', '8-12', '13-17', '18-24', '25-40', '40+'];
 
 // Retailer sub-roles that may write to the catalog. staff = read-only.
+// @deprecated for new code: use `usePermissions().can('listings.edit')` (Inventory still calls
+// canWriteCatalog until it is converted).
 export type SubRole = 'owner' | 'manager' | 'staff' | 'delivery_agent';
 export function canWriteCatalog(subRole?: string | null): boolean {
   // No sub-role on the session (e.g. the login response doesn't send one) =

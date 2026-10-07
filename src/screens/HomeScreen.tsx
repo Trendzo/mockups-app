@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   AppText,
   Banner,
+  BlockedStoreBanner,
   BottomSheet,
   Icon,
   IconButton,
@@ -17,6 +18,8 @@ import {
   useToast,
 } from '../components';
 import { ScreenProps } from '../navigation/types';
+import type { StoreGate } from '../navigation/storeGate';
+import { useStoreGate } from '../navigation/useStoreGate';
 import { useCaptureDraft } from '../store/captureDraft';
 import { useProductDraft } from '../store/productDraft';
 import {
@@ -33,6 +36,7 @@ import { useInbox } from '../api/notifications';
 import { errorMessage } from '../api/request';
 import { OrderRow, OrderTab } from '../types/orders';
 import { orderStats, sortForTab } from '../utils/orders';
+import { usePermissions } from '../utils/usePermission';
 import { formatPaise } from '../utils/money';
 import { WEEKDAYS, formatDayDate, fromYmd, plural, todayYmd } from '../utils/format';
 import { colors, radii, spacing } from '../theme/theme';
@@ -56,12 +60,28 @@ function greeting(): string {
 }
 
 /**
+ * Home tab. A closed account has nothing to run (orders and listings are off-limits
+ * server-side), so it gets a focused status + reopen page instead of a dashboard full of
+ * failing queries; every other state, restricted or not, is the dashboard.
+ */
+export function HomeScreen(props: ScreenProps<'Home'>) {
+  const gate = useStoreGate();
+  if (gate.state === 'account_closed') return <ClosedHome gate={gate} {...props} />;
+  return <StoreHome gate={gate} {...props} />;
+}
+
+/**
  * Store dashboard: what's selling today (online + counter), the order
  * pipeline, anything that needs the retailer's attention, and shortcuts into
  * every part of running the store.
  */
-export function HomeScreen({ navigation }: ScreenProps<'Home'>) {
+function StoreHome({ navigation, gate }: ScreenProps<'Home'> & { gate: StoreGate }) {
   const toast = useToast();
+  const { can } = usePermissions();
+  // What this login may do in the store's current state (see navigation/storeGate).
+  const canHandleOrders = gate.abilities.handleOrders && can('orders.accept');
+  const canCreateProducts = gate.abilities.editCatalog && can('listings.create');
+  const canBill = gate.mode !== 'restricted' || gate.abilities.counterBilling;
   const insets = useSafeAreaInsets();
   const clearCapture = useCaptureDraft((s) => s.clear);
   const kyc = useKyc();
@@ -211,16 +231,6 @@ export function HomeScreen({ navigation }: ScreenProps<'Home'>) {
       onPress: () => navigation.navigate('Kyc'),
     });
   }
-  if (store?.status === 'paused') {
-    alerts.push({
-      key: 'paused',
-      icon: 'pause-circle-outline',
-      text: 'Storefront paused',
-      hint: store.pauseReason || "Customers can't order until you resume",
-      tone: 'warning',
-      onPress: () => navigation.navigate('StoreStatus'),
-    });
-  }
   if (stats.returnsCount > 0) {
     alerts.push({
       key: 'returns',
@@ -295,7 +305,10 @@ export function HomeScreen({ navigation }: ScreenProps<'Home'>) {
           }
         />
 
-        {store ? (
+        {/* Why the store is restricted + the way out (resume / appeal / reopen / KYC). */}
+        <BlockedStoreBanner gate={gate} onOpen={(target) => navigation.navigate(target)} />
+
+        {store && gate.mode !== 'restricted' ? (
           <StoreStatusCard
             online={online}
             pending={setAccept.isPending}
@@ -413,8 +426,8 @@ export function HomeScreen({ navigation }: ScreenProps<'Home'>) {
                 key={o.id}
                 order={o}
                 onPress={() => navigation.navigate('OrderDetail', { id: o.id })}
-                onAccept={() => runOrder(o, 'accept')}
-                onReject={() => confirmReject(o)}
+                onAccept={canHandleOrders ? () => runOrder(o, 'accept') : undefined}
+                onReject={canHandleOrders ? () => confirmReject(o) : undefined}
                 busy={busyId === o.id}
               />
             ))}
@@ -425,15 +438,21 @@ export function HomeScreen({ navigation }: ScreenProps<'Home'>) {
         <View style={styles.section}>
           <SectionHeader label="Quick actions" />
           <View style={styles.actionsCard}>
-            <QuickAction icon="receipt-outline" label="New bill" onPress={() => navigation.navigate('Register')} />
-            <QuickAction icon="add-circle-outline" label="Add product" onPress={() => setAddOpen(true)} />
+            {canBill ? (
+              <QuickAction icon="receipt-outline" label="New bill" onPress={() => navigation.navigate('Register')} />
+            ) : null}
+            {canCreateProducts ? (
+              <QuickAction icon="add-circle-outline" label="Add product" onPress={() => setAddOpen(true)} />
+            ) : null}
             <QuickAction icon="layers-outline" label="Inventory" onPress={() => navigation.navigate('Inventory')} />
             <QuickAction icon="wallet-outline" label="Payments" onPress={() => navigation.navigate('Earnings')} />
-            <QuickAction
-              icon="stats-chart-outline"
-              label="Sales"
-              onPress={() => navigation.navigate(posEnabled ? 'PosSales' : 'Register')}
-            />
+            {canBill ? (
+              <QuickAction
+                icon="stats-chart-outline"
+                label="Sales"
+                onPress={() => navigation.navigate(posEnabled ? 'PosSales' : 'Register')}
+              />
+            ) : null}
             <QuickAction icon="storefront-outline" label="Store" onPress={() => navigation.navigate('StoreStatus')} />
             <QuickAction icon="calendar-outline" label="Holidays" onPress={() => navigation.navigate('HolidayCalendar')} />
             <QuickAction icon="time-outline" label="Pickup slots" onPress={() => navigation.navigate('PickupSlots')} />
@@ -525,14 +544,16 @@ export function HomeScreen({ navigation }: ScreenProps<'Home'>) {
       </ScrollView>
 
       {/* Quick add: create a product from photos, always one tap away. */}
-      <PressableScale
-        onPress={startFromPhotos}
-        toScale={0.9}
-        style={[styles.fab, { bottom: insets.bottom + 86 }]}
-        accessibilityLabel="Create product"
-      >
-        <Icon name="add" size={30} color={colors.accentInk} />
-      </PressableScale>
+      {canCreateProducts ? (
+        <PressableScale
+          onPress={startFromPhotos}
+          toScale={0.9}
+          style={[styles.fab, { bottom: insets.bottom + 86 }]}
+          accessibilityLabel="Create product"
+        >
+          <Icon name="add" size={30} color={colors.accentInk} />
+        </PressableScale>
+      ) : null}
 
       {/* Add product chooser */}
       <BottomSheet visible={addOpen} onClose={() => setAddOpen(false)}>
@@ -563,6 +584,39 @@ export function HomeScreen({ navigation }: ScreenProps<'Home'>) {
           />
         </SheetSurface>
       </BottomSheet>
+    </Screen>
+  );
+}
+
+/**
+ * Home for a CLOSED account: the owner's own closure was approved, so the storefront is
+ * offline and the order / catalogue / billing endpoints refuse the account. What is left
+ * is the way back (reopen request on AccountStatus) and the account basics.
+ */
+function ClosedHome({ navigation, gate }: ScreenProps<'Home'> & { gate: StoreGate }) {
+  const meQ = useRetailerMe();
+  const name = meQ.data?.store?.legalName || meQ.data?.retailer.legalName || 'Your account';
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await meQ.refetch();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+  return (
+    <Screen edges={['top']}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.ink} />
+        }
+      >
+        <ScreenHeader overline="Account closed" title={name} />
+        <BlockedStoreBanner gate={gate} onOpen={(target) => navigation.navigate(target)} />
+      </ScrollView>
     </Screen>
   );
 }

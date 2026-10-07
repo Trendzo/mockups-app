@@ -35,14 +35,14 @@ import {
 import { ScreenProps } from '../navigation/types';
 import { usePullRefresh } from '../utils/usePullRefresh';
 import { useListings, useLowStockThreshold } from '../api/catalogHooks';
-import { useRetailerMe } from '../api/onboardingHooks';
 import { useBulkJobs, useDismissBulkJob } from '../api/bulkMockupHooks';
 import { deleteListing, updateListing } from '../api/catalogManagement';
 import { useProductDraft } from '../store/productDraft';
 import { aiCopyToast } from '../utils/aiCopy';
 import { BulkMockupJob } from '../types/bulkMockup';
-import { useAuth } from '../store/auth';
-import { canWriteCatalog, Listing, ListingStatus } from '../types/catalog';
+import { useStoreGate } from '../navigation/useStoreGate';
+import { Listing, ListingStatus } from '../types/catalog';
+import { usePermissions } from '../utils/usePermission';
 import { formatPaise } from '../utils/money';
 import { colors, radii, spacing } from '../theme/theme';
 
@@ -69,10 +69,14 @@ function totalStock(l: Listing): number {
 
 export function CatalogListScreen({ navigation }: ScreenProps<'Catalog'>) {
   const insets = useSafeAreaInsets();
-  // Prefer the fresh /retailer/me sub-role; the login snapshot may omit it.
-  const me = useRetailerMe();
-  const authSubRole = useAuth((s) => s.retailer?.subRole);
-  const canWrite = canWriteCatalog(me.data?.retailer.subRole ?? authSubRole);
+  // Server permissions AND the store's state (paused / suspended / terminated / closed
+  // stores cannot write the catalogue - backend assertCanPublish).
+  const { can } = usePermissions();
+  const gate = useStoreGate();
+  const catalogOpen = gate.abilities.editCatalog;
+  const canCreate = can('listings.create') && catalogOpen;
+  const canPublish = can('listings.edit') && can('listings.publish') && catalogOpen;
+  const canDelete = can('listings.retire') && catalogOpen;
   const qc = useQueryClient();
   const toast = useToast();
 
@@ -126,9 +130,9 @@ export function CatalogListScreen({ navigation }: ScreenProps<'Catalog'>) {
 
   // Ready bulk-mockup jobs surface here as draft rows to finish. Only under the
   // All / Draft filters and when not searching (jobs have no product name yet).
-  const readyJobsQ = useBulkJobs('ready', canWrite);
+  const readyJobsQ = useBulkJobs('ready', canCreate);
   const dismissJob = useDismissBulkJob();
-  const showJobs = canWrite && (status === 'all' || status === 'draft') && search.trim() === '';
+  const showJobs = canCreate && (status === 'all' || status === 'draft') && search.trim() === '';
   const readyJobs = showJobs ? readyJobsQ.data ?? [] : [];
 
   const finishJob = (job: BulkMockupJob) => {
@@ -236,8 +240,8 @@ export function CatalogListScreen({ navigation }: ScreenProps<'Catalog'>) {
             <ProductRow
               listing={item}
               onPress={() => navigation.navigate('ProductDetail', { id: item.id })}
-              onDelete={canWrite ? () => remove(item) : undefined}
-              onPublish={canWrite ? () => publish(item) : undefined}
+              onDelete={canDelete ? () => remove(item) : undefined}
+              onPublish={canPublish ? () => publish(item) : undefined}
             />
           )}
         />
@@ -294,7 +298,7 @@ export function CatalogListScreen({ navigation }: ScreenProps<'Catalog'>) {
         </SheetSurface>
       </BottomSheet>
 
-      {canWrite ? (
+      {canCreate ? (
         <PressableScale
           onPress={() => {
             useProductDraft.getState().startCreate();

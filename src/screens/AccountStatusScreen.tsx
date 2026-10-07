@@ -39,15 +39,15 @@ import {
   useRequestClosure,
   useRequestReopen,
 } from '../api/storeSettingsHooks';
-import { useAuth } from '../store/auth';
+import { useStoreGate } from '../navigation/useStoreGate';
 import { ACCOUNT_DELETION_URL } from '../config/legal';
 import { Store } from '../types/onboarding';
-import { canManageStore } from '../types/store';
+import { usePermissions } from '../utils/usePermission';
 import { plural, timeAgo } from '../utils/format';
 import { prepareUpload } from '../utils/image';
 import { colors, radii, spacing, type as typeScale } from '../theme/theme';
 
-const READ_ONLY_NOTE = 'Only the owner or a manager can change this.';
+const READ_ONLY_NOTE = 'Only the owner or a manager can do this.';
 const MAX_REASON = 500;
 const MIN_MESSAGE = 3;
 
@@ -77,22 +77,26 @@ function statusSummary(account: string, store: Store | null): string {
 export function AccountStatusScreen({ navigation }: ScreenProps<'AccountStatus'>) {
   const toast = useToast();
   const me = useRetailerMe();
-  const authSubRole = useAuth((s) => s.retailer?.subRole);
-  const canManage = canManageStore(me.data?.retailer.subRole ?? authSubRole);
+  const gate = useStoreGate();
+  const { can, subRole } = usePermissions();
+  // Closure / reopen requests: the server wants change_requests.submit AND owner/manager
+  // (a missing sub-role is the primary account).
+  const canManage =
+    can('change_requests.submit') && (!subRole || subRole === 'owner' || subRole === 'manager');
   const retailer = me.data?.retailer;
   const store = me.data?.store ?? null;
   const accountStatus = retailer?.status;
-  const isClosed = accountStatus === 'closed';
   const closurePending = me.data?.pendingAccountRequest === 'account_deletion';
   const reopenPending = me.data?.pendingAccountRequest === 'account_reopen';
 
   // Suspension / termination is a decision the retailer can contest. The owner's
-  // own approved closure suspends the store too, but there's nothing to appeal.
+  // own approved closure suspends the store too, but there's nothing to appeal
+  // (the gate already sorts closed accounts out of `abilities.appeal`).
   const actioned =
     store?.status === 'suspended' ||
     store?.status === 'terminated' ||
     accountStatus === 'terminated';
-  const appealMode = actioned && !isClosed && store?.suspendReason !== 'account_closed_by_owner';
+  const appealMode = gate.abilities.appeal;
 
   const appealQ = useAccountAppeal(!!me.data);
   const messages = appealQ.data?.messages ?? [];
@@ -125,6 +129,10 @@ export function AccountStatusScreen({ navigation }: ScreenProps<'AccountStatus'>
     });
     setTimeout(() => sub.remove(), 1500);
   };
+
+  // A terminated ACCOUNT is read-only server-side: only POST /account/appeal is let
+  // through, so the photo upload (POST /uploads) would 403. Text-only appeal there.
+  const canAttach = gate.state !== 'account_terminated';
 
   const trimmed = text.trim();
   const canSend = trimmed.length >= MIN_MESSAGE && !attaching && !postAppeal.isPending;
@@ -288,9 +296,16 @@ export function AccountStatusScreen({ navigation }: ScreenProps<'AccountStatus'>
                   message="Your reopen request is with the Trendzo team. You'll regain full access once it's approved."
                 />
               ) : null}
+              {gate.state === 'store_paused' ? (
+                <PrimaryButton
+                  label={gate.abilities.resume.allowed ? 'Resume storefront' : 'Storefront status'}
+                  tone="accent"
+                  onPress={() => navigation.navigate('StoreStatus')}
+                />
+              ) : null}
             </Panel>
 
-            {isClosed ? (
+            {gate.abilities.reopen ? (
               <Panel title="Reopen account">
                 <AppText variant="body" color={colors.ink}>
                   Your data is safe. Request to reopen whenever you're ready — Trendzo restores your
@@ -340,7 +355,7 @@ export function AccountStatusScreen({ navigation }: ScreenProps<'AccountStatus'>
               </View>
             ) : null}
 
-            {accountStatus === 'active' && canManage ? (
+            {accountStatus === 'active' ? (
               <Panel title="Danger zone">
                 <AppText variant="bodyMedium" color={colors.danger}>
                   Close this account
@@ -357,7 +372,7 @@ export function AccountStatusScreen({ navigation }: ScreenProps<'AccountStatus'>
                   </AppText>
                   <Icon name="open-outline" size={16} color={colors.ink} />
                 </PressableScale>
-                {closurePending ? null : (
+                {closurePending || !canManage ? null : (
                   <View style={styles.fieldWrap}>
                     <Field
                       label="Reason (optional)"
@@ -375,13 +390,17 @@ export function AccountStatusScreen({ navigation }: ScreenProps<'AccountStatus'>
                     </AppText>
                   </View>
                 )}
-                <PrimaryButton
-                  label={closurePending ? 'Closure request pending' : 'Request account closure'}
-                  tone="danger"
-                  disabled={closurePending}
-                  loading={requestClosure.isPending}
-                  onPress={confirmClosure}
-                />
+                {canManage ? (
+                  <PrimaryButton
+                    label={closurePending ? 'Closure request pending' : 'Request account closure'}
+                    tone="danger"
+                    disabled={closurePending}
+                    loading={requestClosure.isPending}
+                    onPress={confirmClosure}
+                  />
+                ) : (
+                  <ReadOnlyNote />
+                )}
               </Panel>
             ) : null}
           </>
@@ -409,19 +428,21 @@ export function AccountStatusScreen({ navigation }: ScreenProps<'AccountStatus'>
             </AppText>
           ) : null}
           <View style={styles.composerRow}>
-            <PressableScale
-              onPress={attach}
-              disabled={postAppeal.isPending}
-              toScale={0.9}
-              accessibilityLabel="Attach a photo"
-              style={styles.attachBtn}
-            >
-              {attaching ? (
-                <ActivityIndicator color={colors.ink} />
-              ) : (
-                <Icon name="attach" size={22} color={colors.ink} />
-              )}
-            </PressableScale>
+            {canAttach ? (
+              <PressableScale
+                onPress={attach}
+                disabled={postAppeal.isPending}
+                toScale={0.9}
+                accessibilityLabel="Attach a photo"
+                style={styles.attachBtn}
+              >
+                {attaching ? (
+                  <ActivityIndicator color={colors.ink} />
+                ) : (
+                  <Icon name="attach" size={22} color={colors.ink} />
+                )}
+              </PressableScale>
+            ) : null}
             <TextInput
               value={text}
               onChangeText={setText}
