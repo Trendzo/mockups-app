@@ -48,10 +48,9 @@ import {
   useSubmitStoreDocument,
   useUpdateStoreProfile,
 } from '../api/storeSettingsHooks';
-import { useAuth } from '../store/auth';
+import { useStoreGate } from '../navigation/useStoreGate';
 import { RetailerProfile, Store } from '../types/onboarding';
 import {
-  canManageStore,
   DayHours,
   DEFAULT_DAY_HOURS,
   MAX_STORE_PHOTOS,
@@ -61,6 +60,7 @@ import {
   Weekday,
 } from '../types/store';
 import { formatDate, formatHm, hmToMinutes } from '../utils/format';
+import { usePermissions } from '../utils/usePermission';
 import { prepareUpload } from '../utils/image';
 import { nationalPhone, toE164 } from '../utils/phone';
 import { colors, radii, spacing } from '../theme/theme';
@@ -131,8 +131,10 @@ function pennyDrop(status: string): { label: string; tone: StatusTone } {
  */
 export function StoreProfileScreen({ navigation, route }: ScreenProps<'StoreProfile'>) {
   const me = useRetailerMe();
-  const authSubRole = useAuth((s) => s.retailer?.subRole);
-  const canManage = canManageStore(me.data?.retailer.subRole ?? authSubRole);
+  const gate = useStoreGate();
+  const { can } = usePermissions();
+  // store.edit_profile, and not on a read-only (terminated / closed) account.
+  const canManage = can('store.edit_profile') && !gate.readOnly;
   const store = me.data?.store ?? null;
   const retailer = me.data?.retailer;
   const refetchMe = me.refetch;

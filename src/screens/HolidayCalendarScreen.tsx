@@ -24,11 +24,11 @@ import {
   useToast,
 } from '../components';
 import { ScreenProps } from '../navigation/types';
-import { useRetailerMe } from '../api/onboardingHooks';
 import { errorMessage } from '../api/request';
 import { useAddHoliday, useHolidays, useRemoveHoliday } from '../api/storeSettingsHooks';
-import { useAuth } from '../store/auth';
-import { canManageStore, HolidayClosure } from '../types/store';
+import { useStoreGate } from '../navigation/useStoreGate';
+import { HolidayClosure } from '../types/store';
+import { usePermissions } from '../utils/usePermission';
 import { formatYmd, todayYmd } from '../utils/format';
 import { colors, spacing } from '../theme/theme';
 
@@ -40,9 +40,10 @@ const READ_ONLY_NOTE = 'Only the owner or a manager can change this.';
  */
 export function HolidayCalendarScreen({ navigation }: ScreenProps<'HolidayCalendar'>) {
   const toast = useToast();
-  const me = useRetailerMe();
-  const authSubRole = useAuth((s) => s.retailer?.subRole);
-  const canManage = canManageStore(me.data?.retailer.subRole ?? authSubRole);
+  const { can } = usePermissions();
+  const gate = useStoreGate();
+  // store.holidays_edit, and not on a read-only (terminated / closed) account.
+  const canManage = can('store.holidays_edit') && !gate.readOnly;
   const holidaysQ = useHolidays();
   const addHoliday = useAddHoliday();
   const removeHoliday = useRemoveHoliday();

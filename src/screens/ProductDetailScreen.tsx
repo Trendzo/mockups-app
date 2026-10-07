@@ -19,11 +19,11 @@ import {
 } from '../components';
 import { ScreenProps } from '../navigation/types';
 import { useListing } from '../api/catalogHooks';
-import { useRetailerMe } from '../api/onboardingHooks';
 import { deleteListing, updateListing } from '../api/catalogManagement';
 import { useProductDraft } from '../store/productDraft';
-import { useAuth } from '../store/auth';
-import { canWriteCatalog, Variant } from '../types/catalog';
+import { useStoreGate } from '../navigation/useStoreGate';
+import { Variant } from '../types/catalog';
+import { usePermissions } from '../utils/usePermission';
 import { formatPaise } from '../utils/money';
 import { shareRemoteImage } from '../utils/gallery';
 import { colors, radii, spacing } from '../theme/theme';
@@ -41,10 +41,14 @@ export function ProductDetailScreen({ navigation, route }: ScreenProps<'ProductD
   const qc = useQueryClient();
   const listingQ = useListing(id);
   const listing = listingQ.data;
-  // Prefer the fresh /retailer/me sub-role; the login snapshot may omit it.
-  const me = useRetailerMe();
-  const authSubRole = useAuth((s) => s.retailer?.subRole);
-  const canWrite = canWriteCatalog(me.data?.retailer.subRole ?? authSubRole);
+  // Server permissions AND the store's state (see navigation/storeGate: a paused,
+  // suspended, terminated or closed store cannot write the catalogue).
+  const { can } = usePermissions();
+  const gate = useStoreGate();
+  const catalogOpen = gate.abilities.editCatalog;
+  const canWrite = can('listings.edit') && catalogOpen;
+  const canPublish = canWrite && can('listings.publish');
+  const canDelete = can('listings.retire') && catalogOpen;
 
   const [busy, setBusy] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -198,7 +202,7 @@ export function ProductDetailScreen({ navigation, route }: ScreenProps<'ProductD
 
       {canWrite ? (
         <View style={styles.footer}>
-          {listing.status === 'draft' || listing.status === 'retired' ? (
+          {!canPublish ? null : listing.status === 'draft' || listing.status === 'retired' ? (
             <PrimaryButton
               label="Publish"
               tone="accent"
@@ -241,7 +245,7 @@ export function ProductDetailScreen({ navigation, route }: ScreenProps<'ProductD
           {listing.status !== 'retired' ? (
             <SheetAction icon="archive-outline" label="Retire" onPress={() => setStatus('retired', 'Retired')} />
           ) : null}
-          {listing.status === 'draft' ? (
+          {listing.status === 'draft' && canDelete ? (
             <SheetAction icon="trash-outline" label="Delete draft" danger onPress={onDelete} />
           ) : null}
           <PrimaryButton label="Cancel" tone="surface" onPress={() => setMoreOpen(false)} />

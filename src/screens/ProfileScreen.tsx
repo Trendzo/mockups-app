@@ -25,9 +25,10 @@ import { useAuth } from '../store/auth';
 import { useKyc, useRetailerMe } from '../api/onboardingHooks';
 import { useInbox } from '../api/notifications';
 import { CatalogExportKind, downloadCatalogCsv } from '../api/catalogueExport';
-import { requestAccountClosure } from '../api/onboarding';
+import { useStoreGate } from '../navigation/useStoreGate';
+import { usePermissions } from '../utils/usePermission';
 import { colors, radii, spacing } from '../theme/theme';
-import { ACCOUNT_DELETION_URL, SUPPORT_URL, WEB_PORTAL_HOME_URL } from '../config/legal';
+import { SUPPORT_URL, WEB_PORTAL_HOME_URL } from '../config/legal';
 
 /** Account tab: who you are, plus the menu into every store-management area. */
 export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
@@ -35,6 +36,8 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
   const retailer = useAuth(s => s.retailer);
   const logout = useAuth(s => s.logout);
   const me = useRetailerMe(!!retailer);
+  const gate = useStoreGate();
+  const { can } = usePermissions();
   const kyc = useKyc(!!retailer);
   const inbox = useInbox(!!retailer);
 
@@ -42,6 +45,7 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
   const store = me.data?.store;
   const storeName = store?.legalName ?? store?.name ?? profile?.storeName;
   const posEnabled = store?.posBillingEnabled === true;
+  const canCreateProducts = can('listings.create') && gate.abilities.editCatalog;
 
   // Prefer the fresh /retailer/me, fall back to the persisted auth snapshot.
   const legalName = profile?.legalName ?? retailer?.legalName ?? '-';
@@ -52,7 +56,11 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
   const initial = (legalName || email).trim().charAt(0).toUpperCase() || '?';
 
   const subRole = profile?.subRole ?? retailer?.subRole;
-  const canManageAccount = subRole === 'owner' || subRole === 'manager';
+  // Closure is filed (with a reason) on AccountStatus; this row only shows who may.
+  const canRequestClosure =
+    (profile?.status ?? retailer?.status) === 'active' &&
+    can('change_requests.submit') &&
+    (subRole === 'owner' || subRole === 'manager');
   const closurePending = me.data?.pendingAccountRequest === 'account_deletion';
 
   // Richer details (shown under "View more" when the backend provides them).
@@ -81,8 +89,6 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
   const [phase, setPhase] = useState<'idle' | 'downloading' | 'done'>('idle');
   const [progress, setProgress] = useState(0);
   const [doneMsg, setDoneMsg] = useState('');
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleting, setDeleting] = useState(false);
 
   const closeExport = () => {
     setExportOpen(false);
@@ -115,22 +121,6 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
   const onLogout = () => {
     logout(); // the app gate swaps to the Login stack automatically
     toast.show('Logged out', 'info');
-  };
-
-  // Closure is now a request, not an instant delete. The account stays active until an
-  // admin approves; we keep the user signed in and just refresh /retailer/me.
-  const onRequestClosure = async () => {
-    setDeleting(true);
-    try {
-      await requestAccountClosure();
-      setDeleteOpen(false);
-      await me.refetch();
-      toast.show('Closure requested - pending admin review', 'info');
-    } catch (e: any) {
-      toast.show(e?.message ?? 'Could not submit closure request', 'error');
-    } finally {
-      setDeleting(false);
-    }
   };
 
   return (
@@ -242,12 +232,14 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
         {/* Sales & money */}
         <View style={styles.actions}>
           <SectionHeader label="Sales & money" />
-          <ListRow
-            icon="receipt-outline"
-            label="Billing counter"
-            hint={posEnabled ? 'Bill walk-in customers' : 'Request activation to bill in-store sales'}
-            onPress={() => navigation.navigate('Register')}
-          />
+          {gate.mode === 'restricted' && !gate.abilities.counterBilling ? null : (
+            <ListRow
+              icon="receipt-outline"
+              label="Billing counter"
+              hint={posEnabled ? 'Bill walk-in customers' : 'Request activation to bill in-store sales'}
+              onPress={() => navigation.navigate('Register')}
+            />
+          )}
           {posEnabled ? (
             <ListRow
               icon="stats-chart-outline"
@@ -279,12 +271,14 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
             hint="Stock, prices and low-stock alerts"
             onPress={() => navigation.navigate('Inventory')}
           />
-          <ListRow
-            icon="albums-outline"
-            label="Create many products"
-            hint="Beta · queue AI product photos for many garments"
-            onPress={() => navigation.navigate('SelectPhotos', { bulk: true })}
-          />
+          {canCreateProducts ? (
+            <ListRow
+              icon="albums-outline"
+              label="Create many products"
+              hint="Beta · queue AI product photos for many garments"
+              onPress={() => navigation.navigate('SelectPhotos', { bulk: true })}
+            />
+          ) : null}
           <ListRow
             icon="download-outline"
             label="Export catalog (CSV)"
@@ -344,18 +338,13 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
             label="Support"
             onPress={() => Linking.openURL(SUPPORT_URL)}
           />
-          {canManageAccount ? (
+          {canRequestClosure ? (
             <ListRow
               icon="trash-outline"
               label={closurePending ? 'Closure requested' : 'Request account closure'}
+              hint="Add a reason and send it for review"
               tone="danger"
-              onPress={() => {
-                if (closurePending) {
-                  toast.show('Your closure request is pending admin review', 'info');
-                  return;
-                }
-                setDeleteOpen(true);
-              }}
+              onPress={() => navigation.navigate('AccountStatus')}
             />
           ) : null}
         </View>
@@ -429,47 +418,6 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
         </SheetSurface>
       </BottomSheet>
 
-      <BottomSheet
-        visible={deleteOpen}
-        onClose={() => !deleting && setDeleteOpen(false)}
-        dismissable={!deleting}
-      >
-        <SheetSurface style={styles.sheet}>
-          <AppText
-            variant="cardTitle"
-            color={colors.ink}
-            style={styles.sheetTitle}
-          >
-            Request account closure?
-          </AppText>
-          <AppText variant="body" color={colors.meta}>
-            This sends a closure request to the Trendzo team for review. Nothing
-            changes until an admin approves it. Once approved, your store is
-            suspended and your account is closed - but your records are kept, and
-            you can request to reopen the account anytime.
-          </AppText>
-          <PressableScale
-            haptic={false}
-            onPress={() => Linking.openURL(ACCOUNT_DELETION_URL)}
-          >
-            <AppText variant="bodyMedium" color={colors.ink}>
-              Read account closure details
-            </AppText>
-          </PressableScale>
-          <PrimaryButton
-            label="Submit closure request"
-            tone="danger"
-            loading={deleting}
-            onPress={onRequestClosure}
-          />
-          <PrimaryButton
-            label="Cancel"
-            tone="surface"
-            disabled={deleting}
-            onPress={() => setDeleteOpen(false)}
-          />
-        </SheetSurface>
-      </BottomSheet>
     </Screen>
   );
 }
@@ -537,7 +485,8 @@ function InfoRow({
 }
 
 const styles = StyleSheet.create({
-  content: { paddingTop: spacing.md, paddingBottom: 120, gap: spacing.lg },
+  // Clears the floating tab bar and the restriction strip above it.
+  content: { paddingTop: spacing.md, paddingBottom: 170, gap: spacing.lg },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   h1: { fontSize: 24, lineHeight: 28 },
   identity: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },

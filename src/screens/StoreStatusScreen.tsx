@@ -40,13 +40,17 @@ import {
   useResumeStore,
   useUpdateStoreProfile,
 } from '../api/storeSettingsHooks';
-import { useAuth } from '../store/auth';
+import type { StoreGate } from '../navigation/storeGate';
+import { useStoreGate } from '../navigation/useStoreGate';
 import { GstScheme, PauseVisibility, Store } from '../types/onboarding';
-import { canManageStore } from '../types/store';
+import { usePermissions } from '../utils/usePermission';
 import { WEEKDAYS, formatDateTime, formatTime, parseDate } from '../utils/format';
 import { colors, radii, spacing } from '../theme/theme';
 
 const READ_ONLY_NOTE = 'Only the owner or a manager can change this.';
+const OWNER_ONLY_PAUSE_NOTE = 'Only the store owner can pause the storefront.';
+const OWNER_ONLY_RESUME_NOTE = 'Only the store owner can resume the storefront.';
+const ACCOUNT_READ_ONLY_NOTE = 'This account is read-only, so nothing here can be changed.';
 
 const STATUS_COPY: Partial<Record<Store['status'], string>> = {
   onboarding: 'Your store is set up — add products and go live.',
@@ -99,8 +103,12 @@ function formatReopen(iso: string): string | null {
  */
 export function StoreStatusScreen({ navigation }: ScreenProps<'StoreStatus'>) {
   const me = useRetailerMe();
-  const authSubRole = useAuth((s) => s.retailer?.subRole);
-  const canManage = canManageStore(me.data?.retailer.subRole ?? authSubRole);
+  const gate = useStoreGate();
+  const { can } = usePermissions();
+  // Server permission AND the account is not read-only (terminated / closed).
+  const writable = !gate.readOnly;
+  const canEditStore = can('store.edit_profile') && writable;
+  const canRequest = can('change_requests.submit') && writable;
   const store = me.data?.store ?? null;
   // Only needed to show a pending counter-billing request.
   const billingOff = !!store && !store.posBillingEnabled;
@@ -159,12 +167,25 @@ export function StoreStatusScreen({ navigation }: ScreenProps<'StoreStatus'>) {
           />
         ) : (
           <>
-            <StatusPanel store={store} canManage={canManage} />
-            <PausePanel store={store} canManage={canManage} />
-            <GstPanel store={store} canManage={canManage} />
+            <StatusPanel
+              store={store}
+              gate={gate}
+              canManage={canEditStore}
+              onOpen={(target) => navigation.navigate(target)}
+            />
+            <PausePanel
+              store={store}
+              gate={gate}
+              canPause={can('store.pause') && writable}
+              readOnly={gate.readOnly}
+              onOpenKyc={() => navigation.navigate('Kyc')}
+            />
+            <GstPanel store={store} canManage={canEditStore} readOnly={gate.readOnly} />
             <BillingPanel
               store={store}
-              canManage={canManage}
+              canManage={canRequest}
+              readOnly={gate.readOnly}
+              canOpenCounter={gate.abilities.counterBilling}
               pending={posPending}
               checking={changeRequestsQ.isLoading}
               onOpenCounter={() => navigation.navigate('Register')}
@@ -197,7 +218,17 @@ export function StoreStatusScreen({ navigation }: ScreenProps<'StoreStatus'>) {
 }
 
 /** Status line + the quick online/offline switch (same mutation as Home's card). */
-function StatusPanel({ store, canManage }: { store: Store; canManage: boolean }) {
+function StatusPanel({
+  store,
+  gate,
+  canManage,
+  onOpen,
+}: {
+  store: Store;
+  gate: StoreGate;
+  canManage: boolean;
+  onOpen: (target: 'StoreStatus' | 'AccountStatus' | 'Kyc') => void;
+}) {
   const toast = useToast();
   const setAccept = useSetOrderAcceptance();
   const online = !store.orderPauseUntil;
@@ -228,7 +259,11 @@ function StatusPanel({ store, canManage }: { store: Store; canManage: boolean })
     });
   };
 
+  // Suspended / terminated / closed: the gate's own explanation + the way out (appeal,
+  // reopen) instead of a dead end. A paused store is explained by the Pause panel below.
+  const lockout = store.status === 'paused' ? null : gate.banner;
   const copy =
+    lockout?.message ??
     STATUS_COPY[store.status] ??
     `Your store is ${store.status.replace(/_/g, ' ')}. Contact Trendzo support to restore it.`;
 
@@ -238,6 +273,13 @@ function StatusPanel({ store, canManage }: { store: Store; canManage: boolean })
       <AppText variant="body" color={colors.ink}>
         {copy}
       </AppText>
+      {lockout && lockout.cta.target !== 'StoreStatus' ? (
+        <PrimaryButton
+          label={lockout.cta.label}
+          tone="accent"
+          onPress={() => onOpen(lockout.cta.target)}
+        />
+      ) : null}
       {store.status === 'active' ? (
         <>
           <Divider />
@@ -251,15 +293,33 @@ function StatusPanel({ store, canManage }: { store: Store; canManage: boolean })
           <AppText variant="meta" color={colors.meta}>
             Going offline is a quick break: your store reopens on its own at the next opening time.
           </AppText>
-          {canManage ? null : <ReadOnlyNote />}
+          {canManage ? null : (
+            <ReadOnlyNote text={gate.readOnly ? ACCOUNT_READ_ONLY_NOTE : undefined} />
+          )}
         </>
       ) : null}
     </Panel>
   );
 }
 
-/** The longer break: stays paused until the retailer resumes it. */
-function PausePanel({ store, canManage }: { store: Store; canManage: boolean }) {
+/**
+ * The longer break: stays paused until the owner resumes it. Pause / resume are owner-only
+ * server-side (store.pause / store.resume), and a KYC auto-pause cannot be resumed at all -
+ * it lifts itself once KYC is approved.
+ */
+function PausePanel({
+  store,
+  gate,
+  canPause,
+  readOnly,
+  onOpenKyc,
+}: {
+  store: Store;
+  gate: StoreGate;
+  canPause: boolean;
+  readOnly: boolean;
+  onOpenKyc: () => void;
+}) {
   const toast = useToast();
   const pause = usePauseStore();
   const resume = useResumeStore();
@@ -267,12 +327,16 @@ function PausePanel({ store, canManage }: { store: Store; canManage: boolean }) 
   const [reason, setReason] = useState('');
 
   if (store.status === 'paused') {
+    const { allowed, blockedBy } = gate.abilities.resume;
+    const kycPause = blockedBy === 'kyc_overdue';
     const details = [
-      store.pauseReason ? `Reason: ${store.pauseReason}` : null,
+      kycPause ? 'Paused because your KYC re-verification is overdue.' : null,
+      store.pauseReason && !kycPause ? `Reason: ${store.pauseReason}` : null,
       store.pauseVisibility === 'hidden'
         ? 'Hidden from catalog — your listings are out of search and browsing.'
         : "Listings stay visible — checkout shows a 'back soon' notice.",
       store.pauseUntil ? `Until ${formatDateTime(store.pauseUntil)}` : null,
+      'You can still finish orders in progress and bill at the counter.',
     ]
       .filter(Boolean)
       .join('\n');
@@ -286,15 +350,23 @@ function PausePanel({ store, canManage }: { store: Store; canManage: boolean }) 
     return (
       <Panel title="Pause storefront">
         <Banner tone="warning" title="Storefront paused" message={details} />
-        {canManage ? (
+        {allowed ? (
           <PrimaryButton
             label="Resume storefront"
             tone="accent"
             loading={resume.isPending}
             onPress={onResume}
           />
+        ) : kycPause ? (
+          <>
+            <AppText variant="meta" color={colors.meta}>
+              This pause lifts on its own once your KYC is approved. Resubmit your documents to
+              get the storefront back sooner.
+            </AppText>
+            <PrimaryButton label="Resubmit KYC" tone="accent" onPress={onOpenKyc} />
+          </>
         ) : (
-          <ReadOnlyNote />
+          <ReadOnlyNote text={OWNER_ONLY_RESUME_NOTE} />
         )}
       </Panel>
     );
@@ -333,9 +405,10 @@ function PausePanel({ store, canManage }: { store: Store; canManage: boolean }) 
     <Panel title="Pause storefront">
       <AppText variant="meta" color={colors.meta}>
         For a longer break. Unlike going offline, a pause doesn't end on its own — your storefront
-        stays paused until you resume it.
+        stays paused until you resume it. You can still finish orders in progress and bill at the
+        counter while paused.
       </AppText>
-      {canManage ? (
+      {canPause ? (
         <>
           {PAUSE_OPTIONS.map((o) => (
             <OptionCard
@@ -362,13 +435,21 @@ function PausePanel({ store, canManage }: { store: Store; canManage: boolean }) 
           />
         </>
       ) : (
-        <ReadOnlyNote />
+        <ReadOnlyNote text={readOnly ? ACCOUNT_READ_ONLY_NOTE : OWNER_ONLY_PAUSE_NOTE} />
       )}
     </Panel>
   );
 }
 
-function GstPanel({ store, canManage }: { store: Store; canManage: boolean }) {
+function GstPanel({
+  store,
+  canManage,
+  readOnly,
+}: {
+  store: Store;
+  canManage: boolean;
+  readOnly: boolean;
+}) {
   const toast = useToast();
   const update = useUpdateStoreProfile();
   // null = untouched, so a /retailer/me refresh never overrides the retailer's pick.
@@ -430,7 +511,7 @@ function GstPanel({ store, canManage }: { store: Store; canManage: boolean }) {
               Not set yet
             </AppText>
           )}
-          <ReadOnlyNote />
+          <ReadOnlyNote text={readOnly ? ACCOUNT_READ_ONLY_NOTE : undefined} />
         </>
       )}
     </Panel>
@@ -440,12 +521,17 @@ function GstPanel({ store, canManage }: { store: Store; canManage: boolean }) {
 function BillingPanel({
   store,
   canManage,
+  readOnly,
+  canOpenCounter,
   pending,
   checking,
   onOpenCounter,
 }: {
   store: Store;
   canManage: boolean;
+  readOnly: boolean;
+  /** The store's state allows counter sales (active or paused). */
+  canOpenCounter: boolean;
   /** A pos_billing_activation change request is pending / under review. */
   pending: boolean;
   /** Change requests are still loading — we don't know about `pending` yet. */
@@ -467,7 +553,13 @@ function BillingPanel({
         <AppText variant="meta" color={colors.meta}>
           Bill walk-in customers at your counter, right from this app.
         </AppText>
-        <PrimaryButton label="Open billing counter" tone="accent" onPress={onOpenCounter} />
+        {canOpenCounter ? (
+          <PrimaryButton label="Open billing counter" tone="accent" onPress={onOpenCounter} />
+        ) : (
+          <AppText variant="meta" color={colors.meta}>
+            Counter sales are off while your store is {store.status.replace(/_/g, ' ')}.
+          </AppText>
+        )}
       </Panel>
     );
   }
@@ -500,7 +592,7 @@ function BillingPanel({
           ) : null}
         </>
       ) : (
-        <ReadOnlyNote />
+        <ReadOnlyNote text={readOnly ? ACCOUNT_READ_ONLY_NOTE : undefined} />
       )}
     </Panel>
   );
@@ -548,12 +640,12 @@ function OptionCard({
   );
 }
 
-function ReadOnlyNote() {
+function ReadOnlyNote({ text = READ_ONLY_NOTE }: { text?: string }) {
   return (
     <View style={styles.readOnly}>
       <Icon name="lock-closed-outline" size={14} color={colors.meta} style={styles.readOnlyIcon} />
       <AppText variant="meta" color={colors.meta} style={styles.flex}>
-        {READ_ONLY_NOTE}
+        {text}
       </AppText>
     </View>
   );

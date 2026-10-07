@@ -62,6 +62,7 @@ import { useSettings } from '../store/settings';
 import { useOnboarding } from '../store/onboarding';
 import { useGenerationRecovery } from '../store/generationRecovery';
 import { useRetailerMe } from '../api/onboardingHooks';
+import { storeGate } from './storeGate';
 import { colors } from '../theme/theme';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -174,43 +175,31 @@ export function RootNavigator() {
     );
   }
 
-  const retailer = me.data?.retailer;
-  const store = me.data?.store;
-  const active =
-    retailer?.status === 'active' &&
-    !!store &&
-    (store.status === 'onboarding' || store.status === 'active');
+  // What the app may do (see ./storeGate for the per-state table): pending approval,
+  // legal gate, the full app, or the full app behind a "restricted" banner (store
+  // paused / suspended / terminated, account closed / terminated).
+  const gate = storeGate(me.data);
 
-  // Legal gate — an onboarding store must accept the Retailer Terms AND the Privacy
-  // Policy before it can go live. Block the full app on one doc at a time (terms
-  // first) until both are accepted.
-  console.log('[legal-gate] evaluating', {
-    active,
-    termsAcceptanceRequired: me.data?.termsAcceptanceRequired,
-    privacyAcceptanceRequired: me.data?.privacyAcceptanceRequired,
-    currentTermsVersion: me.data?.currentTermsVersion,
-    currentPrivacyVersion: me.data?.currentPrivacyVersion,
-    retailerStatus: retailer?.status,
-    storeStatus: store?.status,
-  });
-  // One unified gate handles BOTH docs (with a switcher when both are due), so the
+  // Legal gate — a store must accept the Retailer Terms AND the Privacy Policy before it
+  // trades. One unified gate handles BOTH docs (with a switcher when both are due), so the
   // retailer isn't bounced between two separate prompts.
-  if (active && (me.data?.termsAcceptanceRequired || me.data?.privacyAcceptanceRequired)) {
-    console.log('[legal-gate] → showing legal gate screen');
+  if (gate.mode === 'legal') {
     return (
       <Stack.Navigator screenOptions={options}>
         <Stack.Screen name="Terms" component={TermsScreen} />
       </Stack.Navigator>
     );
   }
-  console.log('[legal-gate] → gate clear, proceeding past legal screens');
 
-  // Active retailer with a usable store → full app.
-  if (active) {
+  // Active retailer with a usable store → full app. A restricted store (paused,
+  // suspended, terminated, closed account) stays in the same stack, landing on Main,
+  // so it can resume, appeal, reopen, finish orders and bill; the banner and the
+  // screens' own checks (see gate.abilities) say what is off.
+  if (gate.mode === 'full' || gate.mode === 'restricted') {
     return (
       <Stack.Navigator
         screenOptions={options}
-        initialRouteName={activeGeneration ? 'Generating' : 'Main'}
+        initialRouteName={gate.mode === 'full' && activeGeneration ? 'Generating' : 'Main'}
       >
         <Stack.Screen name="Main" component={MainTabs} />
         <Stack.Screen name="SelectPhotos" component={SelectPhotosScreen} />
@@ -289,7 +278,7 @@ export function RootNavigator() {
     );
   }
 
-  // Not active yet (pending approval, or store paused/suspended/terminated).
+  // Not approved yet (pending approval, or no store provisioned).
   return (
     <Stack.Navigator screenOptions={options}>
       <Stack.Screen name="PendingApproval" component={PendingApprovalScreen} />

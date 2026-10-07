@@ -28,15 +28,15 @@ import {
 } from '../components';
 import type { FilterOption } from '../components';
 import { ScreenProps } from '../navigation/types';
-import { useRetailerMe } from '../api/onboardingHooks';
 import { errorMessage } from '../api/request';
 import {
   useAddPickupSlot,
   useDeletePickupSlot,
   usePickupSlots,
 } from '../api/storeSettingsHooks';
-import { useAuth } from '../store/auth';
-import { canManageStore, PickupSlot, PickupSlotInput } from '../types/store';
+import { useStoreGate } from '../navigation/useStoreGate';
+import { PickupSlot, PickupSlotInput } from '../types/store';
+import { usePermissions } from '../utils/usePermission';
 import {
   WEEKDAYS,
   WEEKDAYS_LONG,
@@ -72,9 +72,10 @@ const slotRange = (s: { startTime: string; endTime: string }) =>
  */
 export function PickupSlotsScreen({ navigation }: ScreenProps<'PickupSlots'>) {
   const toast = useToast();
-  const me = useRetailerMe();
-  const authSubRole = useAuth(s => s.retailer?.subRole);
-  const canManage = canManageStore(me.data?.retailer.subRole ?? authSubRole);
+  const { can } = usePermissions();
+  const gate = useStoreGate();
+  // store.edit_profile, and not on a read-only (terminated / closed) account.
+  const canManage = can('store.edit_profile') && !gate.readOnly;
   const slotsQ = usePickupSlots();
   const addSlot = useAddPickupSlot();
   const deleteSlot = useDeletePickupSlot();

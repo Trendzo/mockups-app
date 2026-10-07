@@ -4,6 +4,7 @@ export type { WizardStepCopy, DocFieldState } from './ApplicationWizard';
 export { AppText } from './AppText';
 export { BackButton } from './BackButton';
 export { Banner } from './Banner';
+export { BlockedStoreBanner } from './BlockedStoreBanner';
 export { BottomNav } from './BottomNav';
 export type { BottomNavTab } from './BottomNav';
 export { MainBottomNav } from './MainBottomNav';
