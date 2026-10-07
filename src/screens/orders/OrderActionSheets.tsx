@@ -21,7 +21,7 @@ import { prepareUpload } from '../../utils/image';
 import { colors, radii, spacing } from '../../theme/theme';
 
 /** Pick one photo from the library, compress it and upload it to `folder`. */
-async function pickAndUpload(folder: string): Promise<string | null> {
+export async function pickAndUpload(folder: string): Promise<string | null> {
   const res = await launchImageLibrary({
     mediaType: 'photo',
     selectionLimit: 1,
@@ -36,7 +36,7 @@ async function pickAndUpload(folder: string): Promise<string | null> {
 }
 
 /** Thumbnails + "Add photo" tile; uploads as soon as a photo is picked. */
-function PhotoPicker({
+export function PhotoPicker({
   folder,
   max,
   photos,
@@ -87,7 +87,7 @@ function PhotoPicker({
   );
 }
 
-function SheetTitle({ title, message }: { title: string; message?: string }) {
+export function SheetTitle({ title, message }: { title: string; message?: string }) {
   return (
     <View style={styles.titleBlock}>
       <AppText variant="cardTitle" color={colors.ink} style={styles.sheetTitle}>
@@ -339,6 +339,65 @@ export function PickupHandoverSheet({
           boxed
         />
         <PrimaryButton label="Confirm pickup" tone="accent" loading={busy} onPress={submit} />
+        <PrimaryButton label="Cancel" tone="surface" disabled={busy} onPress={onClose} />
+      </SheetSurface>
+    </BottomSheet>
+  );
+}
+
+/**
+ * Own-delivery orders: the customer reads their delivery OTP (shown in their
+ * Trendzo app) to the store as proof of handover. The server rejects
+ * mark-delivered without it.
+ */
+export function DeliveryOtpSheet({
+  visible,
+  busy,
+  onSubmit,
+  onClose,
+}: {
+  visible: boolean;
+  busy?: boolean;
+  onSubmit: (otp: string) => void;
+  onClose: () => void;
+}) {
+  const [otp, setOtp] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (visible) {
+      setOtp('');
+      setError(null);
+    }
+  }, [visible]);
+  const submit = () => {
+    const v = otp.trim();
+    if (v.length < 4) {
+      setError("Enter the 4–8 digit code from the customer's app");
+      return;
+    }
+    onSubmit(v);
+  };
+  return (
+    <BottomSheet visible={visible} onClose={() => !busy && onClose()} avoidKeyboard dismissable={!busy}>
+      <SheetSurface style={styles.sheet}>
+        <SheetTitle
+          title="Confirm delivery"
+          message="Ask the customer for the delivery code shown in their Trendzo app, then hand over the order."
+        />
+        <Field
+          label="Delivery code"
+          value={otp}
+          onChangeText={(t) => {
+            setOtp(t.replace(/\s/g, ''));
+            setError(null);
+          }}
+          keyboardType="number-pad"
+          maxLength={8}
+          autoCorrect={false}
+          error={error}
+          boxed
+        />
+        <PrimaryButton label="Mark delivered" tone="accent" loading={busy} onPress={submit} />
         <PrimaryButton label="Cancel" tone="surface" disabled={busy} onPress={onClose} />
       </SheetSurface>
     </BottomSheet>
@@ -616,3 +675,6 @@ const styles = StyleSheet.create({
   },
   pickRowOn: { borderColor: colors.ink },
 });
+
+/** Shared sheet chrome, for sheets that live in their own files. */
+export const sheetStyles = styles;
