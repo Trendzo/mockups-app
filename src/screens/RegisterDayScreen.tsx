@@ -20,6 +20,7 @@ import {
 import type { FilterOption } from '../components';
 import { ScreenProps } from '../navigation/types';
 import { usePullRefresh } from '../utils/usePullRefresh';
+import { usePermission } from '../utils/usePermission';
 import { useCloseDay, useDaySummary, useOpenDay } from '../api/posHooks';
 import { errorMessage } from '../api/request';
 import { PosDaySummary, PosTenderMethod, TENDER_LABEL } from '../types/pos';
@@ -169,6 +170,8 @@ function SessionCard({
 }) {
   const toast = useToast();
   const openQ = useOpenDay();
+  // Opening / closing the drawer is a manager action (pos.manage); staff still see the numbers.
+  const canManage = usePermission('pos.manage');
   const [floatText, setFloatText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const session = summary.session;
@@ -209,20 +212,28 @@ function SessionCard({
           Count the cash in the drawer to start the day. Billing works without it, but opening the
           day lets you match the drawer at close.
         </AppText>
-        <Field
-          label="Opening float"
-          prefix="₹"
-          value={floatText}
-          onChangeText={(t) => {
-            setFloatText(t);
-            setError(null);
-          }}
-          placeholder="2000"
-          keyboardType="numeric"
-          error={error}
-          boxed
-        />
-        <PrimaryButton label="Open day" tone="accent" loading={openQ.isPending} onPress={open} />
+        {canManage ? (
+          <>
+            <Field
+              label="Opening float"
+              prefix="₹"
+              value={floatText}
+              onChangeText={(t) => {
+                setFloatText(t);
+                setError(null);
+              }}
+              placeholder="2000"
+              keyboardType="numeric"
+              error={error}
+              boxed
+            />
+            <PrimaryButton label="Open day" tone="accent" loading={openQ.isPending} onPress={open} />
+          </>
+        ) : (
+          <AppText variant="meta" color={colors.meta}>
+            Only the owner or a manager can open the day.
+          </AppText>
+        )}
       </Panel>
     );
   }
@@ -238,7 +249,13 @@ function SessionCard({
         </View>
         <DetailRow label="Opening float" value={formatPaise(session.openingFloatPaise)} />
         <DetailRow label="Expected in drawer" value={formatPaise(expectedCash(summary))} strong />
-        <PrimaryButton label="Close day" tone="accent" onPress={onCloseDay} />
+        {canManage ? (
+          <PrimaryButton label="Close day" tone="accent" onPress={onCloseDay} />
+        ) : (
+          <AppText variant="meta" color={colors.meta}>
+            Only the owner or a manager can close the day.
+          </AppText>
+        )}
       </Panel>
     );
   }

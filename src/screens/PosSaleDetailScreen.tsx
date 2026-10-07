@@ -18,14 +18,27 @@ import {
   useToast,
 } from '../components';
 import { ScreenProps } from '../navigation/types';
-import { getSaleInvoice } from '../api/pos';
+import { getSaleInvoice, getSaleReceipt } from '../api/pos';
 import { usePosSale, useVoidSale } from '../api/posHooks';
 import { openHostedPdf } from '../api/invoices';
 import { errorMessage } from '../api/request';
 import { PosSaleDetail, PosSalePayment, TENDER_LABEL, posSaleBadge } from '../types/pos';
 import { formatPaise } from '../utils/money';
 import { formatDateTime } from '../utils/format';
+import { usePermissions } from '../utils/usePermission';
+import { canReturnAgainst } from '../utils/posExchange';
+import { adaptReceipt, buildReceiptHtml } from '../utils/receiptHtml';
+import {
+  PRINT_UNAVAILABLE_MESSAGE,
+  isPrintAvailable,
+  printFailureMessage,
+  printHtml,
+  printPdfFile,
+} from '../utils/printing';
+import { downloadPdfToCache, pdfFileName, savePdfAndOpen } from '../utils/posPdf';
 import { colors, radii, spacing } from '../theme/theme';
+
+type Busy = null | 'receipt' | 'print-invoice' | 'share-pdf' | 'invoice';
 
 /** "− ₹40" for negatives, "+ ₹0.40" / "− ₹0.40" when `sign` is forced (round-off). */
 function signedPaise(p: number, sign = false): string {
@@ -64,15 +77,20 @@ function receiptText(s: PosSaleDetail): string {
   out.push(rule);
   if (s.billDiscountPaise > 0) out.push(`Bill discount  − ${formatPaise(s.billDiscountPaise)}`);
   out.push(`Taxable  ${formatPaise(s.taxableValuePaise)}`);
-  out.push(`CGST  ${formatPaise(s.cgstPaise)}`);
-  out.push(`SGST  ${formatPaise(s.sgstPaise)}`);
+  if (s.igstPaise) {
+    out.push(`IGST  ${formatPaise(s.igstPaise)}`);
+  } else {
+    out.push(`CGST  ${formatPaise(s.cgstPaise)}`);
+    out.push(`SGST  ${formatPaise(s.sgstPaise)}`);
+  }
   if (s.roundOffPaise) out.push(`Round off  ${signedPaise(s.roundOffPaise, true)}`);
   const returned = returnedCredit(s);
   if (returned > 0) out.push(`Returned credit  − ${formatPaise(returned)}`);
   out.push(`TOTAL  ${signedPaise(s.payablePaise)}`);
   out.push(rule);
   for (const p of s.payments) {
-    out.push(`${p.direction === 'refund' ? 'REFUND ' : ''}${tenderName(p).toUpperCase()} ${formatPaise(p.amountPaise)}`);
+    const ref = p.reference ? ` (${p.reference})` : '';
+    out.push(`${p.direction === 'refund' ? 'REFUND ' : ''}${tenderName(p).toUpperCase()}${ref} ${formatPaise(p.amountPaise)}`);
   }
   if (s.changePaise > 0) out.push(`Change ${formatPaise(s.changePaise)}`);
   out.push('', 'Thank you! Visit again.');
@@ -88,11 +106,16 @@ function receiptText(s: PosSaleDetail): string {
 export function PosSaleDetailScreen({ navigation, route }: ScreenProps<'PosSaleDetail'>) {
   const { id, justCompleted, changePaise } = route.params;
   const toast = useToast();
+  const { can } = usePermissions();
   const saleQ = usePosSale(id);
   const voidQ = useVoidSale();
   const [voidOpen, setVoidOpen] = useState(false);
-  const [pdfBusy, setPdfBusy] = useState(false);
+  const [busy, setBusy] = useState<Busy>(null);
   const sale = saleQ.data;
+  // A return / exchange document lists the lines it handed back by id only — the sale they came from
+  // supplies the names (and the receipt rebuilds its item lines from them).
+  const originalQ = usePosSale(sale?.originalSaleId ?? undefined);
+  const original = originalQ.data ?? null;
   const invoiceNo = sale?.invoice?.invoiceNumber ?? null;
 
   const newBill = () => navigation.popTo('Register');
@@ -144,8 +167,16 @@ export function PosSaleDetailScreen({ navigation, route }: ScreenProps<'PosSaleD
 
   const badge = posSaleBadge({ status: sale.status, isReturn: !!sale.originalSaleId });
   const mobile = customerMobile(sale);
-  const canVoid = sale.status === 'completed' && !sale.originalSaleId;
+  const canRefund = can('pos.refund');
+  const canVoid = sale.status === 'completed' && !sale.originalSaleId && canRefund;
+  // Return / exchange is offered on a completed sale that isn't itself a return or exchange.
+  const canReturn = canRefund && canReturnAgainst(sale);
   const returned = returnedCredit(sale);
+  const hasInvoice = !!sale.invoice;
+  const returnedLines = (sale.returnLines ?? []).map((rl) => ({
+    rl,
+    item: original?.items.find((i) => i.id === rl.originalSaleItemId) ?? null,
+  }));
 
   const share = async () => {
     try {
@@ -169,7 +200,7 @@ export function PosSaleDetailScreen({ navigation, route }: ScreenProps<'PosSaleD
   };
 
   const openInvoice = async () => {
-    setPdfBusy(true);
+    setBusy('invoice');
     try {
       const inv = await getSaleInvoice(id);
       if (inv?.pdfUrl) await openHostedPdf(inv.pdfUrl);
@@ -177,9 +208,71 @@ export function PosSaleDetailScreen({ navigation, route }: ScreenProps<'PosSaleD
     } catch (e) {
       toast.show(errorMessage(e, "Couldn't open the invoice"), 'error');
     } finally {
-      setPdfBusy(false);
+      setBusy(null);
     }
   };
+
+  /** The invoice PDF's link, or a toast explaining why there isn't one yet. */
+  const invoicePdfUrl = async (): Promise<string | null> => {
+    const inv = await getSaleInvoice(id);
+    if (inv?.pdfUrl) return inv.pdfUrl;
+    toast.show('The invoice PDF isn’t ready yet — try again in a moment.', 'info');
+    return null;
+  };
+
+  /** Narrow 80mm-style receipt through the system print dialog (any Wi-Fi / Bluetooth / USB printer). */
+  const printReceipt = async () => {
+    if (!isPrintAvailable()) {
+      toast.show(PRINT_UNAVAILABLE_MESSAGE, 'info');
+      return;
+    }
+    setBusy('receipt');
+    try {
+      const receipt = await getSaleReceipt(id);
+      const html = buildReceiptHtml(adaptReceipt(receipt, sale, original), {
+        voided: sale.status === 'voided',
+      });
+      await printHtml(html, invoiceNo ? `Receipt ${invoiceNo}` : 'Receipt');
+    } catch (e) {
+      toast.show(printFailureMessage(e, "Couldn't print the receipt"), 'error');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  /** The GST invoice as an A4 PDF through the system print dialog. */
+  const printInvoice = async () => {
+    if (!isPrintAvailable()) {
+      toast.show(PRINT_UNAVAILABLE_MESSAGE, 'info');
+      return;
+    }
+    setBusy('print-invoice');
+    try {
+      const url = await invoicePdfUrl();
+      if (!url) return;
+      const path = await downloadPdfToCache(url, pdfFileName(invoiceNo));
+      await printPdfFile(path, invoiceNo ? `Invoice ${invoiceNo}` : 'Invoice');
+    } catch (e) {
+      toast.show(printFailureMessage(e, "Couldn't print the invoice"), 'error');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  /** Download the invoice PDF and open it so it can be sent on (viewer / share sheet). */
+  const sharePdf = async () => {
+    setBusy('share-pdf');
+    try {
+      const url = await invoicePdfUrl();
+      if (url) await savePdfAndOpen(url, pdfFileName(invoiceNo));
+    } catch (e) {
+      toast.show(errorMessage(e, "Couldn't share the invoice"), 'error');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const spinner = <ActivityIndicator color={colors.ink} />;
 
   const submitVoid = (reason: string) =>
     voidQ.mutate(
@@ -289,13 +382,45 @@ export function PosSaleDetailScreen({ navigation, route }: ScreenProps<'PosSaleD
             </View>
           ))}
 
+          {/* A return / exchange lists what was handed back (names come from the original sale). */}
+          {returnedLines.length > 0 ? (
+            <>
+              <AppText variant="sectionLabel" color={colors.meta}>
+                {sale.items.length > 0 ? 'Handed back' : 'Items returned'}
+              </AppText>
+              {returnedLines.map(({ rl, item }, i) => (
+                <View key={rl.id ?? `${rl.originalSaleItemId}-${i}`} style={styles.item}>
+                  <View style={styles.flex}>
+                    <AppText variant="bodyMedium" color={colors.ink} numberOfLines={2}>
+                      {item?.listingNameSnap ?? 'Returned item'}
+                    </AppText>
+                    <AppText variant="meta" color={colors.meta}>
+                      {[item?.attributesLabelSnap, `× ${rl.qty}`, rl.restock === false ? 'not restocked' : null]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </AppText>
+                  </View>
+                  <AppText variant="bodyMedium" color={colors.ink}>
+                    {formatPaise(rl.refundPaise)}
+                  </AppText>
+                </View>
+              ))}
+            </>
+          ) : null}
+
           <Divider />
           {sale.billDiscountPaise > 0 ? (
             <DetailRow label="Bill discount" value={`− ${formatPaise(sale.billDiscountPaise)}`} tone="negative" />
           ) : null}
           <DetailRow label="Taxable value" value={formatPaise(sale.taxableValuePaise)} />
-          <DetailRow label="CGST" value={formatPaise(sale.cgstPaise)} />
-          <DetailRow label="SGST" value={formatPaise(sale.sgstPaise)} />
+          {sale.igstPaise ? (
+            <DetailRow label="IGST" value={formatPaise(sale.igstPaise)} />
+          ) : (
+            <>
+              <DetailRow label="CGST" value={formatPaise(sale.cgstPaise)} />
+              <DetailRow label="SGST" value={formatPaise(sale.sgstPaise)} />
+            </>
+          )}
           {sale.roundOffPaise ? (
             <DetailRow label="Round off" value={signedPaise(sale.roundOffPaise, true)} />
           ) : null}
@@ -311,6 +436,7 @@ export function PosSaleDetailScreen({ navigation, route }: ScreenProps<'PosSaleD
                 <DetailRow
                   key={p.id}
                   label={p.direction === 'refund' ? `Refund · ${tenderName(p)}` : tenderName(p)}
+                  hint={p.reference ? `Ref ${p.reference}` : undefined}
                   value={p.direction === 'refund' ? `− ${formatPaise(p.amountPaise)}` : formatPaise(p.amountPaise)}
                   tone={p.direction === 'refund' ? 'negative' : 'default'}
                 />
@@ -323,6 +449,47 @@ export function PosSaleDetailScreen({ navigation, route }: ScreenProps<'PosSaleD
         </Panel>
 
         {/* Actions */}
+        {canReturn ? (
+          <>
+            <ListRow
+              icon="return-down-back-outline"
+              label="Return items"
+              hint="Take items back and refund them"
+              onPress={() => navigation.navigate('PosReturn', { saleId: id })}
+            />
+            <ListRow
+              icon="swap-horizontal-outline"
+              label="Exchange items"
+              hint="Swap for other items, settle only the difference"
+              onPress={() => navigation.navigate('PosExchange', { saleId: id })}
+            />
+          </>
+        ) : null}
+        <ListRow
+          icon="print-outline"
+          label="Print receipt"
+          hint={busy === 'receipt' ? 'Preparing…' : 'Narrow receipt for any printer'}
+          onPress={busy ? undefined : printReceipt}
+          right={busy === 'receipt' ? spinner : undefined}
+        />
+        {hasInvoice ? (
+          <ListRow
+            icon="document-outline"
+            label="Print invoice"
+            hint={busy === 'print-invoice' ? 'Preparing…' : 'GST invoice on A4'}
+            onPress={busy ? undefined : printInvoice}
+            right={busy === 'print-invoice' ? spinner : undefined}
+          />
+        ) : null}
+        {hasInvoice ? (
+          <ListRow
+            icon="download-outline"
+            label="Share PDF"
+            hint={busy === 'share-pdf' ? 'Downloading…' : 'Save the invoice and send it on'}
+            onPress={busy ? undefined : sharePdf}
+            right={busy === 'share-pdf' ? spinner : undefined}
+          />
+        ) : null}
         <ListRow
           icon="share-outline"
           label="Share receipt"
@@ -340,9 +507,9 @@ export function PosSaleDetailScreen({ navigation, route }: ScreenProps<'PosSaleD
         <ListRow
           icon="document-text-outline"
           label="Tax invoice (PDF)"
-          hint={pdfBusy ? 'Opening…' : 'The GST invoice for this sale'}
-          onPress={pdfBusy ? undefined : openInvoice}
-          right={pdfBusy ? <ActivityIndicator color={colors.ink} /> : undefined}
+          hint={busy === 'invoice' ? 'Opening…' : 'The GST invoice for this sale'}
+          onPress={busy ? undefined : openInvoice}
+          right={busy === 'invoice' ? spinner : undefined}
         />
         {canVoid ? (
           <ListRow
