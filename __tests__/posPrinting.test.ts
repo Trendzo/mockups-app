@@ -17,7 +17,7 @@ import {
   printHtml,
   printPdfFile,
 } from '../src/utils/printing';
-import { isOwnApiUrl, pdfFileName } from '../src/utils/posPdf';
+import { absolutePdfUrl, isOwnApiUrl, pdfFileName } from '../src/utils/posPdf';
 import { gstinError, isValidGstin, normalizeGstin } from '../src/utils/gstin';
 import { useLabelSettings } from '../src/store/labelSettings';
 import { usePosReturns } from '../src/store/posReturns';
@@ -87,6 +87,14 @@ describe('invoice PDF helpers', () => {
     expect(isOwnApiUrl('https://media.example.net/pos-invoices/x.pdf', base)).toBe(false);
     expect(isOwnApiUrl('https://api.example.com.evil.io/x.pdf', base)).toBe(false);
     expect(isOwnApiUrl('not a url', base)).toBe(false);
+  });
+
+  it('turns a server-relative link into an absolute one, leaving full links alone', () => {
+    const base = 'https://api.example.com/api/v1';
+    expect(absolutePdfUrl('/files/INV-1.pdf', base)).toBe('https://api.example.com/files/INV-1.pdf');
+    expect(absolutePdfUrl('https://cdn.example.net/INV-1.pdf', base)).toBe('https://cdn.example.net/INV-1.pdf');
+    expect(absolutePdfUrl('//cdn.example.net/INV-1.pdf', base)).toBe('//cdn.example.net/INV-1.pdf');
+    expect(absolutePdfUrl('/files/x.pdf', 'not a url')).toBe('/files/x.pdf');
   });
 });
 

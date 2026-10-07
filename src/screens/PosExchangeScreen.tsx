@@ -28,6 +28,7 @@ import {
   TenderDraft,
   buildExchangeRequest,
   canReturnAgainst,
+  collapseSplit,
   exchangeNet,
   exchangeProblem,
   mergeReturned,
@@ -113,6 +114,12 @@ export function PosExchangeScreen({ navigation, route }: ScreenProps<'PosExchang
 
   const settlement: Settlement | null = quoteReady ? settlementFor(exchangeNet(newValue, returnValue)) : null;
   const settleKind = settlement?.kind ?? null;
+  const settleAmount = settlement?.amountPaise ?? 0;
+
+  // Typed split amounts stop meaning anything once the amount to settle changes — start the split over.
+  useEffect(() => {
+    setRows((r) => collapseSplit(r));
+  }, [settleAmount]);
 
   // When the money flips sides (customer pays ↔ store refunds), start the payment split afresh: a
   // refund goes back the way the customer paid, a collection defaults to cash.

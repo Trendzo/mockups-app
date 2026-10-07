@@ -24,17 +24,26 @@ export function isOwnApiUrl(url: string, base: string): boolean {
   return !!o && o === origin(base);
 }
 
+/** A server-relative link ("/files/x.pdf") made absolute against the API host; full links pass through. */
+export function absolutePdfUrl(pdfUrl: string, base: string): string {
+  if (!pdfUrl.startsWith('/') || pdfUrl.startsWith('//')) return pdfUrl;
+  const origin = /^(https?:\/\/[^/?#]+)/i.exec(base.trim())?.[1];
+  return origin ? `${origin}${pdfUrl}` : pdfUrl;
+}
+
 function authHeadersFor(pdfUrl: string): Record<string, string> {
   const base = useSettings.getState().baseUrl;
   const token = useAuth.getState().token;
   return token && isOwnApiUrl(pdfUrl, base) ? { Authorization: `Bearer ${token}` } : {};
 }
 
+const resolveUrl = (pdfUrl: string): string => absolutePdfUrl(pdfUrl, useSettings.getState().baseUrl);
+
 async function assertOk(res: { info(): { status?: number }; path(): string }, dest: string): Promise<void> {
   const status = res.info().status ?? 0;
-  if (status >= 400 || status === 0) {
+  if (status >= 400) {
     await ReactNativeBlobUtil.fs.unlink(dest).catch(() => {});
-    throw new Error(`Couldn’t download the invoice (${status || 'no response'}).`);
+    throw new Error(`Couldn’t download the invoice (${status}).`);
   }
 }
 
@@ -42,8 +51,9 @@ async function assertOk(res: { info(): { status?: number }; path(): string }, de
  * Download the PDF into the app's private cache and return its plain absolute path (what
  * `printPdfFile` needs — no `file://`).
  */
-export async function downloadPdfToCache(pdfUrl: string, filename: string): Promise<string> {
+export async function downloadPdfToCache(link: string, filename: string): Promise<string> {
   const { fs } = ReactNativeBlobUtil;
+  const pdfUrl = resolveUrl(link);
   const dest = `${fs.dirs.CacheDir}/${filename}`;
   if (await fs.exists(dest)) await fs.unlink(dest);
   const res = await ReactNativeBlobUtil.config({ path: dest }).fetch('GET', pdfUrl, authHeadersFor(pdfUrl));
@@ -57,8 +67,9 @@ export async function downloadPdfToCache(pdfUrl: string, filename: string): Prom
  *    Share action. Same mechanism as the order-invoice download.
  *  - iOS: into the app's Documents, then the system share sheet.
  */
-export async function savePdfAndOpen(pdfUrl: string, filename: string): Promise<void> {
+export async function savePdfAndOpen(link: string, filename: string): Promise<void> {
   const { fs } = ReactNativeBlobUtil;
+  const pdfUrl = resolveUrl(link);
   const headers = authHeadersFor(pdfUrl);
 
   if (Platform.OS === 'android') {

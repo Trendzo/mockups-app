@@ -22,6 +22,7 @@ import {
 import type { FilterOption } from '../components';
 import { ScreenProps } from '../navigation/types';
 import { usePullRefresh } from '../utils/usePullRefresh';
+import { usePermissions } from '../utils/usePermission';
 import { useDebouncedValue, usePosSales } from '../api/posHooks';
 import { errorMessage } from '../api/request';
 import { PosSaleRow, posSaleBadge } from '../types/pos';
@@ -51,6 +52,7 @@ const money = (p: number) => (p < 0 ? `− ${formatPaise(-p)}` : formatPaise(p))
 
 /** Counter sales history: by day range, searchable by invoice number. */
 export function PosSalesScreen({ navigation }: ScreenProps<'PosSales'>) {
+  const { can } = usePermissions();
   const [range, setRange] = useState<Range>('today');
   const [search, setSearch] = useState('');
   const q = useDebouncedValue(search.trim(), 300);
@@ -66,6 +68,20 @@ export function PosSalesScreen({ navigation }: ScreenProps<'PosSales'>) {
     return { count: counted.length, total: counted.reduce((s, r) => s + r.payablePaise, 0) };
   }, [rows]);
   const showDate = range === 'week' || range === 'month';
+
+  if (!can('pos.view')) {
+    return (
+      <Screen edges={['top', 'bottom']}>
+        <ScreenHeader overline="Billing counter" title="Sales" onBack={() => navigation.goBack()} />
+        <Banner
+          tone="warning"
+          title="No access to sales history"
+          message="Your role can't view counter sales. Ask the owner to enable it."
+          style={styles.gapTop}
+        />
+      </Screen>
+    );
+  }
 
   return (
     <Screen edges={['top']}>

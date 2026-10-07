@@ -38,7 +38,6 @@ export function __setPrintModuleForTests(m: PrintModule | null | undefined): voi
 export function getPrintModule(): PrintModule | null {
   if (injected !== undefined) return injected;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const mod = require('react-native-print');
     const impl = mod?.default ?? mod;
     return impl && typeof impl.print === 'function' ? (impl as PrintModule) : null;

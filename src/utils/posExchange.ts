@@ -228,6 +228,16 @@ export function addTenderRow(rows: TenderDraft[], duePaise: number): TenderDraft
   return [...frozen, newTenderDraft(method)];
 }
 
+/**
+ * Back to a single method (the first row's) — used when the amount due changes under a split the
+ * cashier already typed in, since those typed amounts no longer mean anything.
+ */
+export function collapseSplit(rows: TenderDraft[]): TenderDraft[] {
+  if (rows.length <= 1) return rows;
+  const first = rows[0] as TenderDraft;
+  return [{ ...first, amountText: '' }];
+}
+
 export function removeTenderRow(rows: TenderDraft[], index: number): TenderDraft[] {
   if (rows.length <= 1) return rows;
   return rows.filter((_, i) => i !== index);
@@ -271,8 +281,8 @@ export type Settlement =
   | { kind: 'even'; amountPaise: 0 };
 
 /** New items minus returned items: > 0 the customer pays, < 0 the store pays back. */
-export const exchangeNet = (newValuePaise: number, returnValuePaise: number): number =>
-  newValuePaise - returnValuePaise;
+export const exchangeNet = (newValuePaise: number, returnedValuePaise: number): number =>
+  newValuePaise - returnedValuePaise;
 
 /** Which single side of an exchange gets settled, and for how much. */
 export function settlementFor(net: number): Settlement {

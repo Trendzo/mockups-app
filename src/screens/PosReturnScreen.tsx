@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet } from 'react-native';
 import {
   AppText,
   Banner,
@@ -23,6 +23,7 @@ import {
   TenderDraft,
   buildReturnRequest,
   canReturnAgainst,
+  collapseSplit,
   mergeReturned,
   newTenderDraft,
   originalTenderMethod,
@@ -93,6 +94,10 @@ export function PosReturnScreen({ navigation, route }: ScreenProps<'PosReturn'>)
   const problem = returnProblem({ items, selection, returned, reason, rows });
   const eligible = !!sale && canReturnAgainst(sale);
   const picked = selectedLines(items, selection);
+  // Typed split amounts stop meaning anything once the refund due changes — start the split over.
+  useEffect(() => {
+    setRows((r) => collapseSplit(r));
+  }, [due]);
   const unitCount = picked.reduce((s, l) => s + l.qty, 0);
 
   const submit = async () => {

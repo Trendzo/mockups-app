@@ -16,6 +16,7 @@ import {
   buildReturnRequest,
   canReturnAgainst,
   cleanReason,
+  collapseSplit,
   exchangeNet,
   exchangeProblem,
   lineRefundPaise,
@@ -227,6 +228,15 @@ describe('tender split — legs must add up to the amount due exactly', () => {
     const fewer = removeTenderRow(rows, 1);
     expect(resolveTenders(fewer, 1000_00).amounts).toEqual([300_00, 700_00]);
     expect(removeTenderRow([draft('cash')], 0)).toHaveLength(1);
+  });
+
+  it('starts the split over (first method only) when the amount due changes under it', () => {
+    const rows = [draft('card', '300', 'REF1'), draft('upi')];
+    const one = collapseSplit(rows);
+    expect(one).toHaveLength(1);
+    expect(one[0]).toMatchObject({ method: 'card', amountText: '', reference: 'REF1' });
+    const single = [draft('cash')];
+    expect(collapseSplit(single)).toBe(single);
   });
 
   it('builds request tenders: cash carries no reference, card/UPI carry a trimmed one', () => {
