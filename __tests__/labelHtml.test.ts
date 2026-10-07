@@ -123,6 +123,12 @@ describe('the code on the tag', () => {
     expect(modules.split('').reduce((s, d) => s + Number(d), 0)).toBe(11 * 3 + 13);
     expect(modules.startsWith('211214')).toBe(true); // start code B
     expect(modules.endsWith('2331112')).toBe(true); // stop
+    // exact symbol sequence: start B, 'A' (value 33), checksum 34, stop
+    expect(modules).toBe('211214' + '111323' + '131123' + '2331112');
+    // a longer code: checksum = (104 + Σ value × position) mod 103
+    const value = '12'.split('').reduce((sum, ch, i) => sum + (ch.charCodeAt(0) - 32) * (i + 1), 104) % 103;
+    expect(code128Modules('12').length).toBe(6 * 4 + 7);
+    expect(value).toBe((104 + 17 * 1 + 18 * 2) % 103);
     expect(code128Printable('A₹é1')).toBe('A1');
     expect(code128Svg('A')).toContain('viewBox="0 0 ');
   });
