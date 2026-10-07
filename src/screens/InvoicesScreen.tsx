@@ -140,6 +140,9 @@ export function InvoicesScreen({ navigation, route }: ScreenProps<'Invoices'>) {
       <ScreenHeader overline="Payments" title="Invoices" onBack={() => navigation.goBack()} />
       <FlatList
         data={rows}
+        // Full-bleed list (gutter moved into the content) so the filter chips can scroll
+        // edge to edge, like Payout history.
+        style={styles.list}
         keyExtractor={(i) => i.id}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -396,7 +399,13 @@ function InvoiceSheet({
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  listContent: { paddingTop: spacing.md, paddingBottom: spacing.xxl, gap: spacing.sm },
+  list: { marginHorizontal: -spacing.screenH },
+  listContent: {
+    paddingHorizontal: spacing.screenH,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xxl,
+    gap: spacing.sm,
+  },
   listHeader: { gap: spacing.sm + 4, marginBottom: spacing.xs },
   loader: { marginTop: spacing.xl },
   searchBox: {

@@ -116,6 +116,9 @@ export function DeadStockScreen({ navigation }: ScreenProps<'DeadStock'>) {
       {title}
       <FlatList
         data={rows}
+        // Full-bleed list (gutter moved into the content) so the filter chips can scroll
+        // edge to edge, like Payout history.
+        style={styles.list}
         keyExtractor={(r) => r.variantId}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -232,7 +235,13 @@ function DeadStockCard({ row, onPress }: { row: DeadStockRow; onPress: () => voi
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  listContent: { paddingTop: spacing.md, paddingBottom: spacing.xxl, gap: spacing.sm },
+  list: { marginHorizontal: -spacing.screenH },
+  listContent: {
+    paddingHorizontal: spacing.screenH,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xxl,
+    gap: spacing.sm,
+  },
   listHeader: { gap: spacing.sm + 4, marginBottom: spacing.xs },
   loader: { marginTop: spacing.xl },
   summary: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
