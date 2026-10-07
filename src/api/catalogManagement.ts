@@ -1,10 +1,12 @@
 import { http, unwrapEnvelope } from './client';
 import { normalizeAuthError } from './auth';
 import {
+  AdjustStockInput,
   BestSeller,
   CatalogBrand,
   CatalogCategory,
   CreateListingInput,
+  DeadStockRow,
   DefaultVariantInput,
   InventoryFlag,
   InventoryPage,
@@ -176,10 +178,27 @@ export const getReservations = (variantId: string, limit = 5) =>
     }),
   );
 
-/** Store-wide stock ledger, newest first. `from`/`to` are ISO instants. */
-export const getStockAdjustments = (params: { from?: string; to?: string; limit?: number }) =>
+/**
+ * Stock ledger, newest first (server max 200). `variantId` narrows it to one
+ * variant server-side; `from`/`to` are ISO instants.
+ */
+export const getStockAdjustments = (params: {
+  variantId?: string;
+  from?: string;
+  to?: string;
+  limit?: number;
+}) =>
   req<StockAdjustment[]>(() =>
     http.get('/retailer/inventory/adjustments', { params: { limit: 200, ...params } }),
+  );
+
+/**
+ * Correct one variant's on-hand count. Gated by `inventory.adjust` (floor staff
+ * have it; they lack `listings.edit`, so they cannot use PATCH /retailer/variants).
+ */
+export const adjustVariantStock = (variantId: string, body: AdjustStockInput) =>
+  req<unknown>(() =>
+    http.post(`/retailer/inventory/${encodeURIComponent(variantId)}/adjust`, body),
   );
 
 export const getBestSellers = (days = 30, limit = 10) =>
@@ -188,3 +207,34 @@ export const getBestSellers = (days = 30, limit = 10) =>
       params: { days, limit },
     }),
   );
+
+/**
+ * Dead stock: in-stock variants with no order placed in the last `daysWithoutSale`
+ * days (or never). GET /retailer/reports/listings/dead-stock (`reports.view`);
+ * the report envelope is `{ rows, meta }`, `limit` is capped at 200 server-side.
+ */
+export async function getDeadStock(params: {
+  daysWithoutSale: number;
+  limit?: number;
+}): Promise<{ rows: DeadStockRow[]; generatedAtIst?: string }> {
+  const data = await req<unknown>(() =>
+    http.get('/retailer/reports/listings/dead-stock', {
+      params: { daysWithoutSale: params.daysWithoutSale, limit: params.limit ?? 200 },
+    }),
+  );
+  return shapeDeadStock(data);
+}
+
+/** Accepts `{ rows, meta }` or a bare array, like the web portal's unwrapRows. */
+export function shapeDeadStock(data: unknown): { rows: DeadStockRow[]; generatedAtIst?: string } {
+  const rows = Array.isArray(data)
+    ? data
+    : Array.isArray((data as { rows?: unknown } | null)?.rows)
+      ? ((data as { rows: unknown[] }).rows)
+      : [];
+  const ist = (data as { meta?: { generatedAtIst?: unknown } } | null)?.meta?.generatedAtIst;
+  return {
+    rows: rows as DeadStockRow[],
+    generatedAtIst: typeof ist === 'string' ? ist : undefined,
+  };
+}

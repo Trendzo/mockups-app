@@ -6,6 +6,7 @@ import {
   EmptyState,
   FilterChips,
   Icon,
+  ListRow,
   PressableScale,
   Screen,
   ScreenHeader,
@@ -15,7 +16,8 @@ import type { FilterOption } from '../components';
 import { ScreenProps } from '../navigation/types';
 import { usePayouts, useUpcomingPayout } from '../api/earningsHooks';
 import { errorMessage } from '../api/request';
-import { bankTail, PayoutRow, payoutStatusMeta } from '../types/earnings';
+import { bankTail, cycleLabel, PayoutRow, payoutStatusMeta } from '../types/earnings';
+import { usePermissions } from '../utils/usePermission';
 import { formatPaise } from '../utils/money';
 import { formatDate, formatDayDate, plural } from '../utils/format';
 import { colors, radii, spacing } from '../theme/theme';
@@ -67,8 +69,10 @@ function inFilter(p: PayoutRow, filter: Filter): boolean {
 
 /** Every settlement cycle sent (or due) to the store's bank, newest first. */
 export function PayoutsScreen({ navigation }: ScreenProps<'Payouts'>) {
-  const payoutsQ = usePayouts();
-  const upcomingQ = useUpcomingPayout();
+  const { can } = usePermissions();
+  const allowed = can('payouts.view');
+  const payoutsQ = usePayouts(allowed);
+  const upcomingQ = useUpcomingPayout(allowed);
   const up = upcomingQ.data;
   const [filter, setFilter] = useState<Filter>('all');
   const [refreshing, setRefreshing] = useState(false);
@@ -81,7 +85,7 @@ export function PayoutsScreen({ navigation }: ScreenProps<'Payouts'>) {
     [payouts],
   );
   const paid = payouts.filter((p) => p.status === 'paid');
-  const paidTotal = paid.reduce((sum, p) => sum + (p.amountPaise || 0), 0);
+  const paidTotal = paid.reduce((sum, p) => sum + (p.netPaise || 0), 0);
   const failedCount = payouts.filter((p) => p.status === 'failed').length;
 
   const onRefresh = async () => {
@@ -92,6 +96,19 @@ export function PayoutsScreen({ navigation }: ScreenProps<'Payouts'>) {
       setRefreshing(false);
     }
   };
+
+  if (!allowed) {
+    return (
+      <Screen edges={['top']}>
+        <ScreenHeader overline="Payments" title="Payout history" onBack={() => navigation.goBack()} />
+        <EmptyState
+          icon="lock-closed-outline"
+          title="Not available for your role"
+          message="Ask the store owner or a manager about payouts."
+        />
+      </Screen>
+    );
+  }
 
   const header = (
     <View style={styles.listHeader}>
@@ -115,6 +132,13 @@ export function PayoutsScreen({ navigation }: ScreenProps<'Payouts'>) {
           onAction={() => navigation.navigate('ChangeRequest')}
         />
       ) : null}
+
+      <ListRow
+        icon="document-text-outline"
+        label="Billing statements"
+        hint="Gross to net for every cycle"
+        onPress={() => navigation.navigate('BillingStatements')}
+      />
 
       {payouts.length > 0 ? (
         <>
@@ -226,14 +250,18 @@ function PayoutCard({ payout, onPress }: { payout: PayoutRow; onPress: () => voi
       <View style={styles.cardTop}>
         <View style={styles.cardTitle}>
           <AppText variant="bodyMedium" color={colors.ink} numberOfLines={2}>
-            {payout.period || 'Payout'}
+            {cycleLabel(payout) || 'Payout'}
           </AppText>
           <StatusChip label={status.label} tone={status.tone} />
         </View>
         <AppText variant="bodyMedium" color={colors.ink}>
-          {formatPaise(payout.amountPaise)}
+          {formatPaise(payout.netPaise)}
         </AppText>
       </View>
+      {/* Net is what reached (or will reach) the bank. */}
+      <AppText variant="meta" color={colors.meta}>
+        Sales {formatPaise(payout.grossPaise)} · Net {formatPaise(payout.netPaise)}
+      </AppText>
       {bankLine ? (
         <AppText variant="meta" color={colors.meta}>
           {bankLine}

@@ -1,15 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   createEarlyDisbursement,
+  getBillingStatement,
   getFees,
   getPayout,
   getPayoutDeductions,
   getUpcomingPayout,
+  listBillingStatements,
   listEarlyDisbursements,
   listPayouts,
 } from './earnings';
+import { getInvoice, listInvoices } from './invoices';
 import { pollUnlessForbidden, retryUnlessClientError } from './request';
-import type { PayoutRow } from '../types/earnings';
+import type { InvoiceKindQuery, PayoutRow } from '../types/earnings';
 
 /** Unsettled earnings + next payout. Polled lightly so a fresh sale reflects. */
 export function useUpcomingPayout(enabled = true) {
@@ -88,5 +91,47 @@ export function useFees(enabled = true) {
     enabled,
     retry: 0,
     staleTime: 10 * 60_000,
+  });
+}
+
+/** Billing statements (one per settlement cycle). `enabled` follows `payouts.view`. */
+export function useBillingStatements(enabled = true) {
+  return useQuery({
+    queryKey: ['earnings', 'statements'],
+    queryFn: () => listBillingStatements(),
+    enabled,
+    retry: retryUnlessClientError,
+    staleTime: 60_000,
+  });
+}
+
+export function useBillingStatement(id?: string) {
+  return useQuery({
+    queryKey: ['earnings', 'statement', id],
+    queryFn: () => getBillingStatement(id as string),
+    enabled: !!id,
+    retry: retryUnlessClientError,
+  });
+}
+
+/** Invoices of one server kind (invoice | supplementary | commission | all). */
+export function useInvoices(kind: InvoiceKindQuery, enabled = true) {
+  return useQuery({
+    queryKey: ['invoices', kind],
+    queryFn: () => listInvoices({ kind, limit: 200 }),
+    enabled,
+    retry: retryUnlessClientError,
+    staleTime: 60_000,
+  });
+}
+
+/** One invoice with its credit notes (fetched when its sheet opens). */
+export function useInvoice(id?: string | null) {
+  return useQuery({
+    queryKey: ['invoices', 'detail', id],
+    queryFn: () => getInvoice(id as string),
+    enabled: !!id,
+    retry: retryUnlessClientError,
+    staleTime: 30_000,
   });
 }

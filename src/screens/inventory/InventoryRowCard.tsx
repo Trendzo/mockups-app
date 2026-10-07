@@ -14,9 +14,9 @@ import {
   useToast,
 } from '../../components';
 import type { StatusTone } from '../../components';
-import { InventoryRowPatch, useUpdateInventoryRow } from '../../api/catalogHooks';
+import { InventoryRowPatch, useAdjustStock, useUpdateInventoryRow } from '../../api/catalogHooks';
 import { errorCode, errorMessage } from '../../api/request';
-import { InventoryRow } from '../../types/catalog';
+import { InventoryRow, StockAdjustReason } from '../../types/catalog';
 import { formatPaise, paiseToRupeeInput, parseRupeesToPaise } from '../../utils/money';
 import { colors, radii, spacing } from '../../theme/theme';
 
@@ -53,13 +53,21 @@ export function rowTitle(row: InventoryRow): string {
   return row.attributesLabel ? `${row.listingName} · ${row.attributesLabel}` : row.listingName;
 }
 
+/**
+ * What the inline editor offers. `full` (listings.edit): stock, price and the on-sale
+ * switch through PATCH /retailer/variants. `stock` (inventory.adjust only, e.g. floor
+ * staff): a stock count and a reason through POST /retailer/inventory/:id/adjust.
+ */
+export type RowEditMode = 'full' | 'stock';
+
 interface InventoryRowCardProps {
   row: InventoryRow;
   threshold: number;
   selectMode: boolean;
   selected: boolean;
-  /** Inline editor open (write access only). */
+  /** Inline editor open (needs an edit mode). */
   expanded: boolean;
+  editMode: RowEditMode;
   onPress: (row: InventoryRow) => void;
   onSaved: (row: InventoryRow) => void;
   onHolds: (row: InventoryRow) => void;
@@ -77,6 +85,7 @@ export const InventoryRowCard = memo(function RowCard({
   selectMode,
   selected,
   expanded,
+  editMode,
   onPress,
   onSaved,
   onHolds,
@@ -157,6 +166,7 @@ export const InventoryRowCard = memo(function RowCard({
       </PressableScale>
       <RowEditor
         row={row}
+        editMode={editMode}
         onSaved={onSaved}
         onHolds={onHolds}
         onHistory={onHistory}
@@ -191,16 +201,30 @@ function FlagChips({ row, state }: { row: InventoryRow; state: StockState }) {
   );
 }
 
+/** Why a floor-staff stock change was made (values of the server's adjustment-reason enum). */
+const REASON_OPTIONS: { value: StockAdjustReason; label: string }[] = [
+  { value: 'manual_edit', label: 'Correction' },
+  { value: 'audit_correction', label: 'Stock count' },
+  { value: 'damage_writeoff', label: 'Damaged / lost' },
+];
+
 function RowEditor({
   row,
+  editMode,
   onSaved,
   onHolds,
   onHistory,
   onOpenProduct,
-}: Pick<InventoryRowCardProps, 'row' | 'onSaved' | 'onHolds' | 'onHistory' | 'onOpenProduct'>) {
+}: Pick<
+  InventoryRowCardProps,
+  'row' | 'editMode' | 'onSaved' | 'onHolds' | 'onHistory' | 'onOpenProduct'
+>) {
   const toast = useToast();
+  const full = editMode === 'full';
   const save = useUpdateInventoryRow();
+  const adjust = useAdjustStock();
   const toggle = useUpdateInventoryRow();
+  const [reason, setReason] = useState<StockAdjustReason>('manual_edit');
   // null = untouched: the field shows the live value, so a sale landing in the
   // background is never written back as a stale absolute count.
   const [stockText, setStockText] = useState<string | null>(null);
@@ -233,18 +257,25 @@ function RowEditor({
   // Allowed, but worth a nudge: the struck-through MRP disappears.
   const atOrAboveMrp = priceDirty && !priceError && mrp != null && price != null && price >= mrp;
 
-  const canSave = (stockDirty || priceDirty) && !stockError && !priceError;
+  // The stock-only editor has no price field, so a price edit never counts there.
+  const canSave = full
+    ? (stockDirty || priceDirty) && !stockError && !priceError
+    : stockDirty && !stockError;
   const isActive = pendingActive ?? row.isActive;
   const shownStock = stock ?? row.stock;
 
   const onSave = async () => {
-    // Only send what changed.
-    const patch: InventoryRowPatch = {};
-    if (stockDirty && stock != null) patch.stock = stock;
-    if (priceDirty && price != null) patch.pricePaise = price;
     Keyboard.dismiss();
     try {
-      await save.mutateAsync({ id: row.id, patch });
+      if (full) {
+        // Only send what changed.
+        const patch: InventoryRowPatch = {};
+        if (stockDirty && stock != null) patch.stock = stock;
+        if (priceDirty && price != null) patch.pricePaise = price;
+        await save.mutateAsync({ id: row.id, patch });
+      } else if (stock != null) {
+        await adjust.mutateAsync({ id: row.id, input: { newStock: stock, reason } });
+      }
       toast.show(`Saved · ${variantLabel(row)}`, 'success');
       onSaved(row);
     } catch (e) {
@@ -299,44 +330,76 @@ function RowEditor({
         </AppText>
       ) : null}
 
-      <View style={styles.fieldBlock}>
-        <Field
-          label="Price"
-          prefix="₹"
-          boxed
-          value={priceInput}
-          onChangeText={setPriceText}
-          keyboardType="decimal-pad"
-          maxLength={12}
-          error={priceError}
-        />
-        {atOrAboveMrp ? (
-          <AppText variant="meta" color={WARNING}>
-            At or above the MRP of {formatPaise(mrp)}, so no discount will show.
+      {full ? (
+        <View style={styles.fieldBlock}>
+          <Field
+            label="Price"
+            prefix="₹"
+            boxed
+            value={priceInput}
+            onChangeText={setPriceText}
+            keyboardType="decimal-pad"
+            maxLength={12}
+            error={priceError}
+          />
+          {atOrAboveMrp ? (
+            <AppText variant="meta" color={WARNING}>
+              At or above the MRP of {formatPaise(mrp)}, so no discount will show.
+            </AppText>
+          ) : mrp ? (
+            <AppText variant="meta" color={colors.meta}>
+              MRP {formatPaise(mrp)}
+            </AppText>
+          ) : null}
+        </View>
+      ) : (
+        <View style={styles.fieldBlock}>
+          <AppText variant="sectionLabel" color={colors.meta}>
+            Reason
           </AppText>
-        ) : mrp ? (
-          <AppText variant="meta" color={colors.meta}>
-            MRP {formatPaise(mrp)}
-          </AppText>
-        ) : null}
-      </View>
+          <View style={styles.actions}>
+            {REASON_OPTIONS.map((o) => {
+              const on = o.value === reason;
+              return (
+                <PressableScale
+                  key={o.value}
+                  onPress={() => setReason(o.value)}
+                  toScale={0.95}
+                  haptic={false}
+                  style={[styles.pill, on && styles.pillOn]}
+                >
+                  <AppText
+                    variant="meta"
+                    color={on ? colors.accentInk : colors.ink}
+                    style={styles.pillLabel}
+                  >
+                    {o.label}
+                  </AppText>
+                </PressableScale>
+              );
+            })}
+          </View>
+        </View>
+      )}
 
       <PrimaryButton
         label="Save"
         tone="accent"
         disabled={!canSave}
-        loading={save.isPending}
+        loading={full ? save.isPending : adjust.isPending}
         onPress={onSave}
       />
 
       <Divider />
-      <ToggleRow
-        label="On sale"
-        hint={isActive ? 'Customers can buy this variant' : 'Hidden from customers'}
-        value={isActive}
-        onChange={onToggleActive}
-        disabled={toggle.isPending}
-      />
+      {full ? (
+        <ToggleRow
+          label="On sale"
+          hint={isActive ? 'Customers can buy this variant' : 'Hidden from customers'}
+          value={isActive}
+          onChange={onToggleActive}
+          disabled={toggle.isPending}
+        />
+      ) : null}
       <View style={styles.actions}>
         {row.reserved > 0 ? (
           <ActionPill icon="lock-closed-outline" label="Held stock" onPress={() => onHolds(row)} />
@@ -398,6 +461,7 @@ const styles = StyleSheet.create({
   stockHint: { marginTop: -spacing.sm },
   fieldBlock: { gap: spacing.sm },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  pillOn: { backgroundColor: colors.accent },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
