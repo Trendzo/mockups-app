@@ -3,4 +3,6 @@
     <!-- colors.canvas in src/theme/theme.ts: the window (and Android 12+ launch
          splash) background, so launch flows straight into the app's own canvas. -->
     <color name="app_canvas">#E7E7E5</color>
+    <!-- colors.accent in the theme: tint of the small notification icon (push + local alerts). -->
+    <color name="notification_accent">#0A0A0A</color>
 </resources>

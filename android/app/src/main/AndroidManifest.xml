@@ -17,6 +17,15 @@
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" tools:node="remove" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" tools:node="remove" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <!-- Phone push (FCM + Notifee): Android 13+ needs a runtime grant before ANY notification shows.
+         The app asks via Notifee's requestPermission (services/push/pushManager). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Notifee's library manifest also declares permissions for features this app does not use
+         (scheduled/trigger notifications, foreground services). Strip them from the merged manifest,
+         as with READ_MEDIA_* above, so the Play listing does not carry exact-alarm / foreground-service
+         permissions that would need justification. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" tools:node="remove" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" tools:node="remove" />
 
     <application
       android:name=".MainApplication"
@@ -28,6 +37,21 @@
       android:usesCleartextTraffic="${usesCleartextTraffic}"
       android:supportsRtl="true"
       tools:replace="android:allowBackup">
+      <!-- Phone push: defaults FCM uses to draw a notification itself (app closed / backgrounded) when the
+           push does not name a channel/icon. `general` is created at startup (services/push/channels.ts);
+           new-order pushes name `orders` explicitly. tools:replace overrides the values
+           @react-native-firebase/messaging merges in (its colour default is a @color/white the app lacks). -->
+      <meta-data
+        android:name="com.google.firebase.messaging.default_notification_channel_id"
+        android:value="general"
+        tools:replace="android:value" />
+      <meta-data
+        android:name="com.google.firebase.messaging.default_notification_icon"
+        android:resource="@drawable/ic_stat_notification" />
+      <meta-data
+        android:name="com.google.firebase.messaging.default_notification_color"
+        android:resource="@color/notification_accent"
+        tools:replace="android:resource" />
       <activity
         android:name=".MainActivity"
         android:label="@string/app_name"

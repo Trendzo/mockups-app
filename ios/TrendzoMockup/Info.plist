@@ -58,6 +58,12 @@
 		<string>Ionicons.ttf</string>
 		<string>MaterialCommunityIcons.ttf</string>
 	</array>
+	<!-- Phone push (FCM via APNs). UNVERIFIED: written without a Mac. Lets a push wake the app for the
+	     background handler. Also enable the Push Notifications + Background Modes capabilities in Xcode. -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 	<key>UIFileSharingEnabled</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

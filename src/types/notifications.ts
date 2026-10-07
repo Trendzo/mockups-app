@@ -31,13 +31,32 @@ export type DashboardTile =
   | 'recent_products'
   | 'compliance';
 
-/** GET/PUT /retailer/notification-prefs */
+/** Every tile the dashboard can show, in the order the web portal lists them (ids are the server's). */
+export const DASHBOARD_TILES: { id: DashboardTile; label: string; hint: string }[] = [
+  { id: 'sales', label: 'Sales chart', hint: 'Sales over the last week' },
+  { id: 'orders', label: 'Orders snapshot', hint: 'New, to pack, shipped and returns' },
+  { id: 'inventory', label: 'Inventory health', hint: 'Low and out-of-stock items' },
+  { id: 'top_products', label: 'Top products', hint: 'What is selling best' },
+  { id: 'recent_products', label: 'Recent products', hint: 'Latest items you added' },
+  { id: 'compliance', label: 'Compliance reminders', hint: 'KYC, tax and document due dates' },
+];
+
+/**
+ * GET/PUT /retailer/notification-prefs.
+ *
+ * PUT REPLACES the whole row: any field left out resets to its server default, so the app always
+ * sends the full object it last read (see `prefsPayload`).
+ */
 export interface NotificationPrefs {
   pushEnabled: boolean;
   emailEnabled: boolean;
   smsEnabled: boolean;
   dailyDigestEnabled: boolean;
-  language: NotificationLanguage;
+  /**
+   * The server stores a free string (its own default is 'en-IN'); the app offers en/hi/mr/ta. Kept as
+   * the server sent it until the user picks a language.
+   */
+  language: NotificationLanguage | string;
   dashboardTiles: DashboardTile[];
 }
 
