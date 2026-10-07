@@ -2,6 +2,17 @@ apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
+// Phone push (FCM): apply the google-services plugin ONLY when the Firebase config file for
+// com.trendzomockup is present (android/app/google-services.json, downloaded from the Firebase
+// console, never committed). Without it the app still builds and runs; push is simply inactive
+// (the JS push manager logs "Firebase is not configured" and the in-app new-order alerts keep working).
+// Keep this condition in sync with the classpath condition in android/build.gradle.
+if (file("google-services.json").exists()) {
+    apply plugin: "com.google.gms.google-services"
+} else {
+    logger.lifecycle("[push] android/app/google-services.json not found: building WITHOUT Firebase (no phone push).")
+}
+
 // react-native-config: generates BuildConfig/resValues from .env so Config.* works on Android.
 apply from: project(':react-native-config').projectDir.getPath() + "/dotenv.gradle"
 

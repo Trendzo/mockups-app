@@ -20,8 +20,25 @@ if linkage != nil
   use_frameworks! :linkage => linkage.to_sym
 end
 
+# --- Phone push (Firebase Cloud Messaging) ---------------------------------------------------
+# UNVERIFIED: written without a Mac, never run through `pod install`. @react-native-firebase/app +
+# /messaging and @notifee/react-native are autolinked once they are in package.json. Firebase's Swift
+# pods need either static frameworks or modular headers:
+#   - preferred: install with `USE_FRAMEWORKS=static bundle exec pod install` (the switch above)
+#   - if CocoaPods instead reports "The Swift pod `X` depends upon `Y`, which does not define modules",
+#     uncomment the modular_headers lines below.
+$RNFirebaseAsStaticFramework = true if linkage == 'static'
+
 target 'TrendzoMockup' do
   config = use_native_modules!
+
+  # pod 'GoogleUtilities', :modular_headers => true
+  # pod 'FirebaseCore', :modular_headers => true
+  # pod 'FirebaseCoreInternal', :modular_headers => true
+  # pod 'FirebaseCoreExtension', :modular_headers => true
+  # pod 'FirebaseInstallations', :modular_headers => true
+  # pod 'GoogleDataTransport', :modular_headers => true
+  # pod 'nanopb', :modular_headers => true
 
   use_react_native!(
     :path => config[:reactNativePath],
