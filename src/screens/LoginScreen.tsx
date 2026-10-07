@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { Linking, ScrollView, StyleSheet, View } from 'react-native';
-import { OTPWidget } from '@msg91comm/sendotp-react-native';
 import {
   AppText,
   Banner,
@@ -14,7 +13,8 @@ import {
   useToast,
 } from '../components';
 import { ScreenProps } from '../navigation/types';
-import { loginRetailer, loginRetailerOtp } from '../api/auth';
+import { fetchOtpConfig, loginRetailer, loginRetailerOtp } from '../api/auth';
+import { useOtp } from '../services/otp';
 import { useAuth } from '../store/auth';
 import { useRecentPhones } from '../store/recentPhones';
 import { colors, spacing } from '../theme/theme';
@@ -23,13 +23,6 @@ import { PRIVACY_URL, SUPPORT_URL, TERMS_URL } from '../config/legal';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const NATIONAL_RE = /^[0-9]{6,14}$/;
-const RESEND_SECONDS = 30;
-const OTP_LENGTH = 4;
-
-// Public retailer widget credentials (safe to ship; the secret authkey stays server-side).
-const WIDGET_ID = '3667636f3464353730373939';
-const TOKEN_AUTH = '547225TSvi20QFa026a47d90aP1';
-
 // India-only: dial code is fixed at +91 (no country selector).
 const DIAL_CODE = '91';
 
@@ -41,6 +34,10 @@ const formatPhone = (raw: string) => {
 
 export function LoginScreen({ navigation, route }: ScreenProps<'Login'>) {
   const toast = useToast();
+  // Phone OTP provider (MSG91 or Slide) as selected by the backend; see services/otp.
+  const otpClient = useOtp(fetchOtpConfig);
+  const OTP_LENGTH = otpClient.otpLength;
+  const RESEND_SECONDS = otpClient.resendSeconds;
   const setAuth = useAuth(s => s.setAuth);
   const logoutReason = useAuth(s => s.logoutReason);
   const clearLogoutReason = useAuth(s => s.clearLogoutReason);
@@ -58,7 +55,6 @@ export function LoginScreen({ navigation, route }: ScreenProps<'Login'>) {
   const addRecentPhone = useRecentPhones((s) => s.add);
   const removeRecentPhone = useRecentPhones((s) => s.remove);
   const [step, setStep] = useState<'phone' | 'otp'>('phone');
-  const [reqId, setReqId] = useState<string | null>(null);
   const [otp, setOtp] = useState('');
   const [sending, setSending] = useState(false);
   const [verifying, setVerifying] = useState(false);
@@ -73,15 +69,6 @@ export function LoginScreen({ navigation, route }: ScreenProps<'Login'>) {
   const [errors, setErrors] = useState<{ email?: string; password?: string }>(
     {},
   );
-
-  useEffect(() => {
-    try {
-      OTPWidget.initializeWidget(WIDGET_ID, TOKEN_AUTH);
-    } catch {
-      // Native module not linked yet (pre-rebuild) - phone login will error;
-      // email login still works.
-    }
-  }, []);
 
   // Resend cooldown ticker.
   useEffect(() => {
@@ -100,15 +87,7 @@ export function LoginScreen({ navigation, route }: ScreenProps<'Login'>) {
     }
     setSending(true);
     try {
-      const res: any = await OTPWidget.sendOTP({
-        identifier: `${DIAL_CODE}${national}`,
-      });
-      console.log('[LoginScreen] sendOTP response:', res);
-      if (res?.type === 'error')
-        throw new Error(res?.message || 'Could not send OTP');
-      const rid = typeof res === 'string' ? res : res?.message;
-      if (!rid) throw new Error('Could not send OTP');
-      setReqId(String(rid));
+      await otpClient.send(DIAL_CODE, national);
       setOtp('');
       setStep('otp');
       setResendIn(RESEND_SECONDS);
@@ -129,9 +108,9 @@ export function LoginScreen({ navigation, route }: ScreenProps<'Login'>) {
   };
 
   const resendOtp = async () => {
-    if (resendIn > 0 || !reqId) return;
+    if (resendIn > 0) return;
     try {
-      await OTPWidget.retryOTP({ reqId });
+      await otpClient.resend();
       setResendIn(RESEND_SECONDS);
       toast.show('OTP resent', 'info');
     } catch (e: any) {
@@ -142,19 +121,15 @@ export function LoginScreen({ navigation, route }: ScreenProps<'Login'>) {
   const verifyOtp = async (codeOverride?: string) => {
     setOtpErr(undefined);
     const code = (codeOverride ?? otp).replace(/\D/g, '');
-    if (code.length !== OTP_LENGTH || !reqId) {
+    if (code.length !== OTP_LENGTH) {
       setOtpErr('Enter the code we sent');
       return;
     }
     if (verifying) return;
     setVerifying(true);
     try {
-      const vr: any = await OTPWidget.verifyOTP({ reqId, otp: code });
-      console.log('[LoginScreen] verifyOTP response:', vr);
-      if (vr?.type === 'error') throw new Error(vr?.message || 'Invalid OTP');
-      const accessToken = typeof vr === 'string' ? vr : vr?.message;
-      if (!accessToken) throw new Error('Verification failed');
-      const result = await loginRetailerOtp(String(accessToken));
+      const { accessToken, provider } = await otpClient.verify(code);
+      const result = await loginRetailerOtp(accessToken, provider);
       console.log(
         '[LoginScreen] loginRetailerOtp succeeded - token received:',
         !!result?.token,

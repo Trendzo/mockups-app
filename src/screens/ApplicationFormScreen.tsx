@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { OTPWidget } from '@msg91comm/sendotp-react-native';
 import {
   AppText,
   ApplicationWizard,
@@ -17,7 +16,9 @@ import {
   useToast,
 } from '../components';
 import { ScreenProps } from '../navigation/types';
+import { fetchOtpConfig } from '../api/auth';
 import { checkIdentity, submitApplication } from '../api/onboarding';
+import { useOtp } from '../services/otp';
 import { useOnboarding } from '../store/onboarding';
 import { useApplicationDraft, ApplicationFields } from '../store/applicationDraft';
 import { APPLICATION_DOC_KINDS } from '../types/onboarding';
@@ -29,11 +30,8 @@ import { nationalPhone, toE164 } from '../utils/phone';
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^(\+91)?[6-9][0-9]{9}$/;
 const PIN_RE = /^\d{6}$/;
-const OTP_LENGTH = 4;
 
 // Public retailer widget credentials (same as login; secret authkey stays server-side).
-const WIDGET_ID = '3667636f3464353730373939';
-const TOKEN_AUTH = '547225TSvi20QFa026a47d90aP1';
 
 // Only the first three steps carry required fields; bank + documents are optional.
 const REQUIRED_STEPS = [0, 1, 2];
@@ -101,19 +99,13 @@ export function ApplicationFormScreen({ navigation, route }: ScreenProps<'Applic
   // Phone-OTP verification - required before a signup can be submitted.
   const [phoneVerified, setPhoneVerified] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
-  const [reqId, setReqId] = useState<string | null>(null);
   const [otp, setOtp] = useState('');
   const [otpBusy, setOtpBusy] = useState(false);
   const [otpErr, setOtpErr] = useState<string | undefined>();
 
-  // Initialise the OTP widget once.
-  useEffect(() => {
-    try {
-      OTPWidget.initializeWidget(WIDGET_ID, TOKEN_AUTH);
-    } catch {
-      // Native module not linked yet (pre-rebuild) - inline verify will error.
-    }
-  }, []);
+  // Phone OTP provider (MSG91 or Slide) as selected by the backend; see services/otp.
+  const otpClient = useOtp(fetchOtpConfig);
+  const OTP_LENGTH = otpClient.otpLength;
 
   // Path A: seed + lock the verified phone once the draft has hydrated.
   useEffect(() => {
@@ -154,7 +146,6 @@ export function ApplicationFormScreen({ navigation, route }: ScreenProps<'Applic
   const resetPhoneVerification = () => {
     setPhoneVerified(false);
     setOtpSent(false);
-    setReqId(null);
     setOtp('');
     setOtpErr(undefined);
   };
@@ -168,13 +159,8 @@ export function ApplicationFormScreen({ navigation, route }: ScreenProps<'Applic
     }
     setOtpBusy(true);
     try {
-      const res: any = await OTPWidget.sendOTP({
-        identifier: toE164(national).replace('+', ''),
-      });
-      if (res?.type === 'error') throw new Error(res?.message || 'Could not send OTP');
-      const rid = typeof res === 'string' ? res : res?.message;
-      if (!rid) throw new Error('Could not send OTP');
-      setReqId(String(rid));
+      // The form is India-only (+91), same as the login screen.
+      await otpClient.send('91', national);
       setOtp('');
       setOtpSent(true);
       Haptics.select();
@@ -188,16 +174,14 @@ export function ApplicationFormScreen({ navigation, route }: ScreenProps<'Applic
   const verifyPhoneOtp = async (codeOverride?: string) => {
     setOtpErr(undefined);
     const code = (codeOverride ?? otp).replace(/\D/g, '');
-    if (code.length !== OTP_LENGTH || !reqId) {
+    if (code.length !== OTP_LENGTH) {
       setOtpErr('Enter the code we sent');
       return;
     }
     setOtpBusy(true);
     try {
-      const vr: any = await OTPWidget.verifyOTP({ reqId, otp: code });
-      if (vr?.type === 'error') throw new Error(vr?.message || 'Invalid OTP');
-      const ok = typeof vr === 'string' ? vr : vr?.message;
-      if (!ok) throw new Error('Verification failed');
+      // Only the phone's verification matters here; the token itself is not sent anywhere.
+      await otpClient.verify(code);
       Haptics.success();
       setPhoneVerified(true);
       setOtpSent(false);
@@ -378,7 +362,6 @@ export function ApplicationFormScreen({ navigation, route }: ScreenProps<'Applic
           set('ownerPhone')(v);
           if (otpSent) {
             setOtpSent(false);
-            setReqId(null);
           }
         }}
         placeholder="9876543210"
@@ -419,7 +402,6 @@ export function ApplicationFormScreen({ navigation, route }: ScreenProps<'Applic
             <PressableScale
               onPress={() => {
                 setOtpSent(false);
-                setReqId(null);
                 setOtp('');
               }}
               haptic={false}

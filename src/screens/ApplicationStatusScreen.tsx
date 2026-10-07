@@ -241,13 +241,18 @@ function Bubble({ message }: { message: ThreadMessage }) {
       {message.attachments?.length ? (
         <View style={styles.bubbleAtts}>
           {message.attachments.map((url, i) => (
-            <PressableScale key={url} onPress={() => Linking.openURL(url).catch(() => {})}>
+            <PressableScale
+              key={url}
+              onPress={() => Linking.openURL(url).catch(() => {})}
+              style={styles.attRow}
+            >
+              <Icon name="attach-outline" size={14} color={mine ? colors.onDarkMuted : colors.ink} />
               <AppText
                 variant="meta"
                 color={mine ? colors.onDarkMuted : colors.ink}
                 style={styles.attLink}
               >
-                📎 Attachment {i + 1}
+                Attachment {i + 1}
               </AppText>
             </PressableScale>
           ))}
@@ -347,6 +352,7 @@ const styles = StyleSheet.create({
   h1: { fontSize: 24, lineHeight: 28 },
   bubbleHead: { flexDirection: 'row', alignItems: 'center', marginBottom: 2 },
   bubbleAtts: { marginTop: 4, gap: 2 },
+  attRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   attLink: { textDecorationLine: 'underline' },
   reqCard: { backgroundColor: colors.surface, borderRadius: radii.card, padding: spacing.md, gap: spacing.sm },
   reqRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xs },

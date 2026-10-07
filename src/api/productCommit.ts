@@ -23,7 +23,21 @@ import { parseRupeesToPaise } from '../utils/money';
  * already-created variant.
  */
 
-const paise = (s: string): number => parseRupeesToPaise(s) ?? 0;
+/**
+ * A variant's selling price in paise, or null when none is set. A variant always has a
+ * real price (the backend and DB both require > 0); a draft with no price yet is saved
+ * as a listing WITHOUT a variant, and the variant is created once it is priced. Never
+ * send 0 as a stand-in for "not set".
+ */
+const sellingPrice = (...candidates: string[]): number | null => {
+  for (const c of candidates) {
+    if (c.trim()) {
+      const p = parseRupeesToPaise(c);
+      return p != null && p > 0 ? p : null;
+    }
+  }
+  return null;
+};
 const comparePrice = (s: string): number | null => {
   const t = s.trim();
   return t ? parseRupeesToPaise(t) : null;
@@ -56,6 +70,59 @@ async function step<T>(label: string, run: () => Promise<T>): Promise<T> {
  * re-checked server-side (assertListingPublishable), so a loose draft can never
  * go live incomplete.
  */
+type SizeRow = ReturnType<typeof useProductDraft.getState>['colors'][number]['sizes'][number];
+
+/** The untouched starter row of a colour: nothing typed, nothing on the server — not a variant. */
+const isBlankRow = (r: SizeRow): boolean =>
+  !r.serverVariantId &&
+  !r.size.trim() &&
+  !r.price.trim() &&
+  !r.sku.trim() &&
+  !(Number(r.stock) > 0) &&
+  r.imageUrls.length === 0;
+
+/**
+ * What a DRAFT cannot store. The listing itself needs only a name and category, but a
+ * variant (stock, SKU, size, images, MRP) can only exist with a real selling price, so
+ * variant details typed without one would be lost on save. Say so up front instead of
+ * letting the save fail or silently dropping them.
+ */
+function draftVariantProblems(d: ReturnType<typeof useProductDraft.getState>): string[] {
+  const problems: string[] = [];
+  const priceMsg = 'A selling price in Basics (variant details need a price to be saved)';
+  const mrpOk = (price: number | null) => {
+    if (!d.baseMrp.trim()) return true;
+    const mrp = parseRupeesToPaise(d.baseMrp);
+    return price == null || (mrp != null && mrp > price);
+  };
+
+  if (d.variantMode === 'single') {
+    const price = sellingPrice(d.basePrice);
+    const hasVariantData =
+      !!d.single.serverVariantId ||
+      !!d.baseMrp.trim() ||
+      (Number(d.single.stock) || 0) > 0 ||
+      !!d.single.size.trim() ||
+      !!d.single.sku.trim() ||
+      d.single.imageUrls.length > 0;
+    if (price == null && hasVariantData) problems.push(priceMsg);
+    if (price != null && !mrpOk(price)) problems.push('An MRP higher than the selling price');
+    return problems;
+  }
+
+  d.colors.forEach((c) => {
+    c.sizes.forEach((r) => {
+      if (isBlankRow(r)) return;
+      const who = `${c.name.trim() || 'a color'} / ${r.size.trim() || 'size'}`;
+      if (!r.size.trim()) problems.push(`Size name for ${c.name.trim() || 'a color'}`);
+      const price = sellingPrice(r.price, d.basePrice);
+      if (price == null) problems.push(`A selling price for ${who} (set it in Basics or on the row)`);
+      else if (!mrpOk(price)) problems.push(`An MRP higher than the selling price for ${who}`);
+    });
+  });
+  return problems;
+}
+
 export function validateProductDraft(publish = true): string[] {
   const d = useProductDraft.getState();
   const problems: string[] = [];
@@ -66,7 +133,10 @@ export function validateProductDraft(publish = true): string[] {
   // product, or editing one that is still a draft. Editing a LIVE product (or
   // publishing) keeps full validation so a live listing can't be broken.
   const savingDraft = !publish && (d.mode === 'create' || d.editingStatus === 'draft');
-  if (savingDraft) return Array.from(new Set(problems));
+  if (savingDraft) {
+    problems.push(...draftVariantProblems(d));
+    return Array.from(new Set(problems));
+  }
 
   if (!d.brandId) problems.push('Brand');
   if (d.genders.length === 0) problems.push('Gender');
@@ -89,6 +159,7 @@ export function validateProductDraft(publish = true): string[] {
     let anySize = false;
     d.colors.forEach((c) => {
       c.sizes.forEach((r) => {
+        if (isBlankRow(r)) return;
         anySize = true;
         const who = `${c.name || 'a color'} / ${r.size || 'size'}`;
         if (!r.size.trim()) problems.push(`Size name for ${c.name || 'a color'}`);
@@ -224,15 +295,22 @@ export async function commitProductDraft({ publish }: { publish: boolean }): Pro
   // 2) VARIANTS
   if (d.variantMode === 'single') {
     const size = d.single.size.trim();
-    const body = {
-      sku: d.single.sku.trim() || undefined,
-      // Pricing comes from Basics (product-level).
-      pricePaise: paise(d.basePrice),
-      compareAtPrice: comparePrice(d.baseMrp),
-      stock: Number(d.single.stock) || 0,
-      imageUrls: d.single.imageUrls,
-    };
-    if (d.single.serverVariantId) {
+    // Pricing comes from Basics (product-level). Unpriced draft: no variant yet —
+    // validateProductDraft already refused to save any variant details without a price.
+    const price = sellingPrice(d.basePrice);
+    const body =
+      price == null
+        ? null
+        : {
+            sku: d.single.sku.trim() || undefined,
+            pricePaise: price,
+            compareAtPrice: comparePrice(d.baseMrp),
+            stock: Number(d.single.stock) || 0,
+            imageUrls: d.single.imageUrls,
+          };
+    if (!body) {
+      console.log('[commit] no selling price yet - saved without a variant');
+    } else if (d.single.serverVariantId) {
       await step(`patch default variant ${d.single.serverVariantId} (size=${size || 'none'})`, () =>
         patchVariant(d.single.serverVariantId!, {
           // OMIT sku when the retailer left the field blank. Sending null wipes the
@@ -281,12 +359,16 @@ export async function commitProductDraft({ publish }: { publish: boolean }): Pro
       }
 
       for (const row of color.sizes) {
+        if (isBlankRow(row)) continue;
         const size = row.size.trim();
+        // Per-colour selling price overrides the base; MRP is always base. Validation has
+        // already refused a priceless row, so reaching here without one is a bug, not input.
+        const rowPrice = sellingPrice(row.price, d.basePrice);
+        if (rowPrice == null) throw new Error('Set a selling price before saving this variant');
         const body = {
           size,
           sku: row.sku.trim() || undefined,
-          // Per-colour selling price overrides the base; MRP is always base.
-          pricePaise: paise(row.price.trim() || d.basePrice),
+          pricePaise: rowPrice,
           compareAtPrice: comparePrice(d.baseMrp),
           stock: Number(row.stock) || 0,
           imageUrls: row.imageUrls,

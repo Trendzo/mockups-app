@@ -544,7 +544,7 @@ export function HomeScreen({ navigation }: ScreenProps<'Home'>) {
             Products you publish go live on the Trendzo app for shoppers near you.
           </AppText>
           <SheetOption
-            icon="sparkles-outline"
+            icon="camera-outline"
             title="Create with AI photos"
             hint="Photograph the garment — AI makes studio and on-model shots and drafts the description."
             onPress={startFromPhotos}

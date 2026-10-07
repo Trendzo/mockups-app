@@ -60,13 +60,13 @@ const MAP_HTML = `<!DOCTYPE html>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
   html, body, #map { height: 100%; margin: 0; padding: 0; background:#e7e7e5; }
-  #pin { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -100%); z-index: 1000; pointer-events: none; font-size: 36px; line-height: 1; }
+  #pin { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -100%); z-index: 1000; pointer-events: none; line-height: 0; }
   .leaflet-control-attribution { font-size: 9px; }
 </style>
 </head>
 <body>
 <div id="map"></div>
-<div id="pin">📍</div>
+<div id="pin"><svg width="36" height="36" viewBox="0 0 24 24" aria-hidden="true"><path fill="#D93025" stroke="#FFFFFF" stroke-width="1" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg></div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
   function post(o){ if(window.ReactNativeWebView){ window.ReactNativeWebView.postMessage(JSON.stringify(o)); } }
