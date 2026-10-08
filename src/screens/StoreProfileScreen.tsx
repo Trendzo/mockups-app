@@ -135,6 +135,10 @@ export function StoreProfileScreen({ navigation, route }: ScreenProps<'StoreProf
   const { can } = usePermissions();
   // store.edit_profile, and not on a read-only (terminated / closed) account.
   const canManage = can('store.edit_profile') && !gate.readOnly;
+  // Uploading a compliance document is a KYC action: the backend gates POST /store/documents
+  // on kyc.respond, not store.edit_profile. Owner/manager hold both; a role with edit but not
+  // kyc.respond would otherwise see an Upload button that 403s.
+  const canRespondKyc = can('kyc.respond') && !gate.readOnly;
   const store = me.data?.store ?? null;
   const retailer = me.data?.retailer;
   const refetchMe = me.refetch;
@@ -168,7 +172,7 @@ export function StoreProfileScreen({ navigation, route }: ScreenProps<'StoreProf
       case 'legal':
         return <LegalTab {...common} retailer={retailer} />;
       case 'documents':
-        return <DocumentsTab canManage={canManage} navigation={navigation} />;
+        return <DocumentsTab canUpload={canRespondKyc} navigation={navigation} />;
     }
   };
 
@@ -834,7 +838,7 @@ function LegalTab({
 
 // ---- Documents ----
 
-function DocumentsTab({ canManage, navigation }: { canManage: boolean; navigation: Nav }) {
+function DocumentsTab({ canUpload, navigation }: { canUpload: boolean; navigation: Nav }) {
   const toast = useToast();
   const docsQ = useStoreDocuments();
   const submitDoc = useSubmitStoreDocument();
@@ -896,7 +900,7 @@ function DocumentsTab({ canManage, navigation }: { canManage: boolean; navigatio
             <DocumentRow
               key={doc.id}
               doc={doc}
-              canUpload={canManage && needsUpload(doc)}
+              canUpload={canUpload && needsUpload(doc)}
               uploading={uploadingId === doc.id}
               disabled={uploadingId != null}
               onUpload={() => upload(doc)}
@@ -906,7 +910,7 @@ function DocumentsTab({ canManage, navigation }: { canManage: boolean; navigatio
         </View>
       )}
 
-      {!canManage && docs.some(needsUpload) ? <ReadOnlyNote /> : null}
+      {!canUpload && docs.some(needsUpload) ? <ReadOnlyNote /> : null}
 
       <ListRow
         icon="shield-checkmark-outline"

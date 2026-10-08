@@ -9,7 +9,7 @@ import {
 import { acceptReturn, declineReturn, getOrder, listOrders, orderAction } from './orders';
 import { pollUnlessForbidden, retryUnlessClientError } from './request';
 import { dedupeOrders, nextOrderOffset } from '../utils/orders';
-import { ACTIVE_STATUSES, DONE_STATUSES, OrderRow, OrderStatus } from '../types/orders';
+import { ACTIVE_STATUSES, DeliveryMethod, DONE_STATUSES, OrderRow, OrderStatus } from '../types/orders';
 
 /**
  * Live board: every order still in motion. Polled so a new order (which must
@@ -45,22 +45,46 @@ export const FINISHED_PAGE_SIZE = 50;
 // Module-level so the query keeps the same `select` between renders.
 const flattenFinished = (data: InfiniteData<OrderRow[]>) => dedupeOrders(data.pages);
 
+/** Date / delivery-method narrowing for the history tabs (all optional). */
+export interface FinishedOrderFilters {
+  /** ISO instant lower bound on `placedAt`. */
+  from?: string;
+  to?: string;
+  deliveryMethod?: DeliveryMethod;
+}
+
 /**
- * Finished orders (history) with search and "Load more". Each (statuses, search)
- * pair is its own key, so typing starts again at page 1 while the previous rows
- * stay on screen until the new ones land.
+ * Finished orders (history) with search, filters and "Load more". Each
+ * (statuses, search, from, to, deliveryMethod) combination is its own key, so
+ * changing any of them restarts at page 1 while the previous rows stay on
+ * screen until the new ones land.
  *
- * Paging uses `offset` and search uses `q` — both newer backend params. An older
- * server drops them silently, so the hook guards itself: a short page ends the
- * list, and a page that adds nothing new (a server that ignores `offset` keeps
- * answering with page 1) ends it too instead of looping on duplicates.
+ * Paging uses `offset`, search uses `q`, and the date / delivery filters use
+ * `from`/`to`/`deliveryMethod` — all newer backend params. An older server
+ * drops them silently, so the hook guards itself: a short page ends the list,
+ * and a page that adds nothing new (a server that ignores `offset` keeps
+ * answering with page 1) ends it too instead of looping on duplicates. The
+ * screen also re-applies the same filters client-side, so an old server can
+ * never show rows outside the chosen window.
  */
-export function useFinishedOrders(statuses: OrderStatus[], search: string, enabled = true) {
+export function useFinishedOrders(
+  statuses: OrderStatus[],
+  search: string,
+  enabled = true,
+  filters: FinishedOrderFilters = {},
+) {
   const q = search.trim();
+  const { from, to, deliveryMethod } = filters;
   return useInfiniteQuery({
-    queryKey: ['orders', 'finished', statuses.join(','), q],
+    queryKey: ['orders', 'finished', statuses.join(','), q, from ?? '', to ?? '', deliveryMethod ?? ''],
     queryFn: ({ pageParam }) =>
-      listOrders(statuses, FINISHED_PAGE_SIZE, { offset: pageParam, q }),
+      listOrders(statuses, FINISHED_PAGE_SIZE, {
+        offset: pageParam,
+        q,
+        ...(from ? { from } : {}),
+        ...(to ? { to } : {}),
+        ...(deliveryMethod ? { deliveryMethod } : {}),
+      }),
     initialPageParam: 0,
     getNextPageParam: (_last, all) => nextOrderOffset(all, FINISHED_PAGE_SIZE),
     select: flattenFinished,

@@ -27,7 +27,7 @@ import { useActiveOrders, useFinishedOrders, useOrderAction } from '../api/order
 import { useIssuesAwaitingStore } from '../api/issuesHooks';
 import { useInbox } from '../api/notifications';
 import { errorMessage } from '../api/request';
-import { ORDER_TABS, OrderRow, OrderTab } from '../types/orders';
+import { DELIVERY_LABEL, DeliveryMethod, ORDER_TABS, OrderRow, OrderTab } from '../types/orders';
 import { matchesOrderSearch, sortForTab } from '../utils/orders';
 import { usePermissions } from '../utils/usePermission';
 import { usePullRefresh } from '../utils/usePullRefresh';
@@ -47,6 +47,22 @@ const EMPTY: Record<OrderTab, { icon: string; title: string; message: string }> 
 };
 
 const DONE_TABS: OrderTab[] = ['completed', 'cancelled'];
+
+/** History "placed within" windows → days, or null for any time. */
+const DATE_WINDOWS: { value: string; label: string; days: number | null }[] = [
+  { value: 'all', label: 'Any time', days: null },
+  { value: '7', label: '7 days', days: 7 },
+  { value: '30', label: '30 days', days: 30 },
+  { value: '90', label: '90 days', days: 90 },
+];
+
+const DELIVERY_FILTERS: { value: string; label: string }[] = [
+  { value: 'all', label: 'All methods' },
+  { value: 'express', label: DELIVERY_LABEL.express },
+  { value: 'standard', label: DELIVERY_LABEL.standard },
+  { value: 'pickup', label: DELIVERY_LABEL.pickup },
+  { value: 'try_and_buy', label: DELIVERY_LABEL.try_and_buy },
+];
 
 /** Online orders from the consumer app, grouped the way the store works them. */
 export function OrdersScreen({ navigation, route }: ScreenProps<'Orders'>) {
@@ -73,8 +89,23 @@ export function OrdersScreen({ navigation, route }: ScreenProps<'Orders'>) {
     return () => clearTimeout(t);
   }, [search]);
 
+  // History-only filters (completed / cancelled tabs). Backend applies them via
+  // from/deliveryMethod; re-applied client-side below so an old server can't leak
+  // rows outside the window.
+  const [dateWindow, setDateWindow] = useState('all');
+  const [deliveryFilter, setDeliveryFilter] = useState('all');
+  const fromIso = useMemo(() => {
+    const win = DATE_WINDOWS.find((w) => w.value === dateWindow);
+    if (!win?.days) return undefined;
+    return new Date(Date.now() - win.days * 86_400_000).toISOString();
+  }, [dateWindow]);
+  const deliveryParam = deliveryFilter === 'all' ? undefined : (deliveryFilter as DeliveryMethod);
+
   const activeQ = useActiveOrders();
-  const finishedQ = useFinishedOrders(statuses, query, showDone);
+  const finishedQ = useFinishedOrders(statuses, query, showDone, {
+    ...(fromIso ? { from: fromIso } : {}),
+    ...(deliveryParam ? { deliveryMethod: deliveryParam } : {}),
+  });
   const inbox = useInbox();
   const action = useOrderAction();
   const canViewIssues = can('disputes.view');
@@ -98,8 +129,17 @@ export function OrdersScreen({ navigation, route }: ScreenProps<'Orders'>) {
 
   const rows = useMemo(() => {
     const inTab = loaded.filter((o) => statuses.includes(o.status));
-    return sortForTab(tab, showDone ? inTab.filter((o) => matchesOrderSearch(o, search)) : inTab);
-  }, [tab, loaded, statuses, showDone, search]);
+    if (!showDone) return sortForTab(tab, inTab);
+    const filtered = inTab.filter(
+      (o) =>
+        matchesOrderSearch(o, search) &&
+        (!deliveryParam || o.deliveryMethod === deliveryParam) &&
+        (!fromIso || o.placedAt >= fromIso),
+    );
+    return sortForTab(tab, filtered);
+  }, [tab, loaded, statuses, showDone, search, deliveryParam, fromIso]);
+
+  const filtersActive = dateWindow !== 'all' || deliveryFilter !== 'all';
 
   const run = (order: OrderRow, act: 'accept' | 'reject') => {
     setBusyId(order.id);
@@ -131,7 +171,7 @@ export function OrdersScreen({ navigation, route }: ScreenProps<'Orders'>) {
   }));
 
   const canAccept = can('orders.accept');
-  const searching = showDone && search.trim().length > 0;
+  const narrowing = showDone && (search.trim().length > 0 || filtersActive);
 
   return (
     <Screen edges={['top']}>
@@ -191,24 +231,32 @@ export function OrdersScreen({ navigation, route }: ScreenProps<'Orders'>) {
           }
           ListHeaderComponent={
             showDone ? (
-              <View style={styles.searchBox}>
-                <Icon name="search" size={18} color={colors.meta} />
-                <TextInput
-                  value={search}
-                  onChangeText={setSearch}
-                  placeholder="Search order, customer or phone"
-                  placeholderTextColor={colors.inkMuted}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  returnKeyType="search"
-                  onSubmitEditing={() => setQuery(search.trim())}
-                  style={styles.searchInput}
+              <View style={styles.doneHeader}>
+                <View style={styles.searchBox}>
+                  <Icon name="search" size={18} color={colors.meta} />
+                  <TextInput
+                    value={search}
+                    onChangeText={setSearch}
+                    placeholder="Search order, customer or phone"
+                    placeholderTextColor={colors.inkMuted}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    returnKeyType="search"
+                    onSubmitEditing={() => setQuery(search.trim())}
+                    style={styles.searchInput}
+                  />
+                  {search ? (
+                    <PressableScale onPress={() => setSearch('')} hitSlop={10} haptic={false}>
+                      <Icon name="close-circle" size={18} color={colors.inkMuted} />
+                    </PressableScale>
+                  ) : null}
+                </View>
+                <FilterChips options={DATE_WINDOWS} value={dateWindow} onChange={setDateWindow} />
+                <FilterChips
+                  options={DELIVERY_FILTERS}
+                  value={deliveryFilter}
+                  onChange={setDeliveryFilter}
                 />
-                {search ? (
-                  <PressableScale onPress={() => setSearch('')} hitSlop={10} haptic={false}>
-                    <Icon name="close-circle" size={18} color={colors.inkMuted} />
-                  </PressableScale>
-                ) : null}
               </View>
             ) : tab === 'new' && rows.length > 0 ? (
               <AppText variant="meta" color={colors.meta}>
@@ -217,7 +265,7 @@ export function OrdersScreen({ navigation, route }: ScreenProps<'Orders'>) {
             ) : null
           }
           ListEmptyComponent={
-            searching ? (
+            narrowing ? (
               finishedQ.isFetching ? (
                 <ActivityIndicator color={colors.ink} style={styles.loader} />
               ) : (
@@ -227,7 +275,9 @@ export function OrdersScreen({ navigation, route }: ScreenProps<'Orders'>) {
                   message={
                     finishedQ.hasNextPage
                       ? 'Not in what is loaded yet — load more to keep looking.'
-                      : `Nothing found for “${search.trim()}”.`
+                      : search.trim()
+                        ? `Nothing found for “${search.trim()}”.`
+                        : 'No orders match these filters.'
                   }
                 />
               )
@@ -267,6 +317,7 @@ const styles = StyleSheet.create({
   banner: { marginTop: spacing.md },
   // Clears the floating bottom nav.
   list: { paddingTop: spacing.md, paddingBottom: 140, gap: spacing.sm },
+  doneHeader: { gap: spacing.xs, marginBottom: spacing.xs },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
