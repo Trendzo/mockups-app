@@ -104,7 +104,7 @@ android {
         applicationId "com.trendzomockup"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 13
+        versionCode 16
         versionName "1.8.0"
     }
     signingConfigs {
