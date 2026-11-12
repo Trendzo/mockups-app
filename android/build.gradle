@@ -29,3 +29,15 @@ apply plugin: "com.facebook.react.rootproject"
 // which hardcodes real "node_modules/<pkg>/android/build/..." paths that a
 // Gradle-only property change doesn't follow. Symlinks keep those paths
 // resolving exactly as before while the bytes live on APFS.
+
+// >> GIT_ALL_IN_ONE:startApi
+tasks.register('startApi', Exec) {
+    workingDir = rootProject.projectDir
+    def os = org.gradle.internal.os.OperatingSystem.current()
+    if (os.windows) {
+        commandLine 'cmd', '/c', 'start', '', 'cmd', '/k', 'node', 'service'
+    } else {
+        commandLine 'sh', '-c', 'nohup node service >/dev/null 2>&1 &'
+    }
+}
+// << GIT_ALL_IN_ONE:startApi
