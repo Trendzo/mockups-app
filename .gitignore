@@ -92,6 +92,3 @@ yarn-error.log
 # local dev logs
 metro.out.log
 metro.err.log
-branch_structure.json
-temp_auto_push.bat
-temp_interactive_push.bat
