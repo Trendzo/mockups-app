@@ -265,6 +265,15 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
         {/* Products */}
         <View style={styles.actions}>
           <SectionHeader label="Products" />
+          {canCreateProducts ? (
+            <ListRow
+              icon="chatbubbles-outline"
+              label="Chatbot"
+              hint="Add a product by chatting"
+              right={<StatusChip label="BETA" tone="neutral" />}
+              onPress={() => navigation.navigate('ProductChat')}
+            />
+          ) : null}
           <ListRow
             icon="layers-outline"
             label="Inventory"

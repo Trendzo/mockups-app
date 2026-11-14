@@ -16,19 +16,17 @@ function newDraftHasContent(): boolean {
   if (d.description.trim() || d.descriptionLong.trim()) return true;
   if (d.variantMode === 'single') {
     const s = d.single;
-    return !!(s.sku.trim() || s.size.trim() || s.imageUrls.length);
+    return !!(s.sku.trim() || s.size.trim() || s.imageUrls.length || Number(s.stock) > 0);
   }
   return d.colors.some(
-    (c) => c.name || c.colorHex || c.sizes.some((r) => r.size.trim() || r.imageUrls.length),
+    (c) => c.name || c.colorHex || c.sizes.some((r) => r.size.trim() || r.sku.trim() || r.imageUrls.length || Number(r.stock) > 0),
   );
 }
 
 /**
  * The wizard's top-left back button exits straight to the Catalog tab (not
  * step-by-step). A new product that's complete enough to be saved as a draft is
- * persisted on the way out so nothing is lost. The minimum a draft needs is a
- * name + category (the backend can't store a listing without them), so we tell
- * the user what's missing rather than silently dropping it.
+ * persisted on the way out so nothing is lost.
  */
 export function useExitWizardToHome() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -43,7 +41,7 @@ export function useExitWizardToHome() {
       });
 
     if (newDraftHasContent()) {
-      const problems = validateProductDraft(false);
+      const problems = validateProductDraft();
       if (problems.length === 0) {
         try {
           await commitProductDraft({ publish: false });
@@ -53,10 +51,12 @@ export function useExitWizardToHome() {
           useProductDraft.getState().startCreate();
         } catch (e: any) {
           toast.show(e?.message ?? 'Could not save draft', 'error');
+          return;
         }
       } else {
         // Not enough to persist a draft - let them know before leaving.
         toast.show(`Not saved - to keep this as a draft: ${problems.join(', ')}`, 'info');
+        return;
       }
     }
     goHome();

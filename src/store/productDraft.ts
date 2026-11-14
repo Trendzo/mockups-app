@@ -249,10 +249,16 @@ const emptyState = () => ({
 
 /** Map an existing listing (with nested variants + groups) into a fresh draft. */
 function seedFromListing(listing: Listing): Partial<ProductDraftState> {
+  const pending = listing.draftVariantData as {
+    basePrice?: string;
+    baseMrp?: string;
+    single?: Partial<SingleVariantDraft>;
+    colors?: Array<{ name: string; colorHex?: string; sizes: Array<Partial<SizeRow>> }>;
+  } | null | undefined;
   const groups = listing.variantGroups ?? [];
   const variants = listing.variants ?? [];
   const genders: Array<'her' | 'him'> =
-    listing.gender === 'unisex' ? ['her', 'him'] : [listing.gender as 'her' | 'him'];
+    listing.gender === 'unisex' ? ['her', 'him'] : listing.gender ? [listing.gender] : [];
 
   // Legacy 'custom' products fall back to single-variant editing.
   const variantMode: WizardVariantMode =
@@ -275,8 +281,11 @@ function seedFromListing(listing: Listing): Partial<ProductDraftState> {
         serverVariantId: v.id,
       };
     }
+    if (pending?.single) single = { ...single, ...pending.single };
   } else {
-    const sorted = [...groups].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+    const sorted = [...groups]
+      .filter((g) => !g.isDefault || variants.some((v) => v.groupId === g.id) || !pending?.colors?.length)
+      .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
     colors = sorted.map((g: VariantGroup) => ({
       id: lid(),
       name: g.name === 'Default' ? '' : g.name,
@@ -297,7 +306,25 @@ function seedFromListing(listing: Listing): Partial<ProductDraftState> {
     }));
     // A group with no sizes still needs one editable row.
     colors = colors.map((c) => (c.sizes.length ? c : { ...c, sizes: [emptySizeRow()] }));
-    if (!colors.length) colors = [emptyColor()];
+    if (!colors.length && !pending?.colors?.length) colors = [emptyColor()];
+    for (const staged of pending?.colors ?? []) {
+      const stagedRows = staged.sizes.map((r) => ({
+        ...emptySizeRow(), ...r, mrp: r.mrp ?? pending?.baseMrp ?? '', id: lid(),
+      }));
+      const existing = colors.find(c => c.name.toLowerCase() === staged.name.toLowerCase());
+      if (!existing) {
+        colors.push({ id: lid(), name: staged.name, colorHex: staged.colorHex, sizes: stagedRows });
+        continue;
+      }
+      const rows = existing.sizes.filter(r => r.serverVariantId || r.size.trim() || r.price.trim() || r.sku.trim());
+      for (const row of stagedRows) {
+        const match = rows.findIndex(r => row.serverVariantId
+          ? r.serverVariantId === row.serverVariantId : r.size.toLowerCase() === row.size.toLowerCase());
+        if (match >= 0) rows[match] = { ...rows[match]!, ...row };
+        else rows.push(row);
+      }
+      existing.sizes = rows;
+    }
   }
 
   // Product-level pricing seeds from the first variant (MRP always lives there).
@@ -315,8 +342,8 @@ function seedFromListing(listing: Listing): Partial<ProductDraftState> {
     categoryId: listing.categoryId,
     genders,
     gallery: listing.galleryUrls ?? [],
-    basePrice: v0 ? paiseToRupeeInput(v0.pricePaise) : '',
-    baseMrp: v0 ? paiseToRupeeInput(v0.compareAtPrice ?? null) : '',
+    basePrice: pending?.basePrice ?? (v0 ? paiseToRupeeInput(v0.pricePaise) : ''),
+    baseMrp: pending?.baseMrp ?? (v0 ? paiseToRupeeInput(v0.compareAtPrice ?? null) : ''),
     variantMode,
     single,
     colors,
