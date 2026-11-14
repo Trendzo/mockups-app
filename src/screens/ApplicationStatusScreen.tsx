@@ -31,6 +31,7 @@ import {
 } from '../api/onboarding';
 import { ApplicationStatus, DocKind, ThreadMessage } from '../types/onboarding';
 import { inferMimeType } from '../utils/image';
+import { useOnboarding } from '../store/onboarding';
 import { colors, radii, spacing, type as typeScale } from '../theme/theme';
 
 const BANNER: Record<ApplicationStatus, { tone: StatusTone; title: string; message: string }> = {
@@ -62,6 +63,7 @@ export function ApplicationStatusScreen({
 }: ScreenProps<'ApplicationStatus'>) {
   const { applicationId, email } = route.params;
   const toast = useToast();
+  const uploadToken = useOnboarding((s) => s.uploadToken);
 
   const statusQ = useQuery({
     queryKey: ['application-status', applicationId],
@@ -169,7 +171,17 @@ export function ApplicationStatusScreen({
                 <PrimaryButton label="Fix & resubmit" tone="accent" onPress={() => navigation.navigate('Resubmit', { applicationId, email })} />
               ) : null}
 
-              {status === 'docs_requested' && (statusQ.data?.mustReuploadDocKinds?.length ?? 0) > 0 ? (
+              {showThread && !uploadToken ? (
+                <Banner
+                  tone="warning"
+                  title="Verify your phone to attach photos"
+                  message="You can still send a text reply. Verify your phone to upload review documents."
+                  actionLabel="Verify phone"
+                  onAction={() => navigation.navigate('Login', { method: 'phone' })}
+                />
+              ) : null}
+
+              {status === 'docs_requested' && uploadToken && (statusQ.data?.mustReuploadDocKinds?.length ?? 0) > 0 ? (
                 <RequestedDocs
                   applicationId={applicationId}
                   email={email}
@@ -200,7 +212,7 @@ export function ApplicationStatusScreen({
             </AppText>
           ) : null}
           <View style={styles.composerRow}>
-            <PressableScale onPress={attach} style={styles.attachBtn} toScale={0.9}>
+            <PressableScale onPress={attach} disabled={!uploadToken} style={[styles.attachBtn, !uploadToken && styles.attachDisabled]} toScale={0.9}>
               <Icon name="attach" size={22} color={colors.ink} />
             </PressableScale>
             <TextInput
@@ -365,6 +377,7 @@ const styles = StyleSheet.create({
   attachNote: { marginBottom: spacing.xs },
   composerRow: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm },
   attachBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+  attachDisabled: { opacity: 0.4 },
   input: {
     flex: 1,
     maxHeight: 100,

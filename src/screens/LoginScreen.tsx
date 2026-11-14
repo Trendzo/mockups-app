@@ -16,6 +16,7 @@ import { ScreenProps } from '../navigation/types';
 import { fetchOtpConfig, loginRetailer, loginRetailerOtp } from '../api/auth';
 import { useOtp } from '../services/otp';
 import { useAuth } from '../store/auth';
+import { useOnboarding } from '../store/onboarding';
 import { useRecentPhones } from '../store/recentPhones';
 import { colors, spacing } from '../theme/theme';
 import { Haptics } from '../utils/haptics';
@@ -39,6 +40,7 @@ export function LoginScreen({ navigation, route }: ScreenProps<'Login'>) {
   const OTP_LENGTH = otpClient.otpLength;
   const RESEND_SECONDS = otpClient.resendSeconds;
   const setAuth = useAuth(s => s.setAuth);
+  const setUploadToken = useOnboarding(s => s.setUploadToken);
   const logoutReason = useAuth(s => s.logoutReason);
   const clearLogoutReason = useAuth(s => s.clearLogoutReason);
 
@@ -137,12 +139,16 @@ export function LoginScreen({ navigation, route }: ScreenProps<'Login'>) {
       Haptics.success();
       setAuth(result); // the app gate then routes on /retailer/me
     } catch (e: any) {
+      if (typeof e?.onboardingToken === 'string') {
+        setUploadToken(e.onboardingToken);
+      }
       console.error('[LoginScreen] verifyOtp failed:', {
         message: e?.message,
         code: e?.code,
         status: e?.status,
       });
-      console.error(e);
+      // The no-account response may include a scoped onboarding token. Never log it.
+      if (!e?.onboardingToken) console.error(e);
       // Backend AuthError carries code/status; MSG91 failures are plain Errors.
       // The verified phone matched a pending/rejected application → route to its
       // status/resubmit screen (both key on the owner email the backend returns).

@@ -16,7 +16,7 @@ import {
   useToast,
 } from '../components';
 import { ScreenProps } from '../navigation/types';
-import { fetchOtpConfig } from '../api/auth';
+import { createOnboardingSession, fetchOtpConfig } from '../api/auth';
 import { checkIdentity, submitApplication } from '../api/onboarding';
 import { useOtp } from '../services/otp';
 import { useOnboarding } from '../store/onboarding';
@@ -74,6 +74,7 @@ function validateStep(s: number, f: ApplicationFields): Record<string, string> {
 export function ApplicationFormScreen({ navigation, route }: ScreenProps<'ApplicationForm'>) {
   const toast = useToast();
   const setApplication = useOnboarding((s) => s.setApplication);
+  const setUploadToken = useOnboarding((s) => s.setUploadToken);
 
   const f = useApplicationDraft((s) => s.fields);
   const docs = useApplicationDraft((s) => s.docs);
@@ -145,6 +146,7 @@ export function ApplicationFormScreen({ navigation, route }: ScreenProps<'Applic
 
   const resetPhoneVerification = () => {
     setPhoneVerified(false);
+    setUploadToken(null);
     setOtpSent(false);
     setOtp('');
     setOtpErr(undefined);
@@ -180,11 +182,16 @@ export function ApplicationFormScreen({ navigation, route }: ScreenProps<'Applic
     }
     setOtpBusy(true);
     try {
-      // Only the phone's verification matters here; the token itself is not sent anywhere.
-      await otpClient.verify(code);
+      const proof = await otpClient.verify(code);
       Haptics.success();
       setPhoneVerified(true);
       setOtpSent(false);
+      try {
+        setUploadToken(await createOnboardingSession(proof.accessToken, proof.provider));
+      } catch {
+        setUploadToken(null);
+        toast.show('Phone verified. Document uploads are temporarily unavailable; you can submit without them.', 'info');
+      }
     } catch (e: any) {
       setOtpErr(e?.message ?? 'Invalid or expired OTP.');
     } finally {
@@ -326,6 +333,23 @@ export function ApplicationFormScreen({ navigation, route }: ScreenProps<'Applic
         );
         return;
       }
+      if (err?.code === 'application_pending' && err?.applicationId) {
+        setApplication(err.applicationId, f.ownerEmail);
+        clearDraft();
+        navigation.replace('ApplicationStatus', {
+          applicationId: err.applicationId,
+          email: f.ownerEmail.trim().toLowerCase(),
+        });
+        return;
+      }
+      if (err?.code === 'application_rejected' && err?.applicationId) {
+        setApplication(err.applicationId, f.ownerEmail);
+        navigation.replace('ApplicationStatus', {
+          applicationId: err.applicationId,
+          email: f.ownerEmail.trim().toLowerCase(),
+        });
+        return;
+      }
       const detail: any[] = Array.isArray(err?.details) ? err.details : [];
       if (Array.isArray(detail) && detail.length) {
         const e: Record<string, string> = {};
@@ -335,7 +359,12 @@ export function ApplicationFormScreen({ navigation, route }: ScreenProps<'Applic
         });
         setErrors((p) => ({ ...p, ...e }));
       }
-      toast.show(err?.message ?? 'Could not submit application', 'error');
+      toast.show(
+        err?.status === 401
+          ? 'The signup service rejected this request. Your details are saved; please try again or contact support.'
+          : err?.message ?? 'Could not submit application',
+        'error',
+      );
     } finally {
       setBusy(false);
     }

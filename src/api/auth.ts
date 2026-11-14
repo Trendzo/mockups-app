@@ -30,6 +30,7 @@ export function normalizeAuthError(err: unknown): AuthError {
             details?: {
               applicationId?: string;
               ownerEmail?: string;
+            onboardingToken?: string;
               [k: string]: unknown;
             };
           };
@@ -37,14 +38,16 @@ export function normalizeAuthError(err: unknown): AuthError {
       | undefined;
     const e = data?.error;
     if (e?.code || e?.message) {
+      const { onboardingToken, ...safeDetails } = e.details ?? {};
       return {
         code: e.code ?? 'error',
         message: friendly(e.code, e.message),
         status,
-        detail,
+        detail: onboardingToken ? undefined : detail,
         applicationId: e.details?.applicationId,
         ownerEmail: e.details?.ownerEmail,
-        details: e.details,
+        onboardingToken: typeof onboardingToken === 'string' ? onboardingToken : undefined,
+        details: safeDetails,
       };
     }
     if (!err.response) {
@@ -124,6 +127,21 @@ export async function loginRetailerOtp(
     return await unwrap<AuthResult>(
       authHttp.post('/auth/retailer/otp/login', { accessToken, provider }),
     );
+  } catch (e) {
+    throw normalizeAuthError(e);
+  }
+}
+
+/** OTP-verified applicants get a token scoped to uploading review documents. */
+export async function createOnboardingSession(
+  accessToken: string,
+  provider: OtpProvider,
+): Promise<string> {
+  try {
+    const result = await unwrap<{ token: string }>(
+      authHttp.post('/auth/retailer/onboarding-session', { accessToken, provider }),
+    );
+    return result.token;
   } catch (e) {
     throw normalizeAuthError(e);
   }

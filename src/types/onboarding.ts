@@ -125,6 +125,7 @@ export interface ThreadMessage {
 export interface ResubmitPrefill {
   application: Partial<ApplicationInput> & { mustReuploadDocKinds?: DocKind[] };
   documents?: { kind: DocKind; url: string }[];
+  onboardingToken?: string;
 }
 
 // ---- Post-login: /retailer/me ----

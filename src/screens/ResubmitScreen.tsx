@@ -58,6 +58,7 @@ export function ResubmitScreen({ navigation, route }: ScreenProps<'Resubmit'>) {
   const { applicationId, email } = route.params;
   const toast = useToast();
   const setApplication = useOnboarding((s) => s.setApplication);
+  const setUploadToken = useOnboarding((s) => s.setUploadToken);
 
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -81,6 +82,7 @@ export function ResubmitScreen({ navigation, route }: ScreenProps<'Resubmit'>) {
     setLoading(true);
     try {
       const data = await fetchForResubmit(applicationId, { email, password });
+      if (data.onboardingToken) setUploadToken(data.onboardingToken);
       const a = data.application ?? {};
       // Load every field so the whole application is editable, same as onboarding.
       setForm({

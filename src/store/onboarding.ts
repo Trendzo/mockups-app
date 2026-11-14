@@ -5,9 +5,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 interface OnboardingState {
   applicationId: string | null;
   ownerEmail: string | null;
+  uploadToken: string | null;
   hydrated: boolean;
   setApplication: (id: string, email: string) => void;
   clearApplication: () => void;
+  setUploadToken: (token: string | null) => void;
   _setHydrated: () => void;
 }
 
@@ -20,10 +22,12 @@ export const useOnboarding = create<OnboardingState>()(
     (set) => ({
       applicationId: null,
       ownerEmail: null,
+      uploadToken: null,
       hydrated: false,
       setApplication: (id, email) =>
         set({ applicationId: id, ownerEmail: email.trim().toLowerCase() }),
-      clearApplication: () => set({ applicationId: null, ownerEmail: null }),
+      clearApplication: () => set({ applicationId: null, ownerEmail: null, uploadToken: null }),
+      setUploadToken: (token) => set({ uploadToken: token }),
       _setHydrated: () => set({ hydrated: true }),
     }),
     {
@@ -32,6 +36,7 @@ export const useOnboarding = create<OnboardingState>()(
       partialize: (s) => ({
         applicationId: s.applicationId,
         ownerEmail: s.ownerEmail,
+        uploadToken: s.uploadToken,
       }),
       // Flip `hydrated` on both success and error (state is undefined on a
       // rehydration failure) so the app gate can never hang on a blank screen.

@@ -1,10 +1,10 @@
 import {
   getJson,
   postJson,
-  postMultipart,
   unwrapEnvelope,
 } from './client';
-import { normalizeAuthError } from './auth';
+import { authHttp, normalizeAuthError } from './auth';
+import { useOnboarding } from '../store/onboarding';
 import { toFormFile, UploadFile } from '../utils/image';
 import {
   ApplicationCreated,
@@ -37,18 +37,28 @@ export interface AppealThread {
   messages: AppealMessage[];
 }
 
-// ---- A) Document upload (public; any file up to 25MB) ----
+// ---- A) Document upload (phone-verified applicant session) ----
 export async function uploadDocument(file: UploadFile): Promise<UploadResult> {
+  const token = useOnboarding.getState().uploadToken;
+  if (!token) {
+    throw new Error('Document upload is unavailable right now. You can submit without photos and add them later after verifying your phone.');
+  }
   const form = new FormData();
   form.append('file', toFormFile(file) as unknown as Blob);
   try {
-    const res = await postMultipart<{ data: UploadResult }>(
-      '/uploads?folder=onboarding',
+    const res = await authHttp.post<{ data: UploadResult }>(
+      '/uploads/onboarding',
       form,
+      { headers: { 'Content-Type': 'multipart/form-data', Authorization: `Bearer ${token}` }, timeout: 120000 },
     );
-    return unwrapEnvelope<UploadResult>(res);
+    return unwrapEnvelope<UploadResult>(res.data);
   } catch (e) {
-    throw normalizeAuthError(e);
+    const error = normalizeAuthError(e);
+    if (error.status === 401) {
+      useOnboarding.getState().setUploadToken(null);
+      throw new Error('Document upload verification expired. Verify your phone again from the login screen.');
+    }
+    throw error;
   }
 }
 
@@ -58,11 +68,11 @@ export async function checkIdentity(
   phone: string,
 ): Promise<IdentityCheck> {
   try {
-    const res = await getJson<{ data: IdentityCheck }>(
+    const res = await authHttp.get<{ data: IdentityCheck }>(
       '/applications/check-identity',
       { params: { email: email.trim().toLowerCase(), phone: phone.trim() } },
     );
-    return unwrapEnvelope<IdentityCheck>(res);
+    return unwrapEnvelope<IdentityCheck>(res.data);
   } catch (e) {
     throw normalizeAuthError(e);
   }
@@ -72,11 +82,11 @@ export async function submitApplication(
   input: ApplicationInput,
 ): Promise<ApplicationCreated> {
   try {
-    const res = await postJson<{ data: ApplicationCreated }>(
+    const res = await authHttp.post<{ data: ApplicationCreated }>(
       '/applications',
       cleanApplication(input),
     );
-    return unwrapEnvelope<ApplicationCreated>(res);
+    return unwrapEnvelope<ApplicationCreated>(res.data);
   } catch (e) {
     throw normalizeAuthError(e);
   }
@@ -87,11 +97,11 @@ export async function getApplicationStatus(
   email: string,
 ): Promise<ApplicationStatusInfo> {
   try {
-    const res = await getJson<{ data: ApplicationStatusInfo }>(
+    const res = await authHttp.get<{ data: ApplicationStatusInfo }>(
       `/applications/${id}/status`,
       { params: { email: email.trim().toLowerCase() } },
     );
-    return unwrapEnvelope<ApplicationStatusInfo>(res);
+    return unwrapEnvelope<ApplicationStatusInfo>(res.data);
   } catch (e) {
     throw normalizeAuthError(e);
   }
@@ -103,12 +113,12 @@ export async function getMessages(
   email: string,
 ): Promise<ThreadMessage[]> {
   try {
-    const res = await getJson<{
+    const res = await authHttp.get<{
       data: ThreadMessage[] | { thread: ThreadMessage[] };
     }>(`/applications/${id}/messages`, {
       params: { email: email.trim().toLowerCase() },
     });
-    const data = unwrapEnvelope<any>(res);
+    const data = unwrapEnvelope<any>(res.data);
     return Array.isArray(data) ? data : data?.thread ?? data?.messages ?? [];
   } catch (e) {
     throw normalizeAuthError(e);
@@ -120,7 +130,7 @@ export async function postMessage(
   input: { applicantEmail: string; body: string; attachmentUrls?: string[] },
 ): Promise<void> {
   try {
-    await postJson(`/applications/${id}/messages`, {
+    await authHttp.post(`/applications/${id}/messages`, {
       applicantEmail: input.applicantEmail.trim().toLowerCase(),
       body: input.body,
       ...(input.attachmentUrls?.length
@@ -138,7 +148,7 @@ export async function submitClarificationDocuments(
   input: { applicantEmail: string; documents: { kind: DocKind; url: string }[]; note?: string },
 ): Promise<{ status: string; remainingDocKinds: DocKind[] }> {
   try {
-    const res = await postJson<{ data: { status: string; remainingDocKinds: DocKind[] } }>(
+    const res = await authHttp.post<{ data: { status: string; remainingDocKinds: DocKind[] } }>(
       `/applications/${id}/documents`,
       {
         applicantEmail: input.applicantEmail.trim().toLowerCase(),
@@ -146,7 +156,7 @@ export async function submitClarificationDocuments(
         ...(input.note?.trim() ? { note: input.note.trim() } : {}),
       },
     );
-    return unwrapEnvelope(res);
+    return unwrapEnvelope(res.data);
   } catch (e) {
     throw normalizeAuthError(e);
   }
@@ -182,11 +192,11 @@ export async function fetchForResubmit(
   creds: { email: string; password: string },
 ): Promise<ResubmitPrefill> {
   try {
-    const res = await postJson<{ data: ResubmitPrefill }>(
+    const res = await authHttp.post<{ data: ResubmitPrefill }>(
       `/applications/${id}/fetch-for-resubmit`,
       { email: creds.email.trim().toLowerCase(), password: creds.password },
     );
-    return unwrapEnvelope<ResubmitPrefill>(res);
+    return unwrapEnvelope<ResubmitPrefill>(res.data);
   } catch (e) {
     throw normalizeAuthError(e);
   }
@@ -198,7 +208,7 @@ export async function resubmitApplication(
   creds: { email: string; password: string },
 ): Promise<ApplicationStatusInfo> {
   try {
-    const res = await postJson<{ data: ApplicationStatusInfo }>(
+    const res = await authHttp.post<{ data: ApplicationStatusInfo }>(
       `/applications/${id}/resubmit`,
       {
         ...cleanApplication(input),
@@ -206,7 +216,7 @@ export async function resubmitApplication(
         password: creds.password,
       },
     );
-    return unwrapEnvelope<ApplicationStatusInfo>(res);
+    return unwrapEnvelope<ApplicationStatusInfo>(res.data);
   } catch (e) {
     throw normalizeAuthError(e);
   }
@@ -287,8 +297,8 @@ export interface PublicLegalDoc {
   shortText: string;
 }
 export async function getPublicLegal(kind: 'terms' | 'privacy'): Promise<PublicLegalDoc> {
-  const res = await getJson<{ data: PublicLegalDoc }>(`/legal/${kind}`);
-  return unwrapEnvelope<PublicLegalDoc>(res);
+  const res = await authHttp.get<{ data: PublicLegalDoc }>(`/legal/${kind}`);
+  return unwrapEnvelope<PublicLegalDoc>(res.data);
 }
 
 // ---- D) KYC ----
@@ -376,5 +386,6 @@ function cleanApplication(input: ApplicationInput): Record<string, unknown> {
   if (input.categories?.length) out.categories = input.categories;
   if (input.brands?.length) out.brands = input.brands;
   if (input.documents?.length) out.documents = input.documents;
+  if (input.acceptLegal) out.acceptLegal = true;
   return out;
 }
