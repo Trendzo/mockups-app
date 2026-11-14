@@ -399,7 +399,7 @@ function ProductRow({
       )}
       <View style={styles.rowBody}>
         <AppText variant="bodyMedium" color={colors.ink} numberOfLines={1}>
-          {listing.name}
+          {listing.name || 'Untitled draft'}
         </AppText>
         <AppText variant="meta" color={stock <= 0 ? colors.danger : colors.meta} numberOfLines={1}>
           {price} · {stock} in stock · {variants.length || 0} variant

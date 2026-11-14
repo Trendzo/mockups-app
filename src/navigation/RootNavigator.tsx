@@ -27,6 +27,7 @@ import { BasicsStep } from '../screens/ProductWizard/BasicsStep';
 import { VariantsStep } from '../screens/ProductWizard/VariantsStep';
 import { DetailsStep } from '../screens/ProductWizard/DetailsStep';
 import { ReviewStep } from '../screens/ProductWizard/ReviewStep';
+import { ProductChatScreen } from '../screens/ProductChatScreen';
 import { KycScreen } from '../screens/KycScreen';
 import { OrderDetailScreen } from '../screens/OrderDetailScreen';
 import { NotificationsScreen } from '../screens/NotificationsScreen';
@@ -237,6 +238,7 @@ export function RootNavigator() {
         <Stack.Screen name="ProductWizardVariants" component={VariantsStep} options={{ animation: 'none' }} />
         <Stack.Screen name="ProductWizardDetails" component={DetailsStep} options={{ animation: 'none' }} />
         <Stack.Screen name="ProductWizardReview" component={ReviewStep} options={{ animation: 'none' }} />
+        <Stack.Screen name="ProductChat" component={ProductChatScreen} />
         <Stack.Screen name="Kyc" component={KycScreen} />
         <Stack.Screen name="ChangeRequest" component={ChangeRequestScreen} />
         <Stack.Screen name="LegalDoc" component={LegalDocViewerScreen} />

@@ -44,6 +44,52 @@ export const getCatalogCategories = (gender?: string) =>
 export const getCatalogBrands = () =>
   req<CatalogBrand[]>(() => http.get('/catalog/brands', { params: { activeOnly: true } }));
 
+export type ProductReadiness = {
+  canSaveDraft: boolean;
+  canPublish: boolean;
+  draftIssues: Array<{ code: string; field: string; message: string }>;
+  publishIssues: Array<{ code: string; field: string; message: string }>;
+};
+
+export const getProductReadiness = (id: string) =>
+  req<ProductReadiness>(() => http.get(`/retailer/listings/${id}/readiness`));
+
+export type ProductChatMessage = { role: 'user' | 'assistant'; text: string; at: string };
+export type ProductChatMockupJob = {
+  id: string;
+  status: 'queued' | 'processing' | 'ready' | 'failed' | 'cancelled' | 'dismissed';
+  mode: 'without_model' | 'with_model';
+  outputUrls: string[];
+  referenceImageUrls: string[];
+  errorMessage: string | null;
+};
+export type ProductChatSession = {
+  id: string;
+  listingId: string | null;
+  messages: ProductChatMessage[];
+  isPublished: boolean;
+  lastTurnSucceeded: boolean | null;
+  readiness: ProductReadiness | null;
+  mockupJob: ProductChatMockupJob | null;
+};
+export const listProductChats = () =>
+  req<ProductChatSession[]>(() => http.get('/retailer/product-chat/sessions'));
+export const createProductChat = () =>
+  req<ProductChatSession>(() => http.post('/retailer/product-chat/sessions'));
+export const getProductChat = (id: string) =>
+  req<ProductChatSession>(() => http.get(`/retailer/product-chat/sessions/${id}`));
+export const sendProductChatMessage = (id: string, body: { text: string; imageUrls: string[] }) =>
+  req<ProductChatSession>(() => http.post(`/retailer/product-chat/sessions/${id}/messages`, body));
+export const publishProductChat = (id: string) =>
+  req<ProductChatSession>(() => http.post(`/retailer/product-chat/sessions/${id}/publish`));
+export const generateProductChatMockups = (id: string, body: {
+  mode: 'without_model' | 'with_model'; modelGender?: 'her' | 'him'; sourceImageUrl?: string;
+}) => req<ProductChatSession>(() => http.post(`/retailer/product-chat/sessions/${id}/mockups`, body));
+export const adoptProductChatMockups = (id: string, imageUrls: string[]) =>
+  req<ProductChatSession>(() => http.post(`/retailer/product-chat/sessions/${id}/mockups/adopt`, { imageUrls }));
+export const discardProductChatMockups = (id: string) =>
+  req<ProductChatSession>(() => http.delete(`/retailer/product-chat/sessions/${id}/mockups`));
+
 /** Size scales for a category (universal scales come back even without one). */
 export const getCatalogSizeScales = (categoryId?: string | null) =>
   req<SizeScale[]>(() =>
@@ -78,6 +124,9 @@ export const getListings = (opts?: { status?: ListingStatus; sort?: string }) =>
 
 export const getListing = (id: string) =>
   req<Listing>(() => http.get(`/retailer/listings/${id}`));
+
+export const ensureDefaultVariantGroup = (listingId: string) =>
+  req<VariantGroup>(() => http.post(`/retailer/listings/${listingId}/default-group`));
 
 export const createListing = (body: CreateListingInput) =>
   req<Listing>(() => http.post('/retailer/listings', body));

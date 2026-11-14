@@ -118,6 +118,7 @@ export type RootStackParamList = {
   ProductWizardVariants: undefined;
   ProductWizardDetails: undefined;
   ProductWizardReview: undefined;
+  ProductChat: undefined;
 
 
   // ---- Added for the store-app completion work; each track replaces its stub screens ----

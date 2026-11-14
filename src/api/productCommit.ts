@@ -3,6 +3,7 @@ import {
   createGroupVariant,
   createListing,
   deleteVariant,
+  ensureDefaultVariantGroup,
   getListing,
   patchVariant,
   setDefaultVariant,
@@ -10,7 +11,7 @@ import {
 } from './catalogManagement';
 import { useProductDraft } from '../store/productDraft';
 import { Listing } from '../types/catalog';
-import { listingCreateBody, listingUpdateBody } from './listingPayload';
+import { listingCreateBody, listingUpdateBody, pendingVariantData } from './listingPayload';
 import { parseRupeesToPaise } from '../utils/money';
 
 /**
@@ -59,20 +60,9 @@ async function step<T>(label: string, run: () => Promise<T>): Promise<T> {
   }
 }
 
-/**
- * Steps are freely navigable, so nothing is enforced until commit. Returns a
- * list of missing/invalid things (empty = ready to save/publish).
- *
- * A DRAFT saves partial progress: it needs only the two things the backend
- * cannot persist without — a product name and a category (category_id is
- * NOT NULL in the DB). Everything else (brand, gender, a valid price, complete
- * variants) is enforced only when `publish` is true. Publishing is additionally
- * re-checked server-side (assertListingPublishable), so a loose draft can never
- * go live incomplete.
- */
 type SizeRow = ReturnType<typeof useProductDraft.getState>['colors'][number]['sizes'][number];
 
-/** The untouched starter row of a colour: nothing typed, nothing on the server — not a variant. */
+/** An untouched colour row is not a variant. */
 const isBlankRow = (r: SizeRow): boolean =>
   !r.serverVariantId &&
   !r.size.trim() &&
@@ -81,95 +71,21 @@ const isBlankRow = (r: SizeRow): boolean =>
   !(Number(r.stock) > 0) &&
   r.imageUrls.length === 0;
 
-/**
- * What a DRAFT cannot store. The listing itself needs only a name and category, but a
- * variant (stock, SKU, size, images, MRP) can only exist with a real selling price, so
- * variant details typed without one would be lost on save. Say so up front instead of
- * letting the save fail or silently dropping them.
- */
-function draftVariantProblems(d: ReturnType<typeof useProductDraft.getState>): string[] {
-  const problems: string[] = [];
-  const priceMsg = 'A selling price in Basics (variant details need a price to be saved)';
-  const mrpOk = (price: number | null) => {
-    if (!d.baseMrp.trim()) return true;
-    const mrp = parseRupeesToPaise(d.baseMrp);
-    return price == null || (mrp != null && mrp > price);
-  };
-
-  if (d.variantMode === 'single') {
-    const price = sellingPrice(d.basePrice);
-    const hasVariantData =
-      !!d.single.serverVariantId ||
-      !!d.baseMrp.trim() ||
-      (Number(d.single.stock) || 0) > 0 ||
-      !!d.single.size.trim() ||
-      !!d.single.sku.trim() ||
-      d.single.imageUrls.length > 0;
-    if (price == null && hasVariantData) problems.push(priceMsg);
-    if (price != null && !mrpOk(price)) problems.push('An MRP higher than the selling price');
-    return problems;
-  }
-
-  d.colors.forEach((c) => {
-    c.sizes.forEach((r) => {
-      if (isBlankRow(r)) return;
-      const who = `${c.name.trim() || 'a color'} / ${r.size.trim() || 'size'}`;
-      if (!r.size.trim()) problems.push(`Size name for ${c.name.trim() || 'a color'}`);
-      const price = sellingPrice(r.price, d.basePrice);
-      if (price == null) problems.push(`A selling price for ${who} (set it in Basics or on the row)`);
-      else if (!mrpOk(price)) problems.push(`An MRP higher than the selling price for ${who}`);
-    });
-  });
-  return problems;
-}
-
-export function validateProductDraft(publish = true): string[] {
+/** Drafts can hold partial information; a completely untouched form is not a product. */
+export function validateProductDraft(): string[] {
   const d = useProductDraft.getState();
-  const problems: string[] = [];
-  if (d.name.trim().length < 1) problems.push('Product name');
-  if (!d.categoryId) problems.push('Category');
-
-  // Lenient only when the saved listing will actually be a draft: a brand-new
-  // product, or editing one that is still a draft. Editing a LIVE product (or
-  // publishing) keeps full validation so a live listing can't be broken.
-  const savingDraft = !publish && (d.mode === 'create' || d.editingStatus === 'draft');
-  if (savingDraft) {
-    problems.push(...draftVariantProblems(d));
-    return Array.from(new Set(problems));
+  if (d.editingStatus === 'active' && pendingVariantData(d, false)) {
+    return ['Move this product to draft before saving incomplete variant details'];
   }
-
-  if (!d.brandId) problems.push('Brand');
-  if (d.genders.length === 0) problems.push('Gender');
-
-  const badMoney = (price: string, mrp: string): boolean => {
-    const p = parseRupeesToPaise(price);
-    if (p == null || p <= 0) return true;
-    if (mrp.trim()) {
-      const m = parseRupeesToPaise(mrp);
-      if (m == null || m <= p) return true;
-    }
-    return false;
-  };
-
-  // Product pricing lives in Basics; per-colour selling prices only override it.
-  if (badMoney(d.basePrice, d.baseMrp))
-    problems.push('A valid selling price in Basics (MRP must be higher)');
-
-  if (d.variantMode !== 'single') {
-    let anySize = false;
-    d.colors.forEach((c) => {
-      c.sizes.forEach((r) => {
-        if (isBlankRow(r)) return;
-        anySize = true;
-        const who = `${c.name || 'a color'} / ${r.size || 'size'}`;
-        if (!r.size.trim()) problems.push(`Size name for ${c.name || 'a color'}`);
-        // Only validate an override when one was typed.
-        if (r.price.trim() && badMoney(r.price, d.baseMrp)) problems.push(`A valid price for ${who}`);
-      });
-    });
-    if (!anySize) problems.push('At least one variant');
-  }
-  return Array.from(new Set(problems));
+  if (d.mode !== 'create' || d.createdListingId) return [];
+  const meaningful = !!(
+    d.name.trim() || d.gallery.length || d.brandId || d.categoryId || d.genders.length ||
+    d.description.trim() || d.descriptionLong.trim() || d.basePrice.trim() || d.baseMrp.trim() ||
+    d.single.sku.trim() || d.single.size.trim() || d.single.imageUrls.length || Number(d.single.stock) > 0 ||
+    d.colors.some(c => c.name.trim() || c.colorHex || c.sizes.some(r =>
+      r.size.trim() || r.price.trim() || r.sku.trim() || r.imageUrls.length || Number(r.stock) > 0))
+  );
+  return meaningful ? [] : ['Add at least one product detail or photo'];
 }
 
 /** A wizard step a publish blocker can send the retailer to. */
@@ -184,94 +100,8 @@ export type PublishBlocker = {
   /** What's missing, phrased for the retailer. */
   label: string;
   /** Where to go to fix it. */
-  step: PublishBlockerStep;
+  step?: PublishBlockerStep;
 };
-
-/**
- * Everything the BACKEND demands before a listing may go live, mirrored here so
- * the wizard can say what's missing instead of letting the retailer press Publish
- * and eat a 409 from assertListingPublishable.
- *
- * Keep in sync with assertListingPublishable + isVariantComplete in
- * backend/src/modules/retailer/listings/listings.controller.ts. This is a
- * SUPERSET of validateProductDraft: that one guards saving, this one guards
- * going live, and a listing that fails only these still saves fine as a draft.
- */
-export function publishBlockers(): PublishBlocker[] {
-  const d = useProductDraft.getState();
-  const blockers: PublishBlocker[] = [];
-
-  if (!d.name.trim())
-    blockers.push({ id: 'name', label: 'A product name', step: 'ProductWizardBasics' });
-  if (!d.categoryId)
-    blockers.push({ id: 'category', label: 'A category', step: 'ProductWizardBasics' });
-  if (!d.brandId) blockers.push({ id: 'brand', label: 'A brand', step: 'ProductWizardBasics' });
-  if (d.genders.length === 0)
-    blockers.push({ id: 'gender', label: 'A gender', step: 'ProductWizardBasics' });
-  if (d.gallery.length < 1)
-    blockers.push({ id: 'gallery', label: 'At least one product image', step: 'ProductWizardBasics' });
-  if (!d.description.trim())
-    blockers.push({ id: 'description', label: 'A short description', step: 'ProductWizardDetails' });
-  if (!d.descriptionLong.trim())
-    blockers.push({
-      id: 'descriptionLong',
-      label: 'A full description',
-      step: 'ProductWizardDetails',
-    });
-  if (!d.listingPolicy)
-    blockers.push({ id: 'policy', label: 'A return policy', step: 'ProductWizardDetails' });
-
-  // A live listing needs at least ONE variant carrying price + SKU + stock + an
-  // image (its own, or inherited from the gallery).
-  //
-  // SKU is deliberately NOT checked here: the backend generates a store-unique one
-  // whenever the retailer leaves the field blank, so demanding it client-side would
-  // block a product the server would happily publish. Stock likewise defaults to 0,
-  // which satisfies the server's "has a stock figure" test.
-  const galleryCovers = d.gallery.length > 0;
-  const priceOk = (price: string): boolean => {
-    const p = parseRupeesToPaise(price.trim() || d.basePrice);
-    return p != null && p > 0;
-  };
-
-  const hasCompleteVariant =
-    d.variantMode === 'single'
-      ? priceOk('') && (galleryCovers || d.single.imageUrls.length > 0)
-      : d.colors.some((c) =>
-          c.sizes.some((r) => priceOk(r.price) && (galleryCovers || r.imageUrls.length > 0)),
-        );
-
-  if (!hasCompleteVariant) {
-    blockers.push({
-      id: 'variant',
-      label: 'One complete variant — needs a price and an image',
-      step: 'ProductWizardVariants',
-    });
-  }
-
-  return blockers;
-}
-
-/**
- * After creating a color_size listing, the backend may auto-create one empty
- * "Default" variant group. There is no delete/rename-group endpoint, so if that
- * single empty group exists we reuse it for the first color (avoids a stray
- * group); otherwise we create a group per color.
- */
-async function resolveFirstGroup(listingId: string): Promise<string | undefined> {
-  try {
-    const listing = await getListing(listingId);
-    const groups = listing.variantGroups ?? [];
-    const variants = listing.variants ?? [];
-    const emptyDefault = groups.find(
-      (g) => g.isDefault && !variants.some((v) => v.groupId === g.id),
-    );
-    if (groups.length === 1 && emptyDefault) return emptyDefault.id;
-    return undefined;
-  } catch {
-    return undefined;
-  }
-}
 
 export async function commitProductDraft({ publish }: { publish: boolean }): Promise<Listing> {
   const d = useProductDraft.getState();
@@ -286,6 +116,7 @@ export async function commitProductDraft({ publish }: { publish: boolean }): Pro
     await step(`update listing ${listingId}`, () => updateListing(listingId, listingUpdateBody(d)));
   } else if (d.createdListingId) {
     listingId = d.createdListingId;
+    await step(`update draft ${listingId}`, () => updateListing(listingId, listingUpdateBody(d)));
   } else {
     const created = await step('create listing', () => createListing(listingCreateBody(d)));
     listingId = created.id;
@@ -295,8 +126,7 @@ export async function commitProductDraft({ publish }: { publish: boolean }): Pro
   // 2) VARIANTS
   if (d.variantMode === 'single') {
     const size = d.single.size.trim();
-    // Pricing comes from Basics (product-level). Unpriced draft: no variant yet —
-    // validateProductDraft already refused to save any variant details without a price.
+    // Pricing comes from Basics. Unpriced variant details remain on the draft listing.
     const price = sellingPrice(d.basePrice);
     const body =
       price == null
@@ -304,7 +134,7 @@ export async function commitProductDraft({ publish }: { publish: boolean }): Pro
         : {
             sku: d.single.sku.trim() || undefined,
             pricePaise: price,
-            compareAtPrice: comparePrice(d.baseMrp),
+            compareAtPrice: (() => { const mrp = comparePrice(d.baseMrp); return mrp != null && mrp > price ? mrp : null; })(),
             stock: Number(d.single.stock) || 0,
             imageUrls: d.single.imageUrls,
           };
@@ -338,18 +168,17 @@ export async function commitProductDraft({ publish }: { publish: boolean }): Pro
       }
     }
   } else {
-    const reusableGroupId = d.mode === 'create' ? await resolveFirstGroup(listingId) : undefined;
-    let firstGroupConsumed = false;
-
     for (let ci = 0; ci < d.colors.length; ci++) {
       const color = d.colors[ci];
+      const hasPricedRow = color.sizes.some((row) =>
+        !isBlankRow(row) && !!row.size.trim() && sellingPrice(row.price, d.basePrice) != null);
+      if (!hasPricedRow) continue;
       let groupId = color.serverGroupId;
       if (!groupId) {
-        if (reusableGroupId && !firstGroupConsumed) {
-          groupId = reusableGroupId;
-          firstGroupConsumed = true;
+        if (!color.name.trim()) {
+          groupId = (await step('find default variant group', () => ensureDefaultVariantGroup(listingId))).id;
         } else {
-          const name = color.name.trim() || `Color ${ci + 1}`;
+          const name = color.name.trim();
           const g = await step(`create group "${name}"`, () =>
             createGroup(listingId, { name, colorHex: color.colorHex, sortOrder: ci }),
           );
@@ -364,12 +193,12 @@ export async function commitProductDraft({ publish }: { publish: boolean }): Pro
         // Per-colour selling price overrides the base; MRP is always base. Validation has
         // already refused a priceless row, so reaching here without one is a bug, not input.
         const rowPrice = sellingPrice(row.price, d.basePrice);
-        if (rowPrice == null) throw new Error('Set a selling price before saving this variant');
+        if (rowPrice == null || !size) continue; // preserved in draftVariantData
         const body = {
           size,
           sku: row.sku.trim() || undefined,
           pricePaise: rowPrice,
-          compareAtPrice: comparePrice(d.baseMrp),
+          compareAtPrice: (() => { const mrp = comparePrice(d.baseMrp); return mrp != null && mrp > rowPrice ? mrp : null; })(),
           stock: Number(row.stock) || 0,
           imageUrls: row.imageUrls,
         };
@@ -416,6 +245,13 @@ export async function commitProductDraft({ publish }: { publish: boolean }): Pro
   // Edit deletions - variants the user removed from an existing product.
   for (const vid of new Set([...d.removedVariantIds, ...staleVariantIds])) {
     await step(`delete variant ${vid}`, () => deleteVariant(vid));
+  }
+
+  // Clear staged rows only after their server variants are saved. A retry after
+  // a partial network failure can reopen the draft without losing entered values.
+  if (d.editingStatus !== 'active') {
+    await step('save unfinished variant details', () =>
+      updateListing(listingId, { draftVariantData: pendingVariantData(useProductDraft.getState()) }));
   }
 
   // 3) STATUS

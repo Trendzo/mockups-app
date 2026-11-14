@@ -15,10 +15,10 @@ import { ScreenProps } from '../../navigation/types';
 import { useCatalogBrands, useCatalogCategories } from '../../api/catalogHooks';
 import {
   commitProductDraft,
-  publishBlockers,
   validateProductDraft,
   type PublishBlocker,
 } from '../../api/productCommit';
+import { getProductReadiness, updateListing } from '../../api/catalogManagement';
 import { ColorDraft, SingleVariantDraft, useProductDraft } from '../../store/productDraft';
 import { formatPaise, parseRupeesToPaise } from '../../utils/money';
 import { colors, radii, spacing } from '../../theme/theme';
@@ -54,18 +54,11 @@ export function ReviewStep({ navigation }: ScreenProps<'ProductWizardReview'>) {
     const parent = cat.parentId ? categoriesQ.data?.find((c) => c.id === cat.parentId) : undefined;
     return parent ? `${parent.label} › ${cat.label}` : cat.label;
   })();
-  const gender = d.genders.length >= 2 ? 'unisex' : d.genders[0] ?? 'unisex';
+  const gender = d.genders.length >= 2 ? 'unisex' : d.genders[0];
 
   const commit = async (publish: boolean) => {
-    // Publishing an incomplete product must never throw away the retailer's work:
-    // save it as a draft first, then show exactly what is blocking go-live. The
-    // commit is idempotent, so finishing the missing bits and pressing Publish
-    // again updates the same listing rather than creating a second one.
-    const blocking = publish ? publishBlockers() : [];
-    const savingOnly = blocking.length > 0;
-    const effectivePublish = publish && !savingOnly;
-
-    const problems = validateProductDraft(effectivePublish);
+    let savedListingId: string | null = null;
+    const problems = validateProductDraft();
     if (problems.length) {
       setError(`Complete these before saving: ${problems.join(', ')}.`);
       setBlockers(null);
@@ -75,17 +68,26 @@ export function ReviewStep({ navigation }: ScreenProps<'ProductWizardReview'>) {
     setError(null);
     setBlockers(null);
     try {
-      const listing = await commitProductDraft({ publish: effectivePublish });
+      const listing = await commitProductDraft({ publish: false });
+      savedListingId = listing.id;
       qc.invalidateQueries({ queryKey: ['listings'] });
       qc.invalidateQueries({ queryKey: ['inventory'] });
       qc.invalidateQueries({ queryKey: ['listing', listing.id] });
 
-      // Saved, but not live. Stay on Review with the checklist so each missing
-      // item can be tapped straight through to the step that owns it.
-      if (savingOnly) {
-        setBlockers(blocking);
-        setBusy(false);
-        return;
+      if (publish) {
+        const readiness = await getProductReadiness(listing.id);
+        if (!readiness.canPublish) {
+          setBlockers(readiness.publishIssues.map((issue) => ({
+            id: issue.code,
+            label: issue.message,
+            step: issue.field === 'store' ? undefined : issue.field === 'variants' ? 'ProductWizardVariants'
+              : ['description', 'descriptionLong', 'listingPolicy'].includes(issue.field)
+                ? 'ProductWizardDetails' : 'ProductWizardBasics',
+          })));
+          setBusy(false);
+          return;
+        }
+        await updateListing(listing.id, { status: 'active' });
       }
 
       const id = listing.id;
@@ -101,7 +103,13 @@ export function ReviewStep({ navigation }: ScreenProps<'ProductWizardReview'>) {
       // not a lost product — say so, and fall back to the server's own reason
       // when our mirrored checks somehow found nothing.
       if (publish && e?.code === 'cannot_publish_incomplete') {
-        const mirrored = publishBlockers();
+        const issues = Array.isArray(e?.details?.issues) ? e.details.issues : [];
+        const mirrored: PublishBlocker[] = issues.map((issue: { code: string; field: string; message: string }) => ({
+          id: issue.code, label: issue.message,
+          step: issue.field === 'store' ? undefined : issue.field === 'variants' ? 'ProductWizardVariants'
+            : ['description', 'descriptionLong', 'listingPolicy'].includes(issue.field)
+              ? 'ProductWizardDetails' : 'ProductWizardBasics',
+        }));
         setBlockers(
           mirrored.length
             ? mirrored
@@ -116,7 +124,9 @@ export function ReviewStep({ navigation }: ScreenProps<'ProductWizardReview'>) {
         setBusy(false);
         return;
       }
-      setError(e?.message ?? 'Could not save the product');
+      setError(savedListingId
+        ? `Saved as a draft. ${e?.message ?? 'Publishing could not be completed. Please try again.'}`
+        : (e?.message ?? 'Could not save the product'));
       setBusy(false);
     }
   };
@@ -152,7 +162,7 @@ export function ReviewStep({ navigation }: ScreenProps<'ProductWizardReview'>) {
             {blockers.map((b) => (
               <PressableScale
                 key={b.id}
-                onPress={() => navigation.navigate(b.step)}
+                onPress={b.step ? () => navigation.navigate(b.step!) : undefined}
                 style={styles.blockRow}
                 toScale={0.98}
               >
@@ -190,7 +200,7 @@ export function ReviewStep({ navigation }: ScreenProps<'ProductWizardReview'>) {
           <Row label="Name" value={d.name || '-'} />
           <Row label="Brand" value={brandName} />
           <Row label="Category" value={categoryLabel} />
-          <Row label="Gender" value={GENDER_LABEL[gender]} />
+          <Row label="Gender" value={gender ? GENDER_LABEL[gender] : 'Not set'} />
         </Section>
 
         {/* Variants */}

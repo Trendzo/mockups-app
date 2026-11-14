@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Linking, ScrollView, StyleSheet, View } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   AppImage,
@@ -19,7 +19,7 @@ import {
 } from '../components';
 import { ScreenProps } from '../navigation/types';
 import { useListing } from '../api/catalogHooks';
-import { deleteListing, updateListing } from '../api/catalogManagement';
+import { deleteListing, getProductReadiness, updateListing } from '../api/catalogManagement';
 import { useProductDraft } from '../store/productDraft';
 import { useStoreGate } from '../navigation/useStoreGate';
 import { Variant } from '../types/catalog';
@@ -27,6 +27,7 @@ import { usePermissions } from '../utils/usePermission';
 import { formatPaise } from '../utils/money';
 import { shareRemoteImage } from '../utils/gallery';
 import { colors, radii, spacing } from '../theme/theme';
+import { WEB_PORTAL_URL } from '../config/legal';
 
 const GENDER_LABEL: Record<string, string> = { her: 'Women', him: 'Men', unisex: 'Unisex' };
 const POLICY_LABEL: Record<string, string> = {
@@ -53,6 +54,7 @@ export function ProductDetailScreen({ navigation, route }: ScreenProps<'ProductD
   const [busy, setBusy] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  const [publishIssues, setPublishIssues] = useState<string[]>([]);
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['listing', id] });
@@ -63,13 +65,22 @@ export function ProductDetailScreen({ navigation, route }: ScreenProps<'ProductD
   const setStatus = async (status: 'active' | 'draft' | 'retired', okMsg: string) => {
     setBusy(true);
     try {
+      if (status === 'active') {
+        const readiness = await getProductReadiness(id);
+        if (!readiness.canPublish) {
+          setPublishIssues(readiness.publishIssues.map(issue => issue.message));
+          return;
+        }
+      }
       await updateListing(id, { status });
+      setPublishIssues([]);
       toast.show(okMsg, 'success');
       refresh();
       setMoreOpen(false);
     } catch (e: any) {
-      // cannot_publish_incomplete lists what's missing in the message
-      toast.show(e?.message ?? 'Could not update', 'error');
+      const issues = Array.isArray(e?.details?.issues) ? e.details.issues : [];
+      if (issues.length) setPublishIssues(issues.map((issue: { message: string }) => issue.message));
+      else toast.show(e?.message ?? 'Could not update', 'error');
     } finally {
       setBusy(false);
     }
@@ -109,6 +120,11 @@ export function ProductDetailScreen({ navigation, route }: ScreenProps<'ProductD
 
   const variants = listing.variants ?? [];
   const gallery = listing.galleryUrls ?? [];
+  const editInPortal = listing.variantMode === 'custom' || !!listing.draftVariantData?.web;
+  const openPortal = () => {
+    void Linking.openURL(`${WEB_PORTAL_URL}/retailer/listings/${id}`)
+      .catch(() => toast.show('Could not open the web portal', 'error'));
+  };
 
   return (
     <Screen edges={['top']}>
@@ -137,7 +153,7 @@ export function ProductDetailScreen({ navigation, route }: ScreenProps<'ProductD
 
         <View style={styles.titleRow}>
           <AppText variant="cardTitle" color={colors.ink} style={styles.h1}>
-            {listing.name}
+            {listing.name || 'Untitled draft'}
           </AppText>
           <StatusChip label={listing.status.replace(/_/g, ' ')} tone={toneForStatus(listing.status)} />
         </View>
@@ -145,11 +161,19 @@ export function ProductDetailScreen({ navigation, route }: ScreenProps<'ProductD
         {listing.status === 'taken_down' && listing.takedownReason ? (
           <Banner tone="danger" title="Taken down" message={listing.takedownReason} />
         ) : null}
+        {publishIssues.length ? (
+          <Banner tone="warning" title="Complete these before publishing"
+            message={publishIssues.map(issue => `• ${issue}`).join('\n')} />
+        ) : null}
+        {editInPortal ? (
+          <Banner tone="neutral" title="Continue this draft in the web portal"
+            message="This product has variant options saved in the web editor. Complete them there so your progress stays intact." />
+        ) : null}
 
         <View style={styles.card}>
           <InfoRow label="Brand" value={listing.brand?.name ?? '-'} />
           <InfoRow label="Category" value={listing.category?.label ?? '-'} />
-          <InfoRow label="Gender" value={GENDER_LABEL[listing.gender] ?? listing.gender} />
+          <InfoRow label="Gender" value={listing.gender ? GENDER_LABEL[listing.gender] ?? listing.gender : 'Not set'} />
           <InfoRow label="Policy" value={POLICY_LABEL[listing.listingPolicy] ?? listing.listingPolicy} />
           {listing.hsn ? <InfoRow label="HSN" value={listing.hsn} /> : null}
           {listing.description ? <InfoRow label="Description" value={listing.description} /> : null}
@@ -163,7 +187,7 @@ export function ProductDetailScreen({ navigation, route }: ScreenProps<'ProductD
             <AppText variant="sectionLabel" color={colors.meta}>
               Variants ({variants.length})
             </AppText>
-            {canWrite ? (
+            {canWrite && !editInPortal ? (
               <PressableScale
                 onPress={() => {
                   useProductDraft.getState().startEdit(listing);
@@ -219,12 +243,15 @@ export function ProductDetailScreen({ navigation, route }: ScreenProps<'ProductD
           ) : null}
           <View style={styles.footerRow}>
             <PrimaryButton
-              label="Edit details"
+              label={editInPortal ? 'Edit in web portal' : 'Edit details'}
               tone="ghost"
               style={styles.flex}
               onPress={() => {
-                useProductDraft.getState().startEdit(listing);
-                navigation.navigate('ProductWizardBasics');
+                if (editInPortal) openPortal();
+                else {
+                  useProductDraft.getState().startEdit(listing);
+                  navigation.navigate('ProductWizardBasics');
+                }
               }}
             />
             <PrimaryButton

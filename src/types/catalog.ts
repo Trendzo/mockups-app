@@ -90,12 +90,13 @@ export interface Listing {
   storeId: string;
   templateId?: string | null;
   brandId?: string | null;
-  categoryId: string;
+  categoryId: string | null;
   name: string;
   description?: string | null;
   descriptionLong?: string | null;
   hsn?: string | null;
-  gender: CatalogGender;
+  gender: CatalogGender | null;
+  draftVariantData?: Record<string, unknown> | null;
   listingPolicy: ListingPolicy;
   galleryUrls: string[];
   occasion: string[];
@@ -119,8 +120,9 @@ export interface CreateListingInput {
   name: string;
   /** Optional — a draft can be saved before a brand is chosen. */
   brandId?: string;
-  categoryId: string;
-  gender: CatalogGender;
+  categoryId?: string;
+  gender?: CatalogGender;
+  draftVariantData?: Record<string, unknown> | null;
   description?: string;
   descriptionLong?: string;
   listingPolicy?: ListingPolicy;
@@ -132,9 +134,12 @@ export interface CreateListingInput {
   variantMode?: VariantMode;
 }
 
-export type UpdateListingInput = Omit<Partial<CreateListingInput>, 'descriptionLong'> & {
+export type UpdateListingInput = Omit<Partial<CreateListingInput>, 'descriptionLong' | 'brandId' | 'categoryId' | 'gender'> & {
   /** null clears it; omit to leave the stored (HTML) value untouched. */
   descriptionLong?: string | null;
+  brandId?: string | null;
+  categoryId?: string | null;
+  gender?: CatalogGender | null;
   status?: 'draft' | 'active' | 'retired';
 };
 
