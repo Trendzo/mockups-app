@@ -32,6 +32,7 @@ import { KycScreen } from '../screens/KycScreen';
 import { OrderDetailScreen } from '../screens/OrderDetailScreen';
 import { NotificationsScreen } from '../screens/NotificationsScreen';
 import { NotificationSettingsScreen } from '../screens/NotificationSettingsScreen';
+import { SettingsScreen } from '../screens/SettingsScreen';
 import { PayoutsScreen } from '../screens/PayoutsScreen';
 import { PayoutDetailScreen } from '../screens/PayoutDetailScreen';
 import { InventoryScreen } from '../screens/InventoryScreen';
@@ -247,6 +248,7 @@ export function RootNavigator() {
         <Stack.Screen name="OrderDetail" component={OrderDetailScreen} />
         <Stack.Screen name="Notifications" component={NotificationsScreen} />
         <Stack.Screen name="NotificationSettings" component={NotificationSettingsScreen} />
+        <Stack.Screen name="Settings" component={SettingsScreen} />
         <Stack.Screen name="Payouts" component={PayoutsScreen} />
         <Stack.Screen name="PayoutDetail" component={PayoutDetailScreen} />
         <Stack.Screen name="Inventory" component={InventoryScreen} />

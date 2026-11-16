@@ -51,6 +51,7 @@ export type RootStackParamList = {
   OrderDetail: { id: string };
   Notifications: undefined;
   NotificationSettings: undefined;
+  Settings: undefined;
 
   // Counter billing (POS). The cart lives in the register store.
   Register: undefined;

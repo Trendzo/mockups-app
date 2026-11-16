@@ -166,7 +166,6 @@ export function BasicsStep({ navigation }: ScreenProps<'ProductWizardBasics'>) {
         <View style={styles.block}>
           <Select
             label="Brand"
-            required
             placeholder="Choose a brand"
             loading={brandsQ.isLoading}
             options={brandOptions}

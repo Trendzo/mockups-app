@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from 'react-native';
 import { AppText } from './AppText';
 import { BottomSheet, SheetSurface } from './BottomSheet';
 import { Icon } from './Icon';
@@ -26,7 +26,16 @@ interface SelectProps {
   loading?: boolean;
   /** Visible hairline border - for triggers sitting on a white card. */
   boxed?: boolean;
+  /**
+   * Show a search box in the sheet. Defaults to on when there are more than
+   * SEARCH_THRESHOLD options (brands, categories) and off for short fixed lists.
+   */
+  searchable?: boolean;
+  /** Shown when the options list itself is empty (e.g. nothing loaded yet). */
+  emptyMessage?: string;
 }
+
+const SEARCH_THRESHOLD = 8;
 
 /** Dropdown selector (single or multi) rendered as a bottom sheet. */
 export function Select({
@@ -41,8 +50,20 @@ export function Select({
   error,
   loading = false,
   boxed = false,
+  searchable,
+  emptyMessage = 'Nothing to choose from yet',
 }: SelectProps) {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const showSearch = searchable ?? options.length > SEARCH_THRESHOLD;
+  const needle = query.trim().toLowerCase();
+  const visibleOptions = needle
+    ? options.filter((o) => o.label.toLowerCase().includes(needle))
+    : options;
+  const close = () => {
+    setOpen(false);
+    setQuery('');
+  };
   // Concrete cap for the option list (percentage max-heights don't resolve
   // inside the sheet's auto-height animated wrapper). Measured per render so it
   // survives rotation - a module-scope Dimensions read never updates.
@@ -65,7 +86,7 @@ export function Select({
       );
     } else {
       onChange([value]);
-      setOpen(false);
+      close();
     }
   };
 
@@ -115,32 +136,59 @@ export function Select({
         </AppText>
       ) : null}
 
-      <BottomSheet visible={open} onClose={() => setOpen(false)}>
+      <BottomSheet visible={open} onClose={close}>
         <SheetSurface style={styles.sheet}>
             <View style={styles.sheetHeader}>
               <AppText variant="cardTitle" color={colors.ink} style={styles.sheetTitle}>
                 {label}
               </AppText>
-              <PressableScale onPress={() => setOpen(false)} toScale={0.9}>
+              <PressableScale onPress={close} toScale={0.9}>
                 <Icon name="close" size={22} color={colors.ink} />
               </PressableScale>
             </View>
 
+            {showSearch ? (
+              <View style={styles.searchBox}>
+                <Icon name="search" size={18} color={colors.meta} />
+                <TextInput
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder={`Search ${label.toLowerCase()}`}
+                  placeholderTextColor={colors.inkMuted}
+                  autoCorrect={false}
+                  autoCapitalize="none"
+                  returnKeyType="search"
+                  style={styles.searchInput}
+                />
+                {query ? (
+                  <PressableScale onPress={() => setQuery('')} toScale={0.9} haptic={false}>
+                    <Icon name="close-circle" size={18} color={colors.meta} />
+                  </PressableScale>
+                ) : null}
+              </View>
+            ) : null}
+
             <ScrollView
               style={[styles.optionScroll, { maxHeight: optionsMaxHeight }]}
               showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
             >
-              {clearable && !multiple ? (
+              {clearable && !multiple && !needle ? (
                 <OptionRow
                   label="None"
                   selected={empty}
                   onPress={() => {
                     onChange([]);
-                    setOpen(false);
+                    close();
                   }}
                 />
               ) : null}
-              {options.map((o) => (
+              {visibleOptions.length === 0 ? (
+                <AppText variant="body" color={colors.meta} style={styles.noMatch}>
+                  {options.length === 0 ? emptyMessage : `No match for "${query.trim()}"`}
+                </AppText>
+              ) : null}
+              {visibleOptions.map((o) => (
                 <OptionRow
                   key={o.value}
                   label={o.label}
@@ -153,7 +201,7 @@ export function Select({
 
             {multiple ? (
               <PressableScale
-                onPress={() => setOpen(false)}
+                onPress={close}
                 style={styles.doneBtn}
               >
                 <AppText variant="button" color={colors.accentInk}>
@@ -240,6 +288,17 @@ const styles = StyleSheet.create({
   },
   sheetTitle: { fontSize: 20, lineHeight: 24 },
   optionScroll: { flexGrow: 0 },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.canvas,
+    borderRadius: radii.sm + 4,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  searchInput: { flex: 1, paddingVertical: spacing.sm + 2, color: colors.ink, fontSize: 15 },
+  noMatch: { paddingVertical: spacing.lg, textAlign: 'center' },
   optionRow: {
     flexDirection: 'row',
     alignItems: 'center',

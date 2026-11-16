@@ -265,15 +265,6 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
         {/* Products */}
         <View style={styles.actions}>
           <SectionHeader label="Products" />
-          {canCreateProducts ? (
-            <ListRow
-              icon="chatbubbles-outline"
-              label="Chatbot"
-              hint="Add a product by chatting"
-              right={<StatusChip label="BETA" tone="neutral" />}
-              onPress={() => navigation.navigate('ProductChat')}
-            />
-          ) : null}
           <ListRow
             icon="layers-outline"
             label="Inventory"
@@ -305,6 +296,12 @@ export function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
             hint="Inbox and alert settings"
             badge={inbox.unread}
             onPress={() => navigation.navigate('Notifications')}
+          />
+          <ListRow
+            icon="settings-outline"
+            label="Settings"
+            hint="Notification preferences and Chatbot (beta)"
+            onPress={() => navigation.navigate('Settings')}
           />
           <ListRow
             icon="shield-checkmark-outline"
